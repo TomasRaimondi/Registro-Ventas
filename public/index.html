@@ -13,9 +13,12 @@
     <span class="brand-dot"></span>
     <h1>Registro de Ventas</h1>
   </div>
-  <div class="clock">
-    <span id="clock-time">--:--:--</span>
-    <span id="clock-date">--</span>
+  <div class="topbar-actions">
+    <a href="/ganancias.html" class="link-btn">Panel de ganancias</a>
+    <div class="clock">
+      <span id="clock-time">--:--:--</span>
+      <span id="clock-date">--</span>
+    </div>
   </div>
 </header>
 
@@ -25,9 +28,10 @@
   <section class="card form-card">
     <h2>Cargar venta</h2>
     <form id="sale-form" autocomplete="off">
-      <div class="field">
+      <div class="field autocomplete-field">
         <label for="producto">Producto</label>
-        <input type="text" id="producto" name="producto" placeholder="Ej: Coca Cola 500ml" required>
+        <input type="text" id="producto" name="producto" placeholder="Ej: Coca Cola 500ml" autocomplete="off" required>
+        <div class="suggestions" id="producto-suggestions"></div>
       </div>
 
       <div class="field">

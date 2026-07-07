@@ -10,6 +10,39 @@ const TIMEZONE = "America/Argentina/Buenos_Aires";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito", "cuentadni", "mayorista"]);
 const CUENTA_DNI_COMISION = 0.006;
+const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
+
+// ---------- Contraseña del panel de ganancias ----------
+
+let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+try {
+  const localConfigPath = path.join(__dirname, "admin-config.json");
+  if (fs.existsSync(localConfigPath)) {
+    const cfg = JSON.parse(fs.readFileSync(localConfigPath, "utf8"));
+    if (cfg.adminPassword) ADMIN_PASSWORD = cfg.adminPassword;
+  }
+} catch (e) {
+  console.error("No se pudo leer admin-config.json:", e.message);
+}
+
+const sessions = new Set();
+
+function parseCookies(req) {
+  const header = req.headers.cookie;
+  const cookies = {};
+  if (!header) return cookies;
+  header.split(";").forEach((pair) => {
+    const idx = pair.indexOf("=");
+    if (idx === -1) return;
+    cookies[pair.slice(0, idx).trim()] = decodeURIComponent(pair.slice(idx + 1).trim());
+  });
+  return cookies;
+}
+
+function isAuthenticated(req) {
+  const cookies = parseCookies(req);
+  return !!(cookies.session && sessions.has(cookies.session));
+}
 
 // ---------- Hora oficial (Argentina), calculada en el servidor ----------
 
@@ -148,6 +181,109 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === "/api/hora" && req.method === "GET") {
       return sendJson(res, 200, getArgentinaNow());
+    }
+
+    if (pathname === "/api/productos" && req.method === "GET") {
+      // Público: solo nombres, nunca el costo (eso es privado del panel de ganancias)
+      const costos = await db.getCostos();
+      return sendJson(res, 200, costos.map((c) => c.producto));
+    }
+
+    // ---------- Autenticación del panel de ganancias ----------
+
+    if (pathname === "/api/login" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const password = String(body.password || "");
+
+      if (!ADMIN_PASSWORD) {
+        return sendJson(res, 500, { error: "No hay contraseña configurada en el servidor" });
+      }
+      if (password !== ADMIN_PASSWORD) {
+        return sendJson(res, 401, { error: "Contraseña incorrecta" });
+      }
+
+      const token = crypto.randomUUID();
+      sessions.add(token);
+      res.setHeader(
+        "Set-Cookie",
+        `session=${token}; HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax`
+      );
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/logout" && req.method === "POST") {
+      const cookies = parseCookies(req);
+      if (cookies.session) sessions.delete(cookies.session);
+      res.setHeader("Set-Cookie", "session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/auth-check" && req.method === "GET") {
+      return sendJson(res, 200, { authenticated: isAuthenticated(req) });
+    }
+
+    // ---------- Costos y gastos (protegidos, requieren sesión) ----------
+
+    if (pathname === "/api/costos" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getCostos();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/costos" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const producto = String(body.producto || "").trim();
+      const costo = Number(body.costo);
+
+      if (!producto) return sendJson(res, 400, { error: "Falta el producto" });
+      if (!Number.isFinite(costo) || costo < 0) return sendJson(res, 400, { error: "Costo inválido" });
+
+      await db.upsertCosto(producto, costo);
+      return sendJson(res, 200, { ok: true, producto, costo });
+    }
+
+    if (pathname.startsWith("/api/costos/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const producto = decodeURIComponent(pathname.slice("/api/costos/".length));
+      await db.deleteCosto(producto);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/gastos" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const fecha = query.get("fecha") || getArgentinaNow().fecha;
+      const rows = await db.getGastosByFecha(fecha);
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/gastos" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const concepto = String(body.concepto || "").trim();
+      const monto = Number(body.monto);
+
+      if (!concepto) return sendJson(res, 400, { error: "Falta el concepto" });
+      if (!Number.isFinite(monto) || monto <= 0) return sendJson(res, 400, { error: "Monto inválido" });
+
+      const now = getArgentinaNow();
+      const row = {
+        id: crypto.randomUUID(),
+        concepto,
+        monto,
+        fecha: now.fecha,
+        horaLabel: now.horaLabel,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertGasto(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/gastos/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/gastos/".length));
+      await db.deleteGasto(id);
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === "GET") {

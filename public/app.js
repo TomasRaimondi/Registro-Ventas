@@ -50,6 +50,56 @@ async function fetchTodaySales() {
   return api("/api/ventas");
 }
 
+// ---------- Autocompletado de producto ----------
+
+let listaProductos = [];
+
+async function cargarProductos() {
+  try {
+    listaProductos = await api("/api/productos");
+  } catch (e) {
+    console.error("No se pudo cargar la lista de productos:", e);
+  }
+}
+cargarProductos();
+setInterval(cargarProductos, 30000);
+
+const productoInput = document.getElementById("producto");
+const productoSuggestions = document.getElementById("producto-suggestions");
+
+function renderSuggestions(matches) {
+  if (!matches.length) {
+    productoSuggestions.innerHTML = "";
+    productoSuggestions.classList.remove("open");
+    return;
+  }
+  productoSuggestions.innerHTML = matches
+    .map(p => `<div class="suggestion-item">${escapeHtml(p)}</div>`)
+    .join("");
+  productoSuggestions.classList.add("open");
+}
+
+function buscarSugerencias() {
+  const q = productoInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestions([]); return; }
+  const matches = listaProductos.filter(p => p.toLowerCase().includes(q)).slice(0, 6);
+  renderSuggestions(matches);
+}
+
+productoInput.addEventListener("input", buscarSugerencias);
+productoInput.addEventListener("focus", buscarSugerencias);
+
+productoInput.addEventListener("blur", () => {
+  setTimeout(() => renderSuggestions([]), 150);
+});
+
+productoSuggestions.addEventListener("mousedown", (e) => {
+  const item = e.target.closest(".suggestion-item");
+  if (!item) return;
+  productoInput.value = item.textContent;
+  renderSuggestions([]);
+});
+
 // ---------- Selección de método de pago ----------
 
 let metodoSeleccionado = null;
