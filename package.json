@@ -1,0 +1,19 @@
+{
+  "name": "registroventas",
+  "version": "1.0.0",
+  "description": "Registro de ventas diario con metricas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4"
+  }
+}

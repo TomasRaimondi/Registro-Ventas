@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro de Ventas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Registro de Ventas</h1>
+  </div>
+  <div class="clock">
+    <span id="clock-time">--:--:--</span>
+    <span id="clock-date">--</span>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- Formulario de carga -->
+  <section class="card form-card">
+    <h2>Cargar venta</h2>
+    <form id="sale-form" autocomplete="off">
+      <div class="field">
+        <label for="producto">Producto</label>
+        <input type="text" id="producto" name="producto" placeholder="Ej: Coca Cola 500ml" required>
+      </div>
+
+      <div class="field">
+        <label for="precio">Precio</label>
+        <div class="input-prefix">
+          <span>$</span>
+          <input type="number" id="precio" name="precio" placeholder="0" min="0" step="0.01" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Método de pago</label>
+        <div class="pay-methods" id="pay-methods">
+          <button type="button" class="pay-btn" data-metodo="efectivo">💵 Efectivo</button>
+          <button type="button" class="pay-btn" data-metodo="transferencia">🏦 Transferencia</button>
+          <button type="button" class="pay-btn" data-metodo="debito">💳 Débito</button>
+          <button type="button" class="pay-btn" data-metodo="credito">💳 Crédito</button>
+          <button type="button" class="pay-btn" data-metodo="cuentadni">📱 Cuenta DNI</button>
+          <button type="button" class="pay-btn" data-metodo="mayorista">🏷️ Mayorista</button>
+        </div>
+      </div>
+
+      <button type="submit" class="submit-btn">Registrar venta</button>
+      <p class="hint">La hora se registra automáticamente (Argentina).</p>
+    </form>
+  </section>
+
+  <!-- Metricas -->
+  <section class="metrics">
+    <div class="card total-card">
+      <span class="label">Total vendido hoy</span>
+      <span class="big-number" id="total-dia">$0</span>
+      <span class="sub" id="cant-ventas">0 ventas</span>
+
+      <div class="mayorista-total">
+        <span class="label">Total Mayorista</span>
+        <span class="mayorista-number" id="total-dia-mayorista">$0</span>
+        <span class="sub" id="cant-ventas-mayorista">0 ventas</span>
+      </div>
+    </div>
+
+    <div class="card payment-card">
+      <span class="label">Por método de pago</span>
+      <div class="payment-grid">
+        <div class="payment-item">
+          <span class="pm-icon">💵</span>
+          <span class="pm-name">Efectivo</span>
+          <span class="pm-value" id="total-efectivo">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">🏦</span>
+          <span class="pm-name">Transferencia</span>
+          <span class="pm-value" id="total-transferencia">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">💳</span>
+          <span class="pm-name">Débito</span>
+          <span class="pm-value" id="total-debito">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">💳</span>
+          <span class="pm-name">Crédito</span>
+          <span class="pm-value" id="total-credito">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">📱</span>
+          <span class="pm-name">Cuenta DNI</span>
+          <span class="pm-value" id="total-cuentadni">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">🏷️</span>
+          <span class="pm-name">Mayorista</span>
+          <span class="pm-value" id="total-mayorista">$0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <span class="label">Volumen de ventas por hora</span>
+      <div class="chart" id="hour-chart"></div>
+    </div>
+  </section>
+
+  <!-- Historial -->
+  <section class="card history-card">
+    <div class="history-header">
+      <h2>Ventas de hoy</h2>
+      <button id="clear-day" class="clear-btn">Vaciar historial de hoy</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Producto</th>
+            <th>Precio</th>
+            <th>Método</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <tr class="empty-row"><td colspan="5">Todavía no cargaste ninguna venta hoy.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
