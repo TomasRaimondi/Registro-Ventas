@@ -286,6 +286,46 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Salario del empleado ----------
+    // Lectura pública (el empleado la ve sin contraseña), escritura solo del dueño.
+
+    if (pathname === "/api/salario" && req.method === "GET") {
+      const rows = await db.getAllSalario();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/salario" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const fecha = String(body.fecha || "").trim() || getArgentinaNow().fecha;
+      const sueldo = Number(body.sueldo || 0);
+      const comision = Number(body.comision || 0);
+      const nota = body.nota ? String(body.nota).trim() : null;
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
+      if (!Number.isFinite(sueldo) || sueldo < 0) return sendJson(res, 400, { error: "Sueldo inválido" });
+      if (!Number.isFinite(comision) || comision < 0) return sendJson(res, 400, { error: "Comisión inválida" });
+      if (sueldo === 0 && comision === 0) return sendJson(res, 400, { error: "Ingresá al menos un sueldo o una comisión" });
+
+      const row = {
+        id: crypto.randomUUID(),
+        fecha,
+        sueldo,
+        comision,
+        nota,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertSalario(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/salario/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/salario/".length));
+      await db.deleteSalario(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (req.method === "GET") {
       return serveStatic(req, res);
     }

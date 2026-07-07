@@ -23,6 +23,14 @@ const SCHEMA = `
     horaLabel TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS salario (
+    id TEXT PRIMARY KEY,
+    fecha TEXT NOT NULL,
+    sueldo REAL NOT NULL DEFAULT 0,
+    comision REAL NOT NULL DEFAULT 0,
+    nota TEXT,
+    creadoEn TEXT NOT NULL
+  );
 `;
 
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
@@ -96,6 +104,21 @@ if (USE_TURSO) {
     async deleteGasto(id) {
       await client.execute({ sql: "DELETE FROM gastos WHERE id = ?", args: [id] });
     },
+
+    async getAllSalario() {
+      const res = await client.execute("SELECT * FROM salario ORDER BY fecha ASC, creadoEn ASC");
+      return res.rows;
+    },
+    async insertSalario(row) {
+      await client.execute({
+        sql: `INSERT INTO salario (id, fecha, sueldo, comision, nota, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.fecha, row.sueldo, row.comision, row.nota || null, row.creadoEn],
+      });
+    },
+    async deleteSalario(id) {
+      await client.execute({ sql: "DELETE FROM salario WHERE id = ?", args: [id] });
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -147,6 +170,19 @@ if (USE_TURSO) {
     },
     async deleteGasto(id) {
       db.prepare("DELETE FROM gastos WHERE id = ?").run(id);
+    },
+
+    async getAllSalario() {
+      return db.prepare("SELECT * FROM salario ORDER BY fecha ASC, creadoEn ASC").all();
+    },
+    async insertSalario(row) {
+      db.prepare(
+        `INSERT INTO salario (id, fecha, sueldo, comision, nota, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.fecha, row.sueldo, row.comision, row.nota || null, row.creadoEn);
+    },
+    async deleteSalario(id) {
+      db.prepare("DELETE FROM salario WHERE id = ?").run(id);
     },
   };
 }

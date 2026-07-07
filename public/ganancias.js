@@ -27,6 +27,11 @@ function showApp() {
   loginCard.style.display = "none";
   appContent.style.display = "block";
   logoutBtn.style.display = "inline-block";
+  const fechaInput = document.getElementById("salario-fecha");
+  if (fechaInput && !fechaInput.value) {
+    const now = new Date();
+    fechaInput.value = now.toISOString().slice(0, 10);
+  }
   renderAll();
 }
 
@@ -127,6 +132,45 @@ async function deleteGasto(id) {
   }
 }
 
+// ---------- Salario del empleado ----------
+
+document.getElementById("salario-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fecha = document.getElementById("salario-fecha").value;
+  const sueldo = parseFloat(document.getElementById("salario-sueldo").value) || 0;
+  const comision = parseFloat(document.getElementById("salario-comision").value) || 0;
+  const nota = document.getElementById("salario-nota").value.trim();
+
+  if (!fecha) return;
+  if (sueldo <= 0 && comision <= 0) {
+    alert("Ingresá un sueldo o una comisión mayor a 0.");
+    return;
+  }
+
+  try {
+    await api("/api/salario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fecha, sueldo, comision, nota }),
+    });
+    document.getElementById("salario-sueldo").value = "";
+    document.getElementById("salario-comision").value = "";
+    document.getElementById("salario-nota").value = "";
+    renderAll();
+  } catch (err) {
+    alert("No se pudo registrar el salario.\n" + err.message);
+  }
+});
+
+async function deleteSalario(id) {
+  try {
+    await api("/api/salario/" + encodeURIComponent(id), { method: "DELETE" });
+    renderAll();
+  } catch (err) {
+    alert("No se pudo borrar el registro.\n" + err.message);
+  }
+}
+
 // ---------- Render ----------
 
 function escapeHtml(str) {
@@ -136,12 +180,13 @@ function escapeHtml(str) {
 }
 
 async function renderAll() {
-  let ventas, costos, gastos;
+  let ventas, costos, gastos, salarios;
   try {
-    [ventas, costos, gastos] = await Promise.all([
+    [ventas, costos, gastos, salarios] = await Promise.all([
       api("/api/ventas"),
       api("/api/costos"),
       api("/api/gastos"),
+      api("/api/salario"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -246,6 +291,28 @@ async function renderAll() {
     });
     gastosBody.querySelectorAll(".del-btn").forEach(btn => {
       btn.addEventListener("click", () => deleteGasto(btn.dataset.id));
+    });
+  }
+
+  // Tabla de salario
+  const salarioBody = document.getElementById("salario-body");
+  salarioBody.innerHTML = "";
+  if (salarios.length === 0) {
+    salarioBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no cargaste ningún día.</td></tr>`;
+  } else {
+    [...salarios].reverse().forEach(s => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${s.fecha}</td>
+        <td>${s.sueldo > 0 ? money(s.sueldo) : "—"}</td>
+        <td>${s.comision > 0 ? money(s.comision) : "—"}</td>
+        <td>${s.nota ? escapeHtml(s.nota) : ""}</td>
+        <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>
+      `;
+      salarioBody.appendChild(tr);
+    });
+    salarioBody.querySelectorAll(".del-btn").forEach(btn => {
+      btn.addEventListener("click", () => deleteSalario(btn.dataset.id));
     });
   }
 }

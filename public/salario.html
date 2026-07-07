@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte de Salario</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Reporte de Salario</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">← Registro de Ventas</a>
+  </div>
+</header>
+
+<main class="layout-single">
+
+  <section class="card total-card">
+    <span class="sub" id="dias-trabajados">Trabajaste 0 días</span>
+    <span class="label" style="margin-top:10px;">Sueldo acumulado</span>
+    <span class="big-number" id="sueldo-acumulado">$0</span>
+  </section>
+
+  <section class="metrics-single" style="display:grid; grid-template-columns:1fr; gap:20px;">
+    <div class="card">
+      <span class="label">Comisiones y bonos totales</span>
+      <span class="big-number" id="comisiones-total" style="color:var(--green);">$0</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Detalle día a día</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Fecha</th><th>Sueldo agregado</th><th>Comisión / Bono</th><th>Nota</th></tr>
+        </thead>
+        <tbody id="salario-body">
+          <tr class="empty-row"><td colspan="4">Todavía no se cargó ningún día.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script src="salario.js"></script>
+</body>
+</html>
