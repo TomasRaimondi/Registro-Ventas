@@ -372,6 +372,17 @@ tbody tr:last-child td { border-bottom: none; }
   flex-direction: column;
   gap: 24px;
 }
+.layout-wide { max-width: 1200px; }
+
+.side-by-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .side-by-side { grid-template-columns: 1fr; }
+}
 
 .metrics-single {
   display: grid;

@@ -204,6 +204,30 @@ async function renderAll() {
     });
   }
 
+  // Detalle de ventas de hoy (precio, costo y ganancia por venta)
+  const detalleBody = document.getElementById("detalle-ventas-body");
+  detalleBody.innerHTML = "";
+  if (ventas.length === 0) {
+    detalleBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay ventas hoy.</td></tr>`;
+  } else {
+    [...ventas].reverse().forEach(v => {
+      const key = normalizeNombre(v.producto);
+      const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
+      const costo = tieneCosto ? costoPorProducto[key] : null;
+      const ganancia = tieneCosto ? v.precio - costo : null;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${v.horaLabel}</td>
+        <td>${escapeHtml(v.producto)}</td>
+        <td>${money(v.precio)}</td>
+        <td>${tieneCosto ? money(costo) : "—"}</td>
+        <td style="${ganancia !== null && ganancia < 0 ? 'color:#e15b5b;' : ''}">${ganancia !== null ? money(ganancia) : "—"}</td>
+      `;
+      detalleBody.appendChild(tr);
+    });
+  }
+
   // Tabla de gastos
   const gastosBody = document.getElementById("gastos-body");
   gastosBody.innerHTML = "";
