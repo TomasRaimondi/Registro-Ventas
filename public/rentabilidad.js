@@ -191,7 +191,10 @@ function renderSelectoresProducto() {
   const stockSelect = document.getElementById("stock-producto-select");
   const crecimientoSelect = document.getElementById("producto-crecimiento-select");
 
-  [comboSelect, componenteSelect, stockSelect, crecimientoSelect].forEach(sel => {
+  comboSelect.innerHTML = `<option value="" disabled selected>Elegí el combo</option>` + opciones;
+  componenteSelect.innerHTML = `<option value="" disabled selected>Elegí el componente</option>` + opciones;
+
+  [stockSelect, crecimientoSelect].forEach(sel => {
     const valorPrevio = sel.value;
     sel.innerHTML = opciones;
     if (productos.includes(valorPrevio)) sel.value = valorPrevio;
@@ -201,7 +204,20 @@ function renderSelectoresProducto() {
     productoCrecimientoSeleccionado = productos[0];
   }
   if (productoCrecimientoSeleccionado) crecimientoSelect.value = productoCrecimientoSeleccionado;
+
+  renderVerComboSelect();
 }
+
+function renderVerComboSelect() {
+  const verComboSelect = document.getElementById("ver-combo-select");
+  const valorPrevio = verComboSelect.value;
+  const combos = [...new Set(composicionGlobal.map(c => c.comboProducto))].sort((a, b) => a.localeCompare(b));
+  verComboSelect.innerHTML = `<option value="">Elegí un combo para ver su contenido</option>` +
+    combos.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  if (combos.includes(valorPrevio)) verComboSelect.value = valorPrevio;
+}
+
+document.getElementById("ver-combo-select").addEventListener("change", renderComposicion);
 
 document.getElementById("composicion-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -221,8 +237,12 @@ document.getElementById("composicion-form").addEventListener("submit", async (e)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ comboProducto, componenteProducto, cantidad }),
     });
+    document.getElementById("combo-select").selectedIndex = 0;
+    document.getElementById("componente-select").selectedIndex = 0;
     document.getElementById("componente-cantidad").value = "1";
     composicionGlobal = await api("/api/composicion");
+    renderVerComboSelect();
+    document.getElementById("ver-combo-select").value = comboProducto;
     renderComposicion();
     renderRentabilidad();
   } catch (err) {
@@ -234,6 +254,7 @@ async function deleteComponente(id) {
   try {
     await api("/api/composicion/" + encodeURIComponent(id), { method: "DELETE" });
     composicionGlobal = await api("/api/composicion");
+    renderVerComboSelect();
     renderComposicion();
     renderRentabilidad();
   } catch (err) {
@@ -243,14 +264,21 @@ async function deleteComponente(id) {
 
 function renderComposicion() {
   const body = document.getElementById("composicion-body");
-  if (composicionGlobal.length === 0) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no vinculaste ningún combo.</td></tr>`;
+  const comboElegido = document.getElementById("ver-combo-select").value;
+
+  if (!comboElegido) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="3">Elegí un combo arriba para ver de qué está compuesto.</td></tr>`;
     return;
   }
-  const ordenado = [...composicionGlobal].sort((a, b) => a.comboProducto.localeCompare(b.comboProducto));
-  body.innerHTML = ordenado.map(c => `
+
+  const componentes = composicionGlobal.filter(c => c.comboProducto === comboElegido);
+  if (componentes.length === 0) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="3">Este combo todavía no tiene componentes vinculados.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = componentes.map(c => `
     <tr>
-      <td>${escapeHtml(c.comboProducto)}</td>
       <td>${escapeHtml(c.componenteProducto)}</td>
       <td>${c.cantidad}</td>
       <td><button class="del-btn" title="Desvincular" data-id="${c.id}">✕</button></td>

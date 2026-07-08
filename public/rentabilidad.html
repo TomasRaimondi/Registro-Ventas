@@ -44,16 +44,27 @@
         así el stock y el capital parado no se cuentan dos veces. El empleado sigue vendiendo el combo normal, esto es solo interno.
       </p>
       <form id="composicion-form" class="inline-form">
-        <select id="combo-select" required></select>
-        <select id="componente-select" required></select>
+        <select id="combo-select" required>
+          <option value="" disabled selected>Elegí el combo</option>
+        </select>
+        <select id="componente-select" required>
+          <option value="" disabled selected>Elegí el componente</option>
+        </select>
         <input type="number" id="componente-cantidad" placeholder="Cant." min="1" step="1" value="1" style="max-width:90px;">
         <button type="submit" class="submit-btn">Vincular</button>
       </form>
+
+      <div class="field" style="max-width:400px; margin-top:24px;">
+        <label for="ver-combo-select">Ver qué contiene un combo</label>
+        <select id="ver-combo-select">
+          <option value="" selected>Elegí un combo para ver su contenido</option>
+        </select>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Combo</th><th>Componente</th><th>Cantidad</th><th></th></tr></thead>
+          <thead><tr><th>Componente</th><th>Cantidad</th><th></th></tr></thead>
           <tbody id="composicion-body">
-            <tr class="empty-row"><td colspan="4">Todavía no vinculaste ningún combo.</td></tr>
+            <tr class="empty-row"><td colspan="3">Elegí un combo arriba para ver de qué está compuesto.</td></tr>
           </tbody>
         </table>
       </div>
