@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carga de Ventas Pasadas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Carga de Ventas Pasadas</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="card form-card">
+      <h2>Cargar venta de un día anterior</h2>
+      <p class="hint" style="text-align:left;">Usá esto para anotar ventas que no se cargaron en el momento (ej: las que tenías en un Excel). Se suman a las métricas y a Reportes igual que una venta normal.</p>
+
+      <form id="sale-form" autocomplete="off">
+        <div class="field">
+          <label for="fecha-venta">Fecha de la venta</label>
+          <input type="date" id="fecha-venta" required>
+        </div>
+
+        <div class="field autocomplete-field">
+          <label for="producto">Producto</label>
+          <input type="text" id="producto" name="producto" placeholder="Ej: Coca Cola 500ml" autocomplete="off">
+          <div class="suggestions" id="producto-suggestions"></div>
+        </div>
+
+        <div class="field">
+          <label for="precio">Precio</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="precio" name="precio" placeholder="0" min="0" step="0.01">
+          </div>
+        </div>
+
+        <button type="button" id="add-item-btn" class="add-item-btn">+ Agregar otro producto a esta venta</button>
+
+        <div class="cart-list" id="cart-list"></div>
+
+        <div class="field">
+          <label>Método de pago</label>
+          <div class="pay-methods" id="pay-methods">
+            <button type="button" class="pay-btn" data-metodo="efectivo">💵 Efectivo</button>
+            <button type="button" class="pay-btn" data-metodo="transferencia">🏦 Transferencia</button>
+            <button type="button" class="pay-btn" data-metodo="debito">💳 Débito</button>
+            <button type="button" class="pay-btn" data-metodo="credito">💳 Crédito</button>
+            <button type="button" class="pay-btn" data-metodo="cuentadni">📱 Cuenta DNI</button>
+            <button type="button" class="pay-btn" data-metodo="mayorista">🏷️ Mayorista</button>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn">Registrar venta pasada</button>
+      </form>
+    </section>
+
+    <section class="card history-card">
+      <div class="history-header">
+        <h2>Ventas cargadas de esa fecha</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Producto</th>
+              <th>Precio</th>
+              <th>Método</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr class="empty-row"><td colspan="5">Elegí una fecha para ver sus ventas.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="carga-historica.js"></script>
+</body>
+</html>

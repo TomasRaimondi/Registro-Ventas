@@ -176,15 +176,29 @@ const server = http.createServer(async (req, res) => {
       const total = itemsProcessed.reduce((acc, it) => acc + it.precio, 0);
       const productoResumen = itemsProcessed.map((it) => it.producto).join(", ");
 
-      const now = getArgentinaNow();
+      // Solo el dueño (con sesión) puede elegir una fecha pasada, para cargar ventas
+      // que no se registraron en el momento (ej: las que ya tenía anotadas en un Excel).
+      let fecha, hora, horaLabel;
+      if (isAuthenticated(req) && body.fecha) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(body.fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
+        fecha = body.fecha;
+        hora = Number.isInteger(body.hora) && body.hora >= 0 && body.hora <= 23 ? body.hora : 12;
+        horaLabel = typeof body.horaLabel === "string" && body.horaLabel ? body.horaLabel : `${String(hora).padStart(2, "0")}:00:00`;
+      } else {
+        const now = getArgentinaNow();
+        fecha = now.fecha;
+        hora = now.hora;
+        horaLabel = now.horaLabel;
+      }
+
       const row = {
         id: crypto.randomUUID(),
         producto: productoResumen,
         precio: Math.round(total * 100) / 100,
         metodo,
-        fecha: now.fecha,
-        hora: now.hora,
-        horaLabel: now.horaLabel,
+        fecha,
+        hora,
+        horaLabel,
         creadoEn: new Date().toISOString(),
       };
 
