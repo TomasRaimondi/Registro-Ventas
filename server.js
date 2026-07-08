@@ -174,7 +174,15 @@ const server = http.createServer(async (req, res) => {
       }
 
       const total = itemsProcessed.reduce((acc, it) => acc + it.precio, 0);
-      const productoResumen = itemsProcessed.map((it) => it.producto).join(", ");
+
+      // Agrupa productos repetidos en el resumen (ej: "Pancake x10" en vez de repetirlo 10 veces)
+      const conteoPorProducto = new Map();
+      for (const it of itemsProcessed) {
+        conteoPorProducto.set(it.producto, (conteoPorProducto.get(it.producto) || 0) + 1);
+      }
+      const productoResumen = [...conteoPorProducto.entries()]
+        .map(([producto, cantidad]) => (cantidad > 1 ? `${producto} x${cantidad}` : producto))
+        .join(", ");
 
       // Solo el dueño (con sesión) puede elegir una fecha pasada, para cargar ventas
       // que no se registraron en el momento (ej: las que ya tenía anotadas en un Excel).

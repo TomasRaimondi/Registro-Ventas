@@ -154,10 +154,13 @@ function renderCart() {
   carrito.forEach((item, idx) => {
     const div = document.createElement("div");
     div.className = "cart-item";
+    const detalle = item.cantidad > 1
+      ? `${money(item.precioUnitario)} c/u × ${item.cantidad} = ${money(item.precioUnitario * item.cantidad)}`
+      : money(item.precioUnitario);
     div.innerHTML = `
       <div class="cart-item-info">
         <span class="cart-item-nombre">${escapeHtml(item.producto)}</span>
-        <span class="cart-item-precio">${money(item.precio)}</span>
+        <span class="cart-item-precio">${detalle}</span>
       </div>
       <button type="button" class="cart-item-remove" title="Quitar">✕</button>
     `;
@@ -169,10 +172,11 @@ function renderCart() {
   });
 
   if (carrito.length > 0) {
-    const subtotal = carrito.reduce((acc, it) => acc + it.precio, 0);
+    const totalUnidades = carrito.reduce((acc, it) => acc + it.cantidad, 0);
+    const subtotal = carrito.reduce((acc, it) => acc + it.precioUnitario * it.cantidad, 0);
     const sub = document.createElement("div");
     sub.className = "cart-subtotal";
-    sub.innerHTML = `<span>${carrito.length} producto${carrito.length === 1 ? "" : "s"} en esta venta</span><span>${money(subtotal)}</span>`;
+    sub.innerHTML = `<span>${totalUnidades} unidad${totalUnidades === 1 ? "" : "es"} en esta venta</span><span>${money(subtotal)}</span>`;
     cartList.appendChild(sub);
   }
 }
@@ -180,11 +184,15 @@ function renderCart() {
 function agregarItemDesdeInputs() {
   const producto = productoInput.value.trim();
   const precio = parseFloat(document.getElementById("precio").value);
+  const cantidadInput = parseInt(document.getElementById("cantidad").value, 10);
+  const cantidad = Number.isInteger(cantidadInput) && cantidadInput > 0 ? cantidadInput : 1;
+
   if (!producto || isNaN(precio) || precio <= 0) return false;
 
-  carrito.push({ producto, precio });
+  carrito.push({ producto, precioUnitario: precio, cantidad });
   productoInput.value = "";
   document.getElementById("precio").value = "";
+  document.getElementById("cantidad").value = "1";
   renderSuggestions([]);
   renderCart();
   return true;
@@ -227,10 +235,14 @@ form.addEventListener("submit", async (e) => {
   submitBtn.textContent = "Registrando...";
 
   try {
+    const itemsAEnviar = carrito.flatMap(it =>
+      Array.from({ length: it.cantidad }, () => ({ producto: it.producto, precio: it.precioUnitario }))
+    );
+
     await api("/api/ventas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: carrito, metodo: metodoSeleccionado, fecha }),
+      body: JSON.stringify({ items: itemsAEnviar, metodo: metodoSeleccionado, fecha }),
     });
 
     carrito = [];
