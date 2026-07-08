@@ -38,33 +38,39 @@
   <div id="app-content" style="display:none;">
 
     <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:20px;">
-      <div class="card">
-        <span class="label" id="label-volumen">Volumen del día</span>
-        <span class="big-number" id="stat-volumen" style="font-size:26px;">$0</span>
+      <div class="card metric-card">
+        <span class="label">Volumen</span>
+        <span class="big-number" id="stat-volumen">$0</span>
+        <span class="metric-sub" id="label-volumen"></span>
       </div>
-      <div class="card">
-        <span class="label" id="label-volumen-mayorista">Volumen Mayorista del día</span>
-        <span class="big-number" id="stat-volumen-mayorista" style="font-size:26px; color:var(--orange);">$0</span>
+      <div class="card metric-card">
+        <span class="label">Volumen mayorista</span>
+        <span class="big-number" id="stat-volumen-mayorista" style="color:var(--orange);">$0</span>
+        <span class="metric-sub" id="label-volumen-mayorista"></span>
       </div>
-      <div class="card">
-        <span class="label" id="label-ganancia-neta">Ganancia neta del día</span>
-        <span class="big-number" id="stat-ganancia-neta" style="font-size:26px;">$0</span>
+      <div class="card metric-card">
+        <span class="label">Ganancia neta</span>
+        <span class="big-number" id="stat-ganancia-neta">$0</span>
+        <span class="metric-sub" id="label-ganancia-neta"></span>
       </div>
-      <div class="card">
-        <span class="label" id="label-gasto">Gasto del día</span>
-        <span class="big-number" id="stat-gasto" style="font-size:26px; color:#e15b5b;">$0</span>
+      <div class="card metric-card">
+        <span class="label">Gasto</span>
+        <span class="big-number" id="stat-gasto" style="color:var(--red);">$0</span>
+        <span class="metric-sub" id="label-gasto"></span>
       </div>
-      <div class="card">
-        <span class="label" id="label-cant-ventas">Ventas del día</span>
-        <span class="big-number" id="stat-cant-ventas" style="font-size:26px;">0</span>
+      <div class="card metric-card">
+        <span class="label">Ventas</span>
+        <span class="big-number" id="stat-cant-ventas">0</span>
+        <span class="metric-sub" id="label-cant-ventas"></span>
       </div>
-      <div class="card">
+      <div class="card metric-card">
         <span class="label">Ticket promedio</span>
-        <span class="big-number" id="stat-ticket-promedio" style="font-size:26px;">$0</span>
+        <span class="big-number" id="stat-ticket-promedio">$0</span>
       </div>
-      <div class="card">
-        <span class="label" id="label-dias">Días con actividad (en el día)</span>
-        <span class="big-number" id="stat-dias" style="font-size:26px;">0</span>
+      <div class="card metric-card">
+        <span class="label">Días con actividad</span>
+        <span class="big-number" id="stat-dias">0</span>
+        <span class="metric-sub" id="label-dias"></span>
       </div>
     </section>
 

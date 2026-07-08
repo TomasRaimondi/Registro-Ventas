@@ -1,5 +1,7 @@
 function money(n) {
-  return "$" + Number(n).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const num = Number(n);
+  const sign = num < 0 ? "-" : "";
+  return sign + "$" + Math.abs(num).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function normalizeNombre(s) {
@@ -382,16 +384,19 @@ function renderPeriodo(tipo) {
   const netaActual = (actual.gananciaBruta + actual.gananciaBrutaMayorista) - actual.gasto;
   const ticketActual = actual.cantVentas ? actual.volumen / actual.cantVentas : 0;
 
-  document.getElementById("label-volumen").textContent = `Volumen (${actual.label})`;
-  document.getElementById("label-volumen-mayorista").textContent = `Volumen Mayorista (${actual.label})`;
-  document.getElementById("label-ganancia-neta").textContent = `Ganancia neta ${nombrePeriodoDel}`;
-  document.getElementById("label-gasto").textContent = `Gasto ${nombrePeriodoDel}`;
-  document.getElementById("label-cant-ventas").textContent = `Ventas ${nombrePeriodoDel}`;
-  document.getElementById("label-dias").textContent = `Días con actividad ${nombrePeriodoDel}`;
+  document.getElementById("label-volumen").textContent = actual.label;
+  document.getElementById("label-volumen-mayorista").textContent = actual.label;
+  document.getElementById("label-ganancia-neta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-dias").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
 
   document.getElementById("stat-volumen").textContent = money(actual.volumen);
   document.getElementById("stat-volumen-mayorista").textContent = money(actual.volumenMayorista);
-  document.getElementById("stat-ganancia-neta").textContent = money(netaActual);
+  const statGananciaNeta = document.getElementById("stat-ganancia-neta");
+  statGananciaNeta.textContent = money(netaActual);
+  statGananciaNeta.classList.toggle("value-positive", netaActual > 0);
+  statGananciaNeta.classList.toggle("value-negative", netaActual < 0);
   document.getElementById("stat-gasto").textContent = money(actual.gasto);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);

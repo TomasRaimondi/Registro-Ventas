@@ -1,5 +1,7 @@
 function money(n) {
-  return "$" + Number(n).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const num = Number(n);
+  const sign = num < 0 ? "-" : "";
+  return sign + "$" + Math.abs(num).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 async function api(url, options) {
@@ -218,7 +220,10 @@ async function renderAll() {
   document.getElementById("ventas-consideradas").textContent =
     `${itemsConsiderados} de ${items.length} productos con costo cargado`;
   document.getElementById("gasto-total").textContent = money(gastoTotal);
-  document.getElementById("ganancia-neta").textContent = money(gananciaNeta);
+  const gananciaNetaEl = document.getElementById("ganancia-neta");
+  gananciaNetaEl.textContent = money(gananciaNeta);
+  gananciaNetaEl.classList.toggle("value-positive", gananciaNeta > 0);
+  gananciaNetaEl.classList.toggle("value-negative", gananciaNeta < 0);
 
   const sinCostoCard = document.getElementById("sin-costo-card");
   const sinCostoList = document.getElementById("sin-costo-list");

@@ -15,6 +15,8 @@
   --purple-soft: rgba(176, 131, 255, 0.15);
   --orange: #ffb648;
   --orange-soft: rgba(255, 182, 72, 0.15);
+  --red: #e15b5b;
+  --red-soft: rgba(225, 91, 91, 0.15);
   --radius: 16px;
   --shadow: 0 8px 24px rgba(0,0,0,0.25);
 }
@@ -269,8 +271,19 @@ input[type="text"]:focus, input[type="number"]:focus {
 }
 
 .total-card { grid-column: 1 / -1; }
-.big-number { font-size: 42px; font-weight: 800; display: block; letter-spacing: -1px; }
+.big-number {
+  font-size: 42px;
+  font-weight: 800;
+  display: block;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  word-break: break-word;
+}
 .total-card .sub { color: var(--text-dim); font-size: 13px; }
+
+.value-positive { color: var(--green); }
+.value-negative { color: var(--red); }
 
 .mayorista-total {
   margin-top: 16px;
@@ -605,6 +618,27 @@ tbody tr:last-child td { border-bottom: none; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 84px;
+}
+.metric-card .label {
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metric-card .big-number { font-size: 25px; }
+.metric-sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 
 .login-card { max-width: 380px; margin: 60px auto 0; }

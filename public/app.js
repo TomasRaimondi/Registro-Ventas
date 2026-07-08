@@ -10,7 +10,9 @@ const PAYMENT_LABELS = {
 };
 
 function money(n) {
-  return "$" + Number(n).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const num = Number(n);
+  const sign = num < 0 ? "-" : "";
+  return sign + "$" + Math.abs(num).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 // ---------- Reloj en vivo (solo visual, la hora oficial la pone el servidor) ----------
