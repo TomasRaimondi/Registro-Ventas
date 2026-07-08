@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compras de Stock</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Compras de Stock</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/rentabilidad.html" class="link-btn">← Rentabilidad</a>
+    <a href="/ganancias.html" class="link-btn">Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:20px;">
+      <div class="card">
+        <span class="label">Valor total de inventario</span>
+        <span class="big-number" id="stat-valor-inventario" style="font-size:28px;">$0</span>
+        <span class="sub">stock × costo promedio, todos los productos</span>
+      </div>
+      <div class="card">
+        <span class="label">Invertido en compras este mes</span>
+        <span class="big-number" id="stat-invertido-mes" style="font-size:28px; color:var(--accent);">$0</span>
+      </div>
+      <div class="card">
+        <span class="label">Productos con stock cargado</span>
+        <span class="big-number" id="stat-productos-stock" style="font-size:28px;">0</span>
+      </div>
+    </section>
+
+    <section class="compra-layout">
+
+      <!-- Formulario -->
+      <div class="card">
+        <h2>Registrar movimiento de stock</h2>
+
+        <div class="tipo-tabs" id="tipo-tabs">
+          <button type="button" class="tipo-tab active" data-tipo="compra">📦 Compra</button>
+          <button type="button" class="tipo-tab" data-tipo="ajuste">⚠️ Ajuste</button>
+        </div>
+
+        <form id="compra-form" autocomplete="off">
+          <div class="field autocomplete-field">
+            <label for="producto">Producto</label>
+            <input type="text" id="producto" placeholder="Buscá o escribí el producto" autocomplete="off" required>
+            <div class="suggestions" id="producto-suggestions"></div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="fecha">Fecha</label>
+              <input type="date" id="fecha" required>
+            </div>
+            <div class="field">
+              <label id="label-cantidad" for="cantidad">Cantidad comprada</label>
+              <input type="number" id="cantidad" step="1" required>
+            </div>
+          </div>
+
+          <div class="field-row" id="fila-precio">
+            <div class="field">
+              <label for="precio-unitario">Precio pagado (por unidad)</label>
+              <div class="input-prefix">
+                <span>$</span>
+                <input type="number" id="precio-unitario" min="0" step="0.01">
+              </div>
+            </div>
+            <div class="field">
+              <label for="proveedor">Proveedor <span class="opcional">(opcional)</span></label>
+              <input type="text" id="proveedor" placeholder="Ej: Distribuidora Sur">
+            </div>
+          </div>
+
+          <div class="field" id="fila-vencimiento">
+            <label for="vencimiento">Vencimiento <span class="opcional">(opcional)</span></label>
+            <input type="date" id="vencimiento">
+          </div>
+
+          <div class="field" id="fila-motivo" style="display:none;">
+            <label for="nota">Motivo del ajuste</label>
+            <input type="text" id="nota" placeholder="Ej: Producto vencido, rotura, corrección de conteo">
+          </div>
+
+          <button type="submit" class="submit-btn" id="submit-btn">Registrar compra</button>
+        </form>
+      </div>
+
+      <!-- Vista previa en vivo -->
+      <div class="card preview-card">
+        <h2>Vista previa</h2>
+        <div id="preview-sin-producto" class="hint" style="text-align:left; padding:20px 0;">
+          Elegí un producto para ver cómo queda su stock y costo promedio.
+        </div>
+        <div id="preview-con-producto" style="display:none;">
+          <div class="preview-row">
+            <div class="preview-col">
+              <span class="preview-label">Stock actual</span>
+              <span class="preview-value" id="preview-stock-antes">0</span>
+            </div>
+            <span class="preview-arrow">→</span>
+            <div class="preview-col">
+              <span class="preview-label">Stock nuevo</span>
+              <span class="preview-value preview-value-highlight" id="preview-stock-despues">0</span>
+            </div>
+          </div>
+          <div class="preview-row">
+            <div class="preview-col">
+              <span class="preview-label">Costo promedio actual</span>
+              <span class="preview-value" id="preview-costo-antes">$0</span>
+            </div>
+            <span class="preview-arrow">→</span>
+            <div class="preview-col">
+              <span class="preview-label">Costo promedio nuevo</span>
+              <span class="preview-value preview-value-highlight" id="preview-costo-despues">$0</span>
+            </div>
+          </div>
+          <div class="preview-total" id="preview-total-row" style="display:none;">
+            <span>Total de esta compra</span>
+            <span id="preview-total">$0</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="card">
+      <div class="history-header">
+        <h2>Historial de movimientos</h2>
+        <select id="filtro-producto" class="periodo-selector" style="width:auto; margin-top:0;">
+          <option value="">Todos los productos</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Precio unit.</th>
+              <th>Total</th>
+              <th>Proveedor</th>
+              <th>Vencimiento</th>
+              <th>Stock</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="historial-body">
+            <tr class="empty-row"><td colspan="10">Todavía no cargaste ningún movimiento.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="compras-stock.js"></script>
+</body>
+</html>

@@ -43,6 +43,21 @@ const SCHEMA = `
     componenteProducto TEXT NOT NULL,
     cantidad INTEGER NOT NULL DEFAULT 1
   );
+  CREATE TABLE IF NOT EXISTS compras_stock (
+    id TEXT PRIMARY KEY,
+    tipo TEXT NOT NULL DEFAULT 'compra',
+    producto TEXT NOT NULL,
+    cantidad INTEGER NOT NULL,
+    precioUnitario REAL,
+    costoTotal REAL,
+    stockAntes INTEGER NOT NULL,
+    stockDespues INTEGER NOT NULL,
+    proveedor TEXT,
+    vencimiento TEXT,
+    nota TEXT,
+    fecha TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -219,6 +234,33 @@ if (USE_TURSO) {
       const res = await client.execute({ sql: "SELECT * FROM ventas WHERE id = ?", args: [id] });
       return res.rows[0] || null;
     },
+
+    async getComprasByProducto(producto) {
+      const res = await client.execute({
+        sql: "SELECT * FROM compras_stock WHERE producto = ? ORDER BY fecha ASC, creadoEn ASC",
+        args: [producto],
+      });
+      return res.rows;
+    },
+    async getAllCompras() {
+      const res = await client.execute("SELECT * FROM compras_stock ORDER BY fecha DESC, creadoEn DESC");
+      return res.rows;
+    },
+    async insertCompra(row) {
+      await client.execute({
+        sql: `INSERT INTO compras_stock
+              (id, tipo, producto, cantidad, precioUnitario, costoTotal, stockAntes, stockDespues, proveedor, vencimiento, nota, fecha, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.tipo, row.producto, row.cantidad, row.precioUnitario, row.costoTotal, row.stockAntes, row.stockDespues, row.proveedor || null, row.vencimiento || null, row.nota || null, row.fecha, row.creadoEn],
+      });
+    },
+    async deleteCompra(id) {
+      await client.execute({ sql: "DELETE FROM compras_stock WHERE id = ?", args: [id] });
+    },
+    async getCompraById(id) {
+      const res = await client.execute({ sql: "SELECT * FROM compras_stock WHERE id = ?", args: [id] });
+      return res.rows[0] || null;
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -344,6 +386,26 @@ if (USE_TURSO) {
     },
     async getVentaById(id) {
       return db.prepare("SELECT * FROM ventas WHERE id = ?").get(id) || null;
+    },
+
+    async getComprasByProducto(producto) {
+      return db.prepare("SELECT * FROM compras_stock WHERE producto = ? ORDER BY fecha ASC, creadoEn ASC").all(producto);
+    },
+    async getAllCompras() {
+      return db.prepare("SELECT * FROM compras_stock ORDER BY fecha DESC, creadoEn DESC").all();
+    },
+    async insertCompra(row) {
+      db.prepare(
+        `INSERT INTO compras_stock
+         (id, tipo, producto, cantidad, precioUnitario, costoTotal, stockAntes, stockDespues, proveedor, vencimiento, nota, fecha, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.tipo, row.producto, row.cantidad, row.precioUnitario, row.costoTotal, row.stockAntes, row.stockDespues, row.proveedor || null, row.vencimiento || null, row.nota || null, row.fecha, row.creadoEn);
+    },
+    async deleteCompra(id) {
+      db.prepare("DELETE FROM compras_stock WHERE id = ?").run(id);
+    },
+    async getCompraById(id) {
+      return db.prepare("SELECT * FROM compras_stock WHERE id = ?").get(id) || null;
     },
   };
 }

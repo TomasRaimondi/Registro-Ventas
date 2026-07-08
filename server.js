@@ -12,6 +12,17 @@ const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito
 const CUENTA_DNI_COMISION = 0.006;
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
 
+function normalizeNombre(s) {
+  return (s || "").trim().toLowerCase();
+}
+
+// Busca un producto existente por nombre sin importar mayúsculas/tildes/espacios.
+// Devuelve el nombre EXACTO ya guardado (para no crear duplicados por una tilde de diferencia).
+function resolverProductoExistente(costosActuales, productoIngresado) {
+  const match = costosActuales.find((c) => normalizeNombre(c.producto) === normalizeNombre(productoIngresado));
+  return match ? match.producto : productoIngresado;
+}
+
 // ---------- Contraseña del panel de ganancias ----------
 
 let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
@@ -391,12 +402,13 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/costos" && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
-      const producto = String(body.producto || "").trim();
+      const productoIngresado = String(body.producto || "").trim();
       const costo = Number(body.costo);
 
-      if (!producto) return sendJson(res, 400, { error: "Falta el producto" });
+      if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
       if (!Number.isFinite(costo) || costo < 0) return sendJson(res, 400, { error: "Costo inválido" });
 
+      const producto = resolverProductoExistente(await db.getCostos(), productoIngresado);
       await db.upsertCosto(producto, costo);
       return sendJson(res, 200, { ok: true, producto, costo });
     }
@@ -411,12 +423,13 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/costos/stock" && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
-      const producto = String(body.producto || "").trim();
+      const productoIngresado = String(body.producto || "").trim();
       const stock = Number(body.stock);
 
-      if (!producto) return sendJson(res, 400, { error: "Falta el producto" });
+      if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
       if (!Number.isFinite(stock) || stock < 0) return sendJson(res, 400, { error: "Stock inválido" });
 
+      const producto = resolverProductoExistente(await db.getCostos(), productoIngresado);
       await db.updateStock(producto, stock);
       return sendJson(res, 200, { ok: true, producto, stock });
     }
@@ -432,8 +445,9 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/composicion" && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
-      const comboProducto = String(body.comboProducto || "").trim();
-      const componenteProducto = String(body.componenteProducto || "").trim();
+      const costosActuales = await db.getCostos();
+      const comboProducto = resolverProductoExistente(costosActuales, String(body.comboProducto || "").trim());
+      const componenteProducto = resolverProductoExistente(costosActuales, String(body.componenteProducto || "").trim());
       const cantidad = Number.isInteger(body.cantidad) ? body.cantidad : parseInt(body.cantidad, 10);
 
       if (!comboProducto || !componenteProducto) return sendJson(res, 400, { error: "Falta el combo o el componente" });
@@ -449,6 +463,110 @@ const server = http.createServer(async (req, res) => {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/composicion/".length));
       await db.deleteComponente(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // ---------- Compras de stock (entradas de mercadería) y ajustes manuales ----------
+
+    if (pathname === "/api/compras" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const producto = query.get("producto");
+      const rows = producto ? await db.getComprasByProducto(producto) : await db.getAllCompras();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/compras" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const tipo = body.tipo === "ajuste" ? "ajuste" : "compra";
+      const productoIngresado = String(body.producto || "").trim();
+      const fecha = typeof body.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha)
+        ? body.fecha
+        : getArgentinaNow().fecha;
+
+      if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
+
+      const costosActuales = await db.getCostos();
+      // Resuelve al nombre exacto ya existente (sin importar mayúsculas/tildes) para no duplicar productos
+      const producto = resolverProductoExistente(costosActuales, productoIngresado);
+      const costoRow = costosActuales.find((c) => c.producto === producto);
+      const stockAntes = costoRow ? costoRow.stock || 0 : 0;
+
+      let cantidad, precioUnitario, costoTotal;
+      const cantidadInput = parseInt(body.cantidad, 10);
+
+      if (tipo === "compra") {
+        cantidad = cantidadInput;
+        precioUnitario = Number(body.precioUnitario);
+        if (!Number.isInteger(cantidad) || cantidad <= 0) return sendJson(res, 400, { error: "Cantidad inválida" });
+        if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return sendJson(res, 400, { error: "Precio inválido" });
+        costoTotal = Math.round(cantidad * precioUnitario * 100) / 100;
+      } else {
+        cantidad = cantidadInput;
+        if (!Number.isInteger(cantidad) || cantidad === 0) return sendJson(res, 400, { error: "Cantidad inválida (no puede ser 0)" });
+        precioUnitario = null;
+        costoTotal = null;
+      }
+
+      const stockDespues = Math.max(0, stockAntes + cantidad);
+
+      const row = {
+        id: crypto.randomUUID(),
+        tipo,
+        producto,
+        cantidad,
+        precioUnitario,
+        costoTotal,
+        stockAntes,
+        stockDespues,
+        proveedor: body.proveedor ? String(body.proveedor).trim() : null,
+        vencimiento: typeof body.vencimiento === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.vencimiento) ? body.vencimiento : null,
+        nota: body.nota ? String(body.nota).trim() : null,
+        fecha,
+        creadoEn: new Date().toISOString(),
+      };
+
+      await db.insertCompra(row);
+
+      if (!costoRow) {
+        await db.upsertCosto(producto, tipo === "compra" ? precioUnitario : 0);
+      }
+      await db.updateStock(producto, stockDespues);
+
+      if (tipo === "compra") {
+        const historial = (await db.getComprasByProducto(producto)).filter((h) => h.tipo === "compra");
+        const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
+        const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
+        const nuevoPromedio = totalUnidades > 0 ? totalCosto / totalUnidades : precioUnitario;
+        await db.upsertCosto(producto, Math.round(nuevoPromedio * 100) / 100);
+      }
+
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/compras/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/compras/".length));
+      const compra = await db.getCompraById(id);
+
+      if (compra) {
+        const costosActuales = await db.getCostos();
+        const costoRow = costosActuales.find((c) => c.producto === compra.producto);
+        const stockActual = costoRow ? costoRow.stock || 0 : 0;
+        const stockRevertido = Math.max(0, stockActual - compra.cantidad);
+        await db.updateStock(compra.producto, stockRevertido);
+        await db.deleteCompra(id);
+
+        if (compra.tipo === "compra") {
+          const historial = (await db.getComprasByProducto(compra.producto)).filter((h) => h.tipo === "compra");
+          const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
+          if (totalUnidades > 0) {
+            const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
+            await db.upsertCosto(compra.producto, Math.round((totalCosto / totalUnidades) * 100) / 100);
+          }
+        }
+      }
+
       return sendJson(res, 200, { ok: true });
     }
 
