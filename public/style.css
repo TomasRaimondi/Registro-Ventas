@@ -449,6 +449,13 @@ tbody td {
 tbody tr:last-child td { border-bottom: none; }
 .empty-row td { text-align: center; color: var(--text-dim); padding: 30px 12px; }
 
+.margen-cell { display: flex; flex-direction: column; gap: 3px; white-space: nowrap; }
+.margen-promedio { font-weight: 700; }
+.margen-promedio-tag { font-weight: 500; font-size: 11px; color: var(--text-dim); text-transform: none; }
+.margen-detail { display: flex; gap: 10px; font-size: 11.5px; font-weight: 600; }
+.margen-minorista { color: var(--text); }
+.margen-mayorista { color: var(--orange); }
+
 .sale-row { cursor: pointer; transition: background .1s; }
 .sale-row:hover { background: var(--bg); }
 .expand-caret {
