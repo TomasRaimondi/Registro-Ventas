@@ -10,7 +10,7 @@ const PAYMENT_LABELS = {
 function money(n) {
   const num = Number(n);
   const sign = num < 0 ? "-" : "";
-  return sign + "$" + Math.abs(num).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return sign + "$" + Math.abs(num).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
 function escapeHtml(str) {
