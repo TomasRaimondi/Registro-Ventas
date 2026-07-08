@@ -135,13 +135,16 @@ async function checkAuth() {
 
 // ---------- Gráfico de dos barras (minorista + mayorista, con total arriba) ----------
 
-function renderDualBarChart(container, entries, { colorBySignA = false, labelA = "Minorista", labelB = "Mayorista" } = {}) {
+function renderDualBarChart(container, entries, { colorBySignA = false, labelA = "Minorista", labelB = "Mayorista", showGasto = false } = {}) {
   container.innerHTML = "";
   if (entries.length === 0) return;
 
-  const maxAbs = Math.max(...entries.map(e => Math.abs(e.valueA) + Math.abs(e.valueB)), 1);
+  const maxAbs = Math.max(
+    ...entries.map(e => Math.abs(e.valueA) + Math.abs(e.valueB) + (showGasto ? Math.abs(e.valueC || 0) : 0)),
+    1
+  );
 
-  entries.forEach(({ label, valueA, valueB, total }) => {
+  entries.forEach(({ label, valueA, valueB, valueC, total }) => {
     const totalMostrado = total !== undefined ? total : valueA + valueB;
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
@@ -149,6 +152,14 @@ function renderDualBarChart(container, entries, { colorBySignA = false, labelA =
     const totalLabel = document.createElement("span");
     totalLabel.className = "chart-bar-value";
     totalLabel.textContent = money(totalMostrado);
+    wrap.appendChild(totalLabel);
+
+    if (showGasto) {
+      const gastoLabel = document.createElement("span");
+      gastoLabel.className = "chart-bar-gasto-label";
+      gastoLabel.textContent = `Gasto: ${money(valueC || 0)}`;
+      wrap.appendChild(gastoLabel);
+    }
 
     const pair = document.createElement("div");
     pair.className = "chart-bar-pair";
@@ -169,11 +180,18 @@ function renderDualBarChart(container, entries, { colorBySignA = false, labelA =
     pair.appendChild(barA);
     pair.appendChild(barB);
 
+    if (showGasto) {
+      const barC = document.createElement("div");
+      barC.className = "chart-bar chart-bar-gasto";
+      barC.style.height = Math.max((Math.abs(valueC || 0) / maxAbs) * 100, (valueC || 0) !== 0 ? 4 : 1) + "%";
+      barC.title = `${label} — Gasto: ${money(valueC || 0)}`;
+      pair.appendChild(barC);
+    }
+
     const hLabel = document.createElement("span");
     hLabel.className = "chart-bar-label";
     hLabel.textContent = label;
 
-    wrap.appendChild(totalLabel);
     wrap.appendChild(pair);
     wrap.appendChild(hLabel);
     container.appendChild(wrap);
@@ -404,7 +422,8 @@ function renderPeriodo(tipo) {
 
   renderDualBarChart(
     document.getElementById("chart-volumen-dia"),
-    grupos.map(g => ({ label: g.label, valueA: g.volumen, valueB: g.volumenMayorista }))
+    grupos.map(g => ({ label: g.label, valueA: g.volumen, valueB: g.volumenMayorista, valueC: g.gasto })),
+    { showGasto: true }
   );
   renderDualBarChart(
     document.getElementById("chart-ganancia-dia"),
