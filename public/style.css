@@ -242,6 +242,24 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
   padding: 0 4px 12px;
 }
 
+.form-divider {
+  border: none;
+  border-top: 1px solid var(--card-border);
+  margin: 4px 0 20px;
+}
+
+.cart-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .submit-btn {
   width: 100%;
   padding: 14px;
@@ -456,8 +474,8 @@ tbody tr:last-child td { border-bottom: none; }
 .margen-minorista { color: var(--text); }
 .margen-mayorista { color: var(--orange); }
 
-.sale-row { cursor: pointer; transition: background .1s; }
-.sale-row:hover { background: var(--bg); }
+.sale-row, .lote-row { cursor: pointer; transition: background .1s; }
+.sale-row:hover, .lote-row:hover { background: var(--bg); }
 .expand-caret {
   display: inline-block;
   margin-right: 8px;
@@ -465,9 +483,9 @@ tbody tr:last-child td { border-bottom: none; }
   transition: transform .15s;
   font-size: 11px;
 }
-.sale-row.expanded .expand-caret { transform: rotate(90deg); color: var(--accent); }
+.sale-row.expanded .expand-caret, .lote-row.expanded .expand-caret { transform: rotate(90deg); color: var(--accent); }
 
-.sale-detail-row td {
+.sale-detail-row td, .lote-detail-row td {
   padding: 0;
   background: var(--bg);
   border-bottom: 1px solid var(--card-border);
@@ -481,6 +499,18 @@ tbody tr:last-child td { border-bottom: none; }
   border-bottom: 1px dashed var(--card-border);
 }
 .sale-detail-item:last-child { border-bottom: none; }
+
+.lote-detail-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 20px 10px 40px;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--card-border);
+}
+.lote-detail-item:last-child { border-bottom: none; }
+.lote-detail-item .del-btn { justify-self: end; }
 
 .pm-tag {
   display: inline-block;

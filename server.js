@@ -163,6 +163,26 @@ async function ajustarStockPorItems(items, direccion) {
   }
 }
 
+// Revierte un movimiento de compras_stock: resta su cantidad del stock actual, lo borra
+// y recalcula el costo promedio ponderado del producto a partir de las compras restantes.
+async function revertirCompra(compra) {
+  const costosActuales = await db.getCostos();
+  const costoRow = costosActuales.find((c) => c.producto === compra.producto);
+  const stockActual = costoRow ? costoRow.stock || 0 : 0;
+  const stockRevertido = Math.max(0, stockActual - compra.cantidad);
+  await db.updateStock(compra.producto, stockRevertido);
+  await db.deleteCompra(compra.id);
+
+  if (compra.tipo === "compra") {
+    const historial = (await db.getComprasByProducto(compra.producto)).filter((h) => h.tipo === "compra");
+    const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
+    if (totalUnidades > 0) {
+      const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
+      await db.upsertCosto(compra.producto, Math.round((totalCosto / totalUnidades) * 100) / 100);
+    }
+  }
+}
+
 // ---------- Servidor ----------
 
 const server = http.createServer(async (req, res) => {
@@ -479,94 +499,114 @@ const server = http.createServer(async (req, res) => {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const tipo = body.tipo === "ajuste" ? "ajuste" : "compra";
-      const productoIngresado = String(body.producto || "").trim();
       const fecha = typeof body.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha)
         ? body.fecha
         : getArgentinaNow().fecha;
 
-      if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
+      // Acepta una lista de productos (una compra puede traer varios) o, por compatibilidad,
+      // un solo producto suelto como antes.
+      const itemsInput = Array.isArray(body.items) && body.items.length
+        ? body.items
+        : (body.producto ? [{ producto: body.producto, cantidad: body.cantidad, precioUnitario: body.precioUnitario }] : []);
+
+      if (!itemsInput.length) return sendJson(res, 400, { error: "No hay productos cargados en esta compra" });
+
+      const proveedor = body.proveedor ? String(body.proveedor).trim() : null;
+      const vencimiento = typeof body.vencimiento === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.vencimiento) ? body.vencimiento : null;
+      const nota = body.nota ? String(body.nota).trim() : null;
+      // Todos los productos cargados en esta misma tanda comparten loteId, así se pueden
+      // agrupar y borrar juntos aunque sean varios productos de una sola compra.
+      const loteId = crypto.randomUUID();
 
       const costosActuales = await db.getCostos();
-      // Resuelve al nombre exacto ya existente (sin importar mayúsculas/tildes) para no duplicar productos
-      const producto = resolverProductoExistente(costosActuales, productoIngresado);
-      const costoRow = costosActuales.find((c) => c.producto === producto);
-      const stockAntes = costoRow ? costoRow.stock || 0 : 0;
+      const filasInsertadas = [];
 
-      let cantidad, precioUnitario, costoTotal;
-      const cantidadInput = parseInt(body.cantidad, 10);
+      for (const itemInput of itemsInput) {
+        const productoIngresado = String(itemInput.producto || "").trim();
+        if (!productoIngresado) return sendJson(res, 400, { error: "Falta el nombre de un producto" });
 
-      if (tipo === "compra") {
-        cantidad = cantidadInput;
-        precioUnitario = Number(body.precioUnitario);
-        if (!Number.isInteger(cantidad) || cantidad <= 0) return sendJson(res, 400, { error: "Cantidad inválida" });
-        if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return sendJson(res, 400, { error: "Precio inválido" });
-        costoTotal = Math.round(cantidad * precioUnitario * 100) / 100;
-      } else {
-        cantidad = cantidadInput;
-        if (!Number.isInteger(cantidad) || cantidad === 0) return sendJson(res, 400, { error: "Cantidad inválida (no puede ser 0)" });
-        precioUnitario = null;
-        costoTotal = null;
+        // Resuelve al nombre exacto ya existente (sin importar mayúsculas/tildes) para no duplicar productos
+        const producto = resolverProductoExistente(costosActuales, productoIngresado);
+        let costoRow = costosActuales.find((c) => c.producto === producto);
+        const stockAntes = costoRow ? costoRow.stock || 0 : 0;
+
+        let cantidad, precioUnitario, costoTotal;
+        const cantidadInput = parseInt(itemInput.cantidad, 10);
+
+        if (tipo === "compra") {
+          cantidad = cantidadInput;
+          precioUnitario = Number(itemInput.precioUnitario);
+          if (!Number.isInteger(cantidad) || cantidad <= 0) return sendJson(res, 400, { error: `Cantidad inválida para "${producto}"` });
+          if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return sendJson(res, 400, { error: `Precio inválido para "${producto}"` });
+          costoTotal = Math.round(cantidad * precioUnitario * 100) / 100;
+        } else {
+          cantidad = cantidadInput;
+          if (!Number.isInteger(cantidad) || cantidad === 0) return sendJson(res, 400, { error: `Cantidad inválida para "${producto}" (no puede ser 0)` });
+          precioUnitario = null;
+          costoTotal = null;
+        }
+
+        const stockDespues = Math.max(0, stockAntes + cantidad);
+
+        const row = {
+          id: crypto.randomUUID(),
+          loteId,
+          tipo,
+          producto,
+          cantidad,
+          precioUnitario,
+          costoTotal,
+          stockAntes,
+          stockDespues,
+          proveedor,
+          vencimiento,
+          nota,
+          fecha,
+          creadoEn: new Date().toISOString(),
+        };
+
+        await db.insertCompra(row);
+
+        if (!costoRow) {
+          await db.upsertCosto(producto, tipo === "compra" ? precioUnitario : 0);
+        }
+        await db.updateStock(producto, stockDespues);
+
+        if (tipo === "compra") {
+          const historial = (await db.getComprasByProducto(producto)).filter((h) => h.tipo === "compra");
+          const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
+          const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
+          const nuevoPromedio = totalUnidades > 0 ? totalCosto / totalUnidades : precioUnitario;
+          await db.upsertCosto(producto, Math.round(nuevoPromedio * 100) / 100);
+        }
+
+        // Mantiene costosActuales al día en memoria por si el mismo producto aparece
+        // más de una vez en esta misma tanda (el próximo item debe ver el stock ya actualizado).
+        const idx = costosActuales.findIndex((c) => c.producto === producto);
+        if (idx >= 0) costosActuales[idx] = { ...costosActuales[idx], stock: stockDespues };
+        else costosActuales.push({ producto, costo: precioUnitario || 0, stock: stockDespues });
+
+        filasInsertadas.push(row);
       }
 
-      const stockDespues = Math.max(0, stockAntes + cantidad);
+      return sendJson(res, 201, { loteId, items: filasInsertadas });
+    }
 
-      const row = {
-        id: crypto.randomUUID(),
-        tipo,
-        producto,
-        cantidad,
-        precioUnitario,
-        costoTotal,
-        stockAntes,
-        stockDespues,
-        proveedor: body.proveedor ? String(body.proveedor).trim() : null,
-        vencimiento: typeof body.vencimiento === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.vencimiento) ? body.vencimiento : null,
-        nota: body.nota ? String(body.nota).trim() : null,
-        fecha,
-        creadoEn: new Date().toISOString(),
-      };
-
-      await db.insertCompra(row);
-
-      if (!costoRow) {
-        await db.upsertCosto(producto, tipo === "compra" ? precioUnitario : 0);
+    if (pathname.startsWith("/api/compras/lote/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const loteId = decodeURIComponent(pathname.slice("/api/compras/lote/".length));
+      const filas = (await db.getAllCompras()).filter((c) => c.loteId === loteId);
+      for (const compra of filas) {
+        await revertirCompra(compra);
       }
-      await db.updateStock(producto, stockDespues);
-
-      if (tipo === "compra") {
-        const historial = (await db.getComprasByProducto(producto)).filter((h) => h.tipo === "compra");
-        const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
-        const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
-        const nuevoPromedio = totalUnidades > 0 ? totalCosto / totalUnidades : precioUnitario;
-        await db.upsertCosto(producto, Math.round(nuevoPromedio * 100) / 100);
-      }
-
-      return sendJson(res, 201, row);
+      return sendJson(res, 200, { ok: true, borradas: filas.length });
     }
 
     if (pathname.startsWith("/api/compras/") && req.method === "DELETE") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/compras/".length));
       const compra = await db.getCompraById(id);
-
-      if (compra) {
-        const costosActuales = await db.getCostos();
-        const costoRow = costosActuales.find((c) => c.producto === compra.producto);
-        const stockActual = costoRow ? costoRow.stock || 0 : 0;
-        const stockRevertido = Math.max(0, stockActual - compra.cantidad);
-        await db.updateStock(compra.producto, stockRevertido);
-        await db.deleteCompra(id);
-
-        if (compra.tipo === "compra") {
-          const historial = (await db.getComprasByProducto(compra.producto)).filter((h) => h.tipo === "compra");
-          const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
-          if (totalUnidades > 0) {
-            const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
-            await db.upsertCosto(compra.producto, Math.round((totalCosto / totalUnidades) * 100) / 100);
-          }
-        }
-      }
-
+      if (compra) await revertirCompra(compra);
       return sendJson(res, 200, { ok: true });
     }
 

@@ -45,6 +45,7 @@ const SCHEMA = `
   );
   CREATE TABLE IF NOT EXISTS compras_stock (
     id TEXT PRIMARY KEY,
+    loteId TEXT,
     tipo TEXT NOT NULL DEFAULT 'compra',
     producto TEXT NOT NULL,
     cantidad INTEGER NOT NULL,
@@ -70,6 +71,16 @@ async function migrarStock(execFn) {
   }
 }
 
+// Migración aditiva: agrega "loteId" a compras_stock para poder agrupar varios productos
+// cargados en una misma compra. Las filas viejas quedan con loteId NULL (se agrupan solas).
+async function migrarLoteId(execFn) {
+  try {
+    await execFn("ALTER TABLE compras_stock ADD COLUMN loteId TEXT");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
 let impl;
@@ -88,6 +99,7 @@ if (USE_TURSO) {
         await client.execute(stmt);
       }
       await migrarStock((sql) => client.execute(sql));
+      await migrarLoteId((sql) => client.execute(sql));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -249,9 +261,9 @@ if (USE_TURSO) {
     async insertCompra(row) {
       await client.execute({
         sql: `INSERT INTO compras_stock
-              (id, tipo, producto, cantidad, precioUnitario, costoTotal, stockAntes, stockDespues, proveedor, vencimiento, nota, fecha, creadoEn)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [row.id, row.tipo, row.producto, row.cantidad, row.precioUnitario, row.costoTotal, row.stockAntes, row.stockDespues, row.proveedor || null, row.vencimiento || null, row.nota || null, row.fecha, row.creadoEn],
+              (id, loteId, tipo, producto, cantidad, precioUnitario, costoTotal, stockAntes, stockDespues, proveedor, vencimiento, nota, fecha, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.loteId || null, row.tipo, row.producto, row.cantidad, row.precioUnitario, row.costoTotal, row.stockAntes, row.stockDespues, row.proveedor || null, row.vencimiento || null, row.nota || null, row.fecha, row.creadoEn],
       });
     },
     async deleteCompra(id) {
@@ -272,6 +284,7 @@ if (USE_TURSO) {
     async init() {
       db.exec(SCHEMA);
       await migrarStock(async (sql) => db.exec(sql));
+      await migrarLoteId(async (sql) => db.exec(sql));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -397,9 +410,9 @@ if (USE_TURSO) {
     async insertCompra(row) {
       db.prepare(
         `INSERT INTO compras_stock
-         (id, tipo, producto, cantidad, precioUnitario, costoTotal, stockAntes, stockDespues, proveedor, vencimiento, nota, fecha, creadoEn)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(row.id, row.tipo, row.producto, row.cantidad, row.precioUnitario, row.costoTotal, row.stockAntes, row.stockDespues, row.proveedor || null, row.vencimiento || null, row.nota || null, row.fecha, row.creadoEn);
+         (id, loteId, tipo, producto, cantidad, precioUnitario, costoTotal, stockAntes, stockDespues, proveedor, vencimiento, nota, fecha, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.loteId || null, row.tipo, row.producto, row.cantidad, row.precioUnitario, row.costoTotal, row.stockAntes, row.stockDespues, row.proveedor || null, row.vencimiento || null, row.nota || null, row.fecha, row.creadoEn);
     },
     async deleteCompra(id) {
       db.prepare("DELETE FROM compras_stock WHERE id = ?").run(id);

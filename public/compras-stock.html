@@ -65,47 +65,60 @@
           <button type="button" class="tipo-tab" data-tipo="ajuste">⚠️ Ajuste</button>
         </div>
 
+        <p class="hint" id="hint-compra" style="text-align:left;">
+          Cargá todos los productos que llegaron en una misma compra y registralos juntos con un solo click.
+        </p>
+        <p class="hint" id="hint-ajuste" style="text-align:left; display:none;">
+          Usá esto para corregir el stock ante roturas, vencimientos o diferencias de conteo.
+        </p>
+
         <form id="compra-form" autocomplete="off">
+          <div class="field-row">
+            <div class="field">
+              <label for="fecha">Fecha de la compra</label>
+              <input type="date" id="fecha" required>
+            </div>
+            <div class="field" id="campo-proveedor">
+              <label for="proveedor">Proveedor <span class="opcional">(opcional)</span></label>
+              <input type="text" id="proveedor" placeholder="Ej: Distribuidora Sur">
+            </div>
+          </div>
+
+          <div class="field" id="campo-vencimiento">
+            <label for="vencimiento">Vencimiento de este lote <span class="opcional">(opcional)</span></label>
+            <input type="date" id="vencimiento">
+          </div>
+
+          <div class="field" id="campo-motivo" style="display:none;">
+            <label for="nota">Motivo del ajuste</label>
+            <input type="text" id="nota" placeholder="Ej: Producto vencido, rotura, corrección de conteo">
+          </div>
+
+          <hr class="form-divider">
+
           <div class="field autocomplete-field">
             <label for="producto">Producto</label>
-            <input type="text" id="producto" placeholder="Buscá o escribí el producto" autocomplete="off" required>
+            <input type="text" id="producto" placeholder="Buscá o escribí el producto" autocomplete="off">
             <div class="suggestions" id="producto-suggestions"></div>
           </div>
 
           <div class="field-row">
             <div class="field">
-              <label for="fecha">Fecha</label>
-              <input type="date" id="fecha" required>
-            </div>
-            <div class="field">
               <label id="label-cantidad" for="cantidad">Cantidad comprada</label>
-              <input type="number" id="cantidad" step="1" required>
+              <input type="number" id="cantidad" step="1">
             </div>
-          </div>
-
-          <div class="field-row" id="fila-precio">
-            <div class="field">
+            <div class="field" id="campo-precio-unitario">
               <label for="precio-unitario">Precio pagado (por unidad)</label>
               <div class="input-prefix">
                 <span>$</span>
                 <input type="number" id="precio-unitario" min="0" step="0.01">
               </div>
             </div>
-            <div class="field">
-              <label for="proveedor">Proveedor <span class="opcional">(opcional)</span></label>
-              <input type="text" id="proveedor" placeholder="Ej: Distribuidora Sur">
-            </div>
           </div>
 
-          <div class="field" id="fila-vencimiento">
-            <label for="vencimiento">Vencimiento <span class="opcional">(opcional)</span></label>
-            <input type="date" id="vencimiento">
-          </div>
+          <button type="button" id="add-item-btn" class="add-item-btn">+ Agregar producto a esta compra</button>
 
-          <div class="field" id="fila-motivo" style="display:none;">
-            <label for="nota">Motivo del ajuste</label>
-            <input type="text" id="nota" placeholder="Ej: Producto vencido, rotura, corrección de conteo">
-          </div>
+          <div class="cart-list" id="cart-list"></div>
 
           <button type="submit" class="submit-btn" id="submit-btn">Registrar compra</button>
         </form>
@@ -141,9 +154,13 @@
             </div>
           </div>
           <div class="preview-total" id="preview-total-row" style="display:none;">
-            <span>Total de esta compra</span>
+            <span>Total de este producto</span>
             <span id="preview-total">$0</span>
           </div>
+        </div>
+        <div class="cart-summary" id="cart-summary" style="display:none;">
+          <span>Total de esta compra</span>
+          <span id="cart-summary-total">$0</span>
         </div>
       </div>
 

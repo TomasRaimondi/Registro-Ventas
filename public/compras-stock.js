@@ -89,6 +89,7 @@ async function checkAuth() {
 let costosGlobal = [];
 let comprasGlobal = [];
 let tipoActual = "compra";
+let carrito = []; // productos ya agregados a la compra/ajuste que se está armando
 
 // ---------- Carga de datos ----------
 
@@ -105,7 +106,6 @@ async function renderAll() {
   }
 
   renderStats();
-  renderAutocompleteList();
   renderFiltroProducto();
   renderHistorial();
   actualizarPreview();
@@ -135,13 +135,20 @@ document.querySelectorAll(".tipo-tab").forEach(btn => {
     btn.classList.add("active");
     tipoActual = btn.dataset.tipo;
 
+    // Mezclar productos de compra y de ajuste en una misma tanda no tiene sentido: se reinicia.
+    carrito = [];
+    renderCart();
+
     const esCompra = tipoActual === "compra";
+    document.getElementById("hint-compra").style.display = esCompra ? "block" : "none";
+    document.getElementById("hint-ajuste").style.display = esCompra ? "none" : "block";
+    document.getElementById("campo-proveedor").style.display = esCompra ? "block" : "none";
+    document.getElementById("campo-vencimiento").style.display = esCompra ? "block" : "none";
+    document.getElementById("campo-motivo").style.display = esCompra ? "none" : "block";
     document.getElementById("label-cantidad").textContent = esCompra ? "Cantidad comprada" : "Cantidad (+ para sumar, - para restar)";
     document.getElementById("cantidad").min = esCompra ? "1" : "";
-    document.getElementById("fila-precio").style.display = esCompra ? "flex" : "none";
-    document.getElementById("fila-vencimiento").style.display = esCompra ? "block" : "none";
-    document.getElementById("fila-motivo").style.display = esCompra ? "none" : "block";
-    document.getElementById("precio-unitario").required = esCompra;
+    document.getElementById("campo-precio-unitario").style.display = esCompra ? "block" : "none";
+    document.getElementById("add-item-btn").textContent = esCompra ? "+ Agregar producto a esta compra" : "+ Agregar producto a este ajuste";
     document.getElementById("submit-btn").textContent = esCompra ? "Registrar compra" : "Registrar ajuste";
 
     actualizarPreview();
@@ -152,10 +159,6 @@ document.querySelectorAll(".tipo-tab").forEach(btn => {
 
 const productoInput = document.getElementById("producto");
 const productoSuggestions = document.getElementById("producto-suggestions");
-
-function renderAutocompleteList() {
-  // Se recalcula en cada búsqueda a partir de costosGlobal
-}
 
 function buscarSugerencias() {
   const q = productoInput.value.trim().toLowerCase();
@@ -186,7 +189,7 @@ productoSuggestions.addEventListener("mousedown", (e) => {
   actualizarPreview();
 });
 
-// ---------- Vista previa en vivo ----------
+// ---------- Vista previa en vivo (del producto que se está por agregar) ----------
 
 ["cantidad", "precio-unitario"].forEach(id => {
   document.getElementById(id).addEventListener("input", actualizarPreview);
@@ -203,6 +206,13 @@ function calcularNuevoPromedio(producto, cantidadNueva, precioNuevo) {
   historial.forEach(h => {
     totalUnidades += h.cantidad;
     totalCosto += h.cantidad * h.precioUnitario;
+  });
+  // Si ya agregaste este mismo producto antes en esta misma compra, también cuenta.
+  carrito.forEach(it => {
+    if (it.producto === producto && it.precioUnitario != null) {
+      totalUnidades += it.cantidad;
+      totalCosto += it.cantidad * it.precioUnitario;
+    }
   });
   return totalUnidades > 0 ? totalCosto / totalUnidades : precioNuevo;
 }
@@ -222,8 +232,11 @@ function actualizarPreview() {
   conProducto.style.display = "block";
 
   const costoRow = obtenerCostoRow(producto);
-  const stockAntes = costoRow ? (costoRow.stock || 0) : 0;
+  const stockBase = costoRow ? (costoRow.stock || 0) : 0;
   const costoAntes = costoRow ? (costoRow.costo || 0) : 0;
+  // Si este producto ya está en el carrito de esta compra, el "antes" ya incluye eso.
+  const stockYaEnCarrito = carrito.filter(it => it.producto === producto).reduce((a, it) => a + it.cantidad, 0);
+  const stockAntes = Math.max(0, stockBase + stockYaEnCarrito);
   const cantidad = parseInt(document.getElementById("cantidad").value, 10) || 0;
 
   document.getElementById("preview-stock-antes").textContent = stockAntes;
@@ -246,7 +259,79 @@ function actualizarPreview() {
   }
 }
 
-// ---------- Alta de movimiento ----------
+// ---------- Carrito de productos (una compra puede traer varios) ----------
+
+function renderCart() {
+  const cartList = document.getElementById("cart-list");
+  cartList.innerHTML = "";
+
+  carrito.forEach((item, idx) => {
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    const detalle = tipoActual === "compra"
+      ? `${item.cantidad} × ${money(item.precioUnitario)} = ${money(item.cantidad * item.precioUnitario)}`
+      : `${item.cantidad > 0 ? "+" : ""}${item.cantidad} unidades`;
+    div.innerHTML = `
+      <div class="cart-item-info">
+        <span class="cart-item-nombre">${escapeHtml(item.producto)}</span>
+        <span class="cart-item-precio">${detalle}</span>
+      </div>
+      <button type="button" class="cart-item-remove" title="Quitar">✕</button>
+    `;
+    div.querySelector(".cart-item-remove").addEventListener("click", () => {
+      carrito.splice(idx, 1);
+      renderCart();
+      actualizarPreview();
+    });
+    cartList.appendChild(div);
+  });
+
+  const cartSummary = document.getElementById("cart-summary");
+  const cartSummaryTotal = document.getElementById("cart-summary-total");
+  if (carrito.length > 0 && tipoActual === "compra") {
+    const totalInvertido = carrito.reduce((acc, it) => acc + it.cantidad * it.precioUnitario, 0);
+    cartSummary.style.display = "flex";
+    cartSummaryTotal.textContent = money(totalInvertido);
+  } else {
+    cartSummary.style.display = "none";
+  }
+}
+
+function agregarItemDesdeInputs() {
+  const producto = productoInput.value.trim();
+  const cantidadInput = parseInt(document.getElementById("cantidad").value, 10);
+
+  if (!producto || !Number.isFinite(cantidadInput) || cantidadInput === 0) return false;
+
+  if (tipoActual === "compra") {
+    const precioUnitario = parseFloat(document.getElementById("precio-unitario").value);
+    if (cantidadInput <= 0 || !Number.isFinite(precioUnitario) || precioUnitario <= 0) return false;
+    carrito.push({ producto, cantidad: cantidadInput, precioUnitario });
+  } else {
+    carrito.push({ producto, cantidad: cantidadInput });
+  }
+
+  productoInput.value = "";
+  document.getElementById("cantidad").value = "";
+  document.getElementById("precio-unitario").value = "";
+  renderSuggestions([]);
+  renderCart();
+  actualizarPreview();
+  return true;
+}
+
+document.getElementById("add-item-btn").addEventListener("click", () => {
+  const agregado = agregarItemDesdeInputs();
+  if (!agregado) {
+    alert(tipoActual === "compra"
+      ? "Completá el producto, la cantidad y el precio antes de agregarlo."
+      : "Completá el producto y la cantidad antes de agregarlo.");
+    return;
+  }
+  productoInput.focus();
+});
+
+// ---------- Alta de la compra/ajuste completo ----------
 
 const form = document.getElementById("compra-form");
 const submitBtn = document.getElementById("submit-btn");
@@ -254,32 +339,26 @@ const submitBtn = document.getElementById("submit-btn");
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const producto = productoInput.value.trim();
-  const fecha = document.getElementById("fecha").value;
-  const cantidad = parseInt(document.getElementById("cantidad").value, 10);
+  // Si quedó cargado un producto en los campos sin apretar "+ Agregar", se suma solo.
+  agregarItemDesdeInputs();
 
-  if (!producto || !fecha || !Number.isFinite(cantidad) || cantidad === 0) {
-    alert("Completá el producto, la fecha y la cantidad.");
+  if (carrito.length === 0) {
+    alert("Agregá al menos un producto.");
     return;
   }
 
-  const body = { tipo: tipoActual, producto, fecha, cantidad };
+  const fecha = document.getElementById("fecha").value;
+  if (!fecha) {
+    alert("Elegí la fecha.");
+    return;
+  }
 
+  const bodyPayload = { tipo: tipoActual, items: carrito, fecha };
   if (tipoActual === "compra") {
-    const precioUnitario = parseFloat(document.getElementById("precio-unitario").value);
-    if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) {
-      alert("Ingresá el precio pagado por unidad.");
-      return;
-    }
-    if (cantidad <= 0) {
-      alert("La cantidad comprada tiene que ser mayor a 0.");
-      return;
-    }
-    body.precioUnitario = precioUnitario;
-    body.proveedor = document.getElementById("proveedor").value.trim();
-    body.vencimiento = document.getElementById("vencimiento").value || null;
+    bodyPayload.proveedor = document.getElementById("proveedor").value.trim();
+    bodyPayload.vencimiento = document.getElementById("vencimiento").value || null;
   } else {
-    body.nota = document.getElementById("nota").value.trim();
+    bodyPayload.nota = document.getElementById("nota").value.trim();
   }
 
   submitBtn.disabled = true;
@@ -289,27 +368,26 @@ form.addEventListener("submit", async (e) => {
     await api("/api/compras", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(bodyPayload),
     });
 
-    productoInput.value = "";
-    document.getElementById("cantidad").value = "";
-    document.getElementById("precio-unitario").value = "";
+    carrito = [];
+    renderCart();
     document.getElementById("proveedor").value = "";
     document.getElementById("vencimiento").value = "";
     document.getElementById("nota").value = "";
-    document.getElementById("fecha").value = hoyISO();
+    // La fecha se deja como está: es común cargar varias compras seguidas del mismo día.
 
     await renderAll();
   } catch (err) {
-    alert("No se pudo registrar el movimiento.\n" + err.message);
+    alert("No se pudo registrar la compra.\n" + err.message);
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = tipoActual === "compra" ? "Registrar compra" : "Registrar ajuste";
   }
 });
 
-// ---------- Historial ----------
+// ---------- Historial, agrupado por compra ----------
 
 function renderFiltroProducto() {
   const select = document.getElementById("filtro-producto");
@@ -332,44 +410,141 @@ async function deleteCompra(id) {
   }
 }
 
+async function deleteLote(loteId) {
+  const cantidad = comprasGlobal.filter(c => c.loteId === loteId).length;
+  if (!confirm(`¿Borrar toda esta compra (${cantidad} producto${cantidad === 1 ? "" : "s"})? Esto revierte el stock de cada uno y recalcula el costo promedio.`)) return;
+  try {
+    await api("/api/compras/lote/" + encodeURIComponent(loteId), { method: "DELETE" });
+    await renderAll();
+  } catch (err) {
+    alert("No se pudo borrar la compra.\n" + err.message);
+  }
+}
+
 function diasHasta(fecha) {
   const a = new Date(hoyISO() + "T00:00:00Z");
   const b = new Date(fecha + "T00:00:00Z");
   return Math.round((b - a) / 86400000);
 }
 
+function vencimientoBadge(c) {
+  if (!c.vencimiento) return "";
+  const dias = diasHasta(c.vencimiento);
+  if (dias > 30) return "";
+  return `<span class="badge-vencimiento">${dias < 0 ? "Vencido" : "Vence pronto"}</span>`;
+}
+
+// Agrupa por loteId: las filas viejas (de antes de esta función) no tienen loteId, así que
+// cada una queda como grupo de un solo producto, igual que se veían antes.
+function agruparPorLote(compras) {
+  const grupos = new Map();
+  compras.forEach(c => {
+    const key = c.loteId || c.id;
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(c);
+  });
+  return [...grupos.values()];
+}
+
+function renderFilaSimple(c) {
+  return `
+    <tr>
+      <td>${formatFechaCorta(c.fecha)}</td>
+      <td><span class="badge-tipo ${c.tipo}">${c.tipo === "compra" ? "Compra" : "Ajuste"}</span></td>
+      <td>${escapeHtml(c.producto)}</td>
+      <td>${c.cantidad > 0 ? "+" : ""}${c.cantidad}</td>
+      <td>${c.precioUnitario !== null ? money(c.precioUnitario) : "—"}</td>
+      <td>${c.costoTotal !== null ? money(c.costoTotal) : "—"}</td>
+      <td>${c.proveedor ? escapeHtml(c.proveedor) : "—"}</td>
+      <td>${c.vencimiento ? formatFechaCorta(c.vencimiento) + vencimientoBadge(c) : "—"}</td>
+      <td>${c.stockAntes} → ${c.stockDespues}</td>
+      <td><button class="del-btn" title="Borrar" data-id="${c.id}">✕</button></td>
+    </tr>
+  `;
+}
+
+function renderFilaGrupo(grupo) {
+  if (grupo.length === 1) return renderFilaSimple(grupo[0]);
+
+  const primero = grupo[0];
+  const totalCosto = grupo.reduce((acc, c) => acc + (c.costoTotal || 0), 0);
+  const totalUnidades = grupo.reduce((acc, c) => acc + c.cantidad, 0);
+
+  return `
+    <tr class="lote-row" data-lote="${primero.loteId}">
+      <td>${formatFechaCorta(primero.fecha)}</td>
+      <td><span class="badge-tipo ${primero.tipo}">${primero.tipo === "compra" ? "Compra" : "Ajuste"}</span></td>
+      <td><span class="expand-caret">▸</span>${grupo.length} productos (${totalUnidades} un.)</td>
+      <td>—</td>
+      <td>—</td>
+      <td>${primero.tipo === "compra" ? money(totalCosto) : "—"}</td>
+      <td>${primero.proveedor ? escapeHtml(primero.proveedor) : "—"}</td>
+      <td>${primero.vencimiento ? formatFechaCorta(primero.vencimiento) + vencimientoBadge(primero) : "—"}</td>
+      <td>—</td>
+      <td><button class="del-btn" title="Borrar toda la compra" data-lote="${primero.loteId}">✕</button></td>
+    </tr>
+  `;
+}
+
+function toggleLoteDetail(tr) {
+  const loteId = tr.dataset.lote;
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains("lote-detail-row")) {
+    existing.remove();
+    tr.classList.remove("expanded");
+    return;
+  }
+
+  document.querySelectorAll(".lote-detail-row").forEach(r => r.remove());
+  document.querySelectorAll(".lote-row.expanded").forEach(r => r.classList.remove("expanded"));
+  tr.classList.add("expanded");
+
+  const filas = comprasGlobal.filter(c => c.loteId === loteId);
+  const detailRow = document.createElement("tr");
+  detailRow.className = "lote-detail-row";
+  const td = document.createElement("td");
+  td.colSpan = 10;
+  td.innerHTML = filas.map(c => `
+    <div class="lote-detail-item">
+      <span>${escapeHtml(c.producto)}</span>
+      <span>${c.cantidad > 0 ? "+" : ""}${c.cantidad}${c.precioUnitario !== null ? ` × ${money(c.precioUnitario)}` : ""}</span>
+      <span>${c.costoTotal !== null ? money(c.costoTotal) : "—"}</span>
+      <span>${c.stockAntes} → ${c.stockDespues}</span>
+      <button class="del-btn" title="Borrar este producto" data-id="${c.id}">✕</button>
+    </div>
+  `).join("");
+  detailRow.appendChild(td);
+  tr.after(detailRow);
+
+  td.querySelectorAll(".del-btn[data-id]").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteCompra(btn.dataset.id); });
+  });
+}
+
 function renderHistorial() {
   const filtro = document.getElementById("filtro-producto").value;
   const body = document.getElementById("historial-body");
-  const filas = filtro ? comprasGlobal.filter(c => c.producto === filtro) : comprasGlobal;
+  const comprasFiltradas = filtro ? comprasGlobal.filter(c => c.producto === filtro) : comprasGlobal;
 
-  if (filas.length === 0) {
+  if (comprasFiltradas.length === 0) {
     body.innerHTML = `<tr class="empty-row"><td colspan="10">Todavía no cargaste ningún movimiento.</td></tr>`;
     return;
   }
 
-  body.innerHTML = filas.map(c => {
-    const vencBadge = c.vencimiento && diasHasta(c.vencimiento) <= 30
-      ? `<span class="badge-vencimiento">${diasHasta(c.vencimiento) < 0 ? "Vencido" : "Vence pronto"}</span>`
-      : "";
-    return `
-      <tr>
-        <td>${formatFechaCorta(c.fecha)}</td>
-        <td><span class="badge-tipo ${c.tipo}">${c.tipo === "compra" ? "Compra" : "Ajuste"}</span></td>
-        <td>${escapeHtml(c.producto)}</td>
-        <td>${c.cantidad > 0 ? "+" : ""}${c.cantidad}</td>
-        <td>${c.precioUnitario !== null ? money(c.precioUnitario) : "—"}</td>
-        <td>${c.costoTotal !== null ? money(c.costoTotal) : "—"}</td>
-        <td>${c.proveedor ? escapeHtml(c.proveedor) : "—"}</td>
-        <td>${c.vencimiento ? formatFechaCorta(c.vencimiento) + vencBadge : "—"}</td>
-        <td>${c.stockAntes} → ${c.stockDespues}</td>
-        <td><button class="del-btn" title="Borrar" data-id="${c.id}">✕</button></td>
-      </tr>
-    `;
-  }).join("");
+  const grupos = agruparPorLote(comprasFiltradas);
+  body.innerHTML = grupos.map(renderFilaGrupo).join("");
 
-  body.querySelectorAll(".del-btn").forEach(btn => {
-    btn.addEventListener("click", () => deleteCompra(btn.dataset.id));
+  body.querySelectorAll(".lote-row").forEach(tr => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest(".del-btn")) return;
+      toggleLoteDetail(tr);
+    });
+  });
+  body.querySelectorAll(".del-btn[data-lote]").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteLote(btn.dataset.lote); });
+  });
+  body.querySelectorAll(".del-btn[data-id]").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteCompra(btn.dataset.id); });
   });
 }
 
