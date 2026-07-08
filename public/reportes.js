@@ -44,6 +44,32 @@ function getMonthLabel(monthKey) {
   return `${MESES[m - 1]} ${y}`;
 }
 
+function getDiasEnMes(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function fechasDeSemana(weekStart) {
+  const fechas = [];
+  const [y, m, d] = weekStart.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  for (let i = 0; i < 7; i++) {
+    fechas.push(date.toISOString().slice(0, 10));
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+  return fechas;
+}
+
+function semanasDeMes(monthKey) {
+  const dias = getDiasEnMes(monthKey);
+  const weekStarts = new Set();
+  for (let d = 1; d <= dias; d++) {
+    const fecha = `${monthKey}-${String(d).padStart(2, "0")}`;
+    weekStarts.add(getWeekStart(fecha));
+  }
+  return [...weekStarts].sort();
+}
+
 async function api(url, options) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -105,45 +131,6 @@ async function checkAuth() {
   else showLogin();
 }
 
-// ---------- Gráfico de barras genérico ----------
-
-function renderBarChart(container, entries, { colorBySign = false } = {}) {
-  container.innerHTML = "";
-  if (entries.length === 0) return;
-
-  const maxAbs = Math.max(...entries.map(e => Math.abs(e.value)), 1);
-
-  entries.forEach(({ label, value }) => {
-    const heightPct = Math.max((Math.abs(value) / maxAbs) * 100, value === 0 ? 2 : 4);
-
-    const wrap = document.createElement("div");
-    wrap.className = "chart-bar-wrap";
-
-    const valLabel = document.createElement("span");
-    valLabel.className = "chart-bar-value";
-    valLabel.textContent = money(value);
-
-    const bar = document.createElement("div");
-    bar.className = "chart-bar";
-    bar.style.height = heightPct + "%";
-    if (colorBySign) {
-      bar.style.background = value < 0
-        ? "linear-gradient(180deg, #e15b5b, #b83f3f)"
-        : "linear-gradient(180deg, var(--green), #1f8f66)";
-    }
-    bar.title = `${label}: ${money(value)}`;
-
-    const hLabel = document.createElement("span");
-    hLabel.className = "chart-bar-label";
-    hLabel.textContent = label;
-
-    wrap.appendChild(valLabel);
-    wrap.appendChild(bar);
-    wrap.appendChild(hLabel);
-    container.appendChild(wrap);
-  });
-}
-
 // ---------- Gráfico de dos barras (minorista + mayorista, con total arriba) ----------
 
 function renderDualBarChart(container, entries, { colorBySignA = false, labelA = "Minorista", labelB = "Mayorista" } = {}) {
@@ -191,9 +178,23 @@ function renderDualBarChart(container, entries, { colorBySignA = false, labelA =
   });
 }
 
-// ---------- Render principal ----------
+// ---------- Estado global ----------
 
 let hoyFecha = null;
+let ventasGlobal = [];
+let itemsGlobal = [];
+let gastosGlobal = [];
+let porFechaGlobal = {};
+let periodoActual = "dia";
+let semanaSeleccionada = null; // weekStart (YYYY-MM-DD), usada por la pestaña "Día"
+let mesSeleccionado = null; // YYYY-MM, usada por la pestaña "Semana"
+
+const METODO_LABELS = {
+  efectivo: "Efectivo", transferencia: "Transferencia", debito: "Débito",
+  credito: "Crédito", cuentadni: "Cuenta DNI", mayorista: "Mayorista",
+};
+
+// ---------- Carga de datos ----------
 
 async function renderAll() {
   let data, costos, hora;
@@ -210,7 +211,9 @@ async function renderAll() {
     return;
   }
 
-  const { ventas, items, gastos } = data;
+  ventasGlobal = data.ventas;
+  itemsGlobal = data.items;
+  gastosGlobal = data.gastos;
 
   const costoPorProducto = {};
   costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
@@ -221,15 +224,14 @@ async function renderAll() {
     return porFecha[fecha];
   }
 
-  ventas.forEach(v => {
+  ventasGlobal.forEach(v => {
     const dia = getDia(v.fecha);
     if (v.metodo === "mayorista") dia.volumenMayorista += v.precio;
     else dia.volumen += v.precio;
     dia.cantVentas++;
   });
 
-  const productoStats = {};
-  items.forEach(it => {
+  itemsGlobal.forEach(it => {
     const dia = getDia(it.fecha);
     const key = normalizeNombre(it.producto);
     if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
@@ -237,141 +239,155 @@ async function renderAll() {
       if (it.metodo === "mayorista") dia.gananciaBrutaMayorista += margen;
       else dia.gananciaBruta += margen;
     }
-    if (!productoStats[it.producto]) productoStats[it.producto] = { unidades: 0, volumen: 0 };
-    productoStats[it.producto].unidades++;
-    productoStats[it.producto].volumen += it.precio;
   });
 
-  gastos.forEach(g => {
+  gastosGlobal.forEach(g => {
     const dia = getDia(g.fecha);
     dia.gasto += g.monto;
   });
 
-  // ---- Gráficos, tarjetas y resumen por período (Día / Semana / Mes) ----
   porFechaGlobal = porFecha;
+
+  if (!semanaSeleccionada) semanaSeleccionada = getWeekStart(hoyFecha);
+  if (!mesSeleccionado) mesSeleccionado = getMonthKey(hoyFecha);
+
   renderPeriodo(periodoActual);
-
-  // ---- Top productos ----
-  const topProductos = Object.entries(productoStats)
-    .map(([producto, s]) => ({ producto, ...s }))
-    .sort((a, b) => b.volumen - a.volumen)
-    .slice(0, 10);
-
-  const topBody = document.getElementById("top-productos-body");
-  topBody.innerHTML = topProductos.length === 0
-    ? `<tr class="empty-row"><td colspan="3">Sin datos todavía.</td></tr>`
-    : topProductos.map(p => `
-        <tr>
-          <td>${escapeHtml(p.producto)}</td>
-          <td>${p.unidades}</td>
-          <td>${money(p.volumen)}</td>
-        </tr>
-      `).join("");
-
-  // ---- Total histórico por método de pago ----
-  const porMetodo = {};
-  ventas.forEach(v => { porMetodo[v.metodo] = (porMetodo[v.metodo] || 0) + v.precio; });
-  const METODO_LABELS = {
-    efectivo: "Efectivo", transferencia: "Transferencia", debito: "Débito",
-    credito: "Crédito", cuentadni: "Cuenta DNI", mayorista: "Mayorista",
-  };
-  const metodoBody = document.getElementById("por-metodo-body");
-  const metodosOrdenados = Object.entries(porMetodo).sort((a, b) => b[1] - a[1]);
-  metodoBody.innerHTML = metodosOrdenados.length === 0
-    ? `<tr class="empty-row"><td colspan="2">Sin datos todavía.</td></tr>`
-    : metodosOrdenados.map(([metodo, total]) => `
-        <tr>
-          <td><span class="pm-tag ${metodo}">${METODO_LABELS[metodo] || metodo}</span></td>
-          <td>${money(total)}</td>
-        </tr>
-      `).join("");
-
 }
 
-// ---------- Agrupación por Día / Semana / Mes ----------
+// ---------- Selectores de semana / mes ----------
 
-let porFechaGlobal = {};
-let periodoActual = "dia";
+const selectorSemana = document.getElementById("selector-semana");
+const selectorMes = document.getElementById("selector-mes");
 
-function agruparPorPeriodo(porFecha, tipo) {
+function poblarSelectorSemana() {
+  const semanas = new Set(Object.keys(porFechaGlobal).map(getWeekStart));
+  semanas.add(getWeekStart(hoyFecha));
+  const lista = [...semanas].sort().reverse();
+  selectorSemana.innerHTML = lista
+    .map(ws => `<option value="${ws}">Semana del ${formatFecha(ws)} al ${formatFecha(getWeekEnd(ws))}</option>`)
+    .join("");
+  selectorSemana.value = semanaSeleccionada;
+}
+
+function poblarSelectorMes() {
+  const meses = new Set(Object.keys(porFechaGlobal).map(getMonthKey));
+  meses.add(getMonthKey(hoyFecha));
+  const lista = [...meses].sort().reverse();
+  selectorMes.innerHTML = lista
+    .map(mk => `<option value="${mk}">${getMonthLabel(mk)}</option>`)
+    .join("");
+  selectorMes.value = mesSeleccionado;
+}
+
+selectorSemana.addEventListener("change", () => {
+  semanaSeleccionada = selectorSemana.value;
+  renderPeriodo("dia");
+});
+selectorMes.addEventListener("change", () => {
+  mesSeleccionado = selectorMes.value;
+  renderPeriodo("semana");
+});
+
+// ---------- Utilidades de agrupación ----------
+
+function grupoVacio(key, label) {
+  return { key, label, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
+}
+
+function sumarEnGrupo(acc, d) {
+  acc.volumen += d.volumen;
+  acc.volumenMayorista += d.volumenMayorista;
+  acc.cantVentas += d.cantVentas;
+  acc.gananciaBruta += d.gananciaBruta;
+  acc.gananciaBrutaMayorista += d.gananciaBrutaMayorista;
+  acc.gasto += d.gasto;
+  acc.diasConDatos += d.diasConDatos || 0;
+  return acc;
+}
+
+function agruparPorMesHistorico() {
   const grupos = {};
-
-  function addFecha(fecha, key, label) {
-    if (!grupos[key]) grupos[key] = { key, label, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
-    const d = porFecha[fecha];
-    grupos[key].volumen += d.volumen;
-    grupos[key].volumenMayorista += d.volumenMayorista;
-    grupos[key].cantVentas += d.cantVentas;
-    grupos[key].gananciaBruta += d.gananciaBruta;
-    grupos[key].gananciaBrutaMayorista += d.gananciaBrutaMayorista;
-    grupos[key].gasto += d.gasto;
-    grupos[key].diasConDatos += 1;
-  }
-
-  Object.keys(porFecha).forEach(fecha => {
-    if (tipo === "dia") {
-      addFecha(fecha, fecha, formatFecha(fecha));
-    } else if (tipo === "semana") {
-      const inicio = getWeekStart(fecha);
-      addFecha(fecha, inicio, `${formatFecha(inicio)}-${formatFecha(getWeekEnd(inicio))}`);
-    } else {
-      const mes = getMonthKey(fecha);
-      addFecha(fecha, mes, getMonthLabel(mes));
-    }
+  Object.keys(porFechaGlobal).forEach(fecha => {
+    const mes = getMonthKey(fecha);
+    if (!grupos[mes]) grupos[mes] = grupoVacio(mes, getMonthLabel(mes));
+    sumarEnGrupo(grupos[mes], { ...porFechaGlobal[fecha], diasConDatos: 1 });
   });
-
   return Object.values(grupos).sort((a, b) => a.key.localeCompare(b.key));
 }
 
-function getDiasEnMes(monthKey) {
-  const [y, m] = monthKey.split("-").map(Number);
-  return new Date(Date.UTC(y, m, 0)).getUTCDate();
-}
-
-function claveYLabelActual(tipo) {
-  if (tipo === "dia") return { key: hoyFecha, label: formatFecha(hoyFecha) };
-  if (tipo === "semana") {
-    const inicio = getWeekStart(hoyFecha);
-    return { key: inicio, label: `${formatFecha(inicio)}-${formatFecha(getWeekEnd(inicio))}` };
-  }
-  const mes = getMonthKey(hoyFecha);
-  return { key: mes, label: getMonthLabel(mes) };
-}
+// ---------- Render por período ----------
 
 function renderPeriodo(tipo) {
-  const limites = { dia: 30, semana: 20, mes: 24 };
-  let grupos = agruparPorPeriodo(porFechaGlobal, tipo);
+  periodoActual = tipo;
+  document.querySelectorAll(".periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === tipo));
+  selectorSemana.style.display = tipo === "dia" ? "block" : "none";
+  selectorMes.style.display = tipo === "semana" ? "block" : "none";
 
-  // Asegura que el período actual (hoy / esta semana / este mes) siempre aparezca,
-  // aunque todavía no tenga ninguna venta cargada.
-  const { key: keyActual, label: labelActual } = claveYLabelActual(tipo);
-  let actual = grupos.find(g => g.key === keyActual);
-  if (!actual) {
-    actual = { key: keyActual, label: labelActual, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
-    grupos.push(actual);
+  let grupos, fechasEnRango, actual, diasEnPeriodo, rangoLabel;
+
+  if (tipo === "dia") {
+    poblarSelectorSemana();
+    fechasEnRango = fechasDeSemana(semanaSeleccionada);
+    grupos = fechasEnRango.map(fecha => {
+      const d = porFechaGlobal[fecha];
+      const g = grupoVacio(fecha, formatFecha(fecha));
+      if (d) sumarEnGrupo(g, { ...d, diasConDatos: 1 });
+      return g;
+    });
+    rangoLabel = `${formatFecha(semanaSeleccionada)} al ${formatFecha(getWeekEnd(semanaSeleccionada))}`;
+    actual = grupos.reduce(sumarEnGrupo, grupoVacio("actual", rangoLabel));
+    diasEnPeriodo = 7;
+  } else if (tipo === "semana") {
+    poblarSelectorMes();
+    const semanas = semanasDeMes(mesSeleccionado);
+    grupos = semanas.map(ws => {
+      const g = grupoVacio(ws, `${formatFecha(ws)}-${formatFecha(getWeekEnd(ws))}`);
+      fechasDeSemana(ws).forEach(fecha => {
+        const d = porFechaGlobal[fecha];
+        if (d) sumarEnGrupo(g, { ...d, diasConDatos: 1 });
+      });
+      return g;
+    });
+    fechasEnRango = semanas.flatMap(fechasDeSemana);
+    rangoLabel = getMonthLabel(mesSeleccionado);
+    actual = grupos.reduce(sumarEnGrupo, grupoVacio("actual", rangoLabel));
+    diasEnPeriodo = getDiasEnMes(mesSeleccionado);
+  } else {
+    // Mes: histórico completo, sin filtro (como estaba antes)
+    grupos = agruparPorMesHistorico();
+    const keyMesActual = getMonthKey(hoyFecha);
+    let actualMes = grupos.find(g => g.key === keyMesActual);
+    if (!actualMes) {
+      actualMes = grupoVacio(keyMesActual, getMonthLabel(keyMesActual));
+      grupos.push(actualMes);
+    }
+    grupos.sort((a, b) => a.key.localeCompare(b.key));
+    grupos = grupos.slice(-24);
+    actual = actualMes;
+    rangoLabel = actualMes.label;
+    fechasEnRango = null; // sin filtro: todo el histórico
+    diasEnPeriodo = getDiasEnMes(keyMesActual);
   }
-  grupos.sort((a, b) => a.key.localeCompare(b.key));
-  grupos = grupos.slice(-limites[tipo]);
 
   const nombrePeriodo = { dia: "día", semana: "semana", mes: "mes" }[tipo];
-  const nombrePeriodoDel = { dia: "del día", semana: "de la semana", mes: "del mes" }[tipo];
+  const nombrePeriodoDel = { dia: "de la semana", semana: "del mes", mes: "del mes" }[tipo];
   document.getElementById("titulo-chart-volumen").textContent = `Volumen vendido por ${nombrePeriodo}`;
   document.getElementById("titulo-chart-ganancia").textContent = `Ganancia neta por ${nombrePeriodo}`;
   document.getElementById("titulo-resumen").textContent = `Resumen por ${nombrePeriodo}`;
+  document.getElementById("titulo-top-productos").textContent = `Top productos (${rangoLabel})`;
+  document.getElementById("titulo-por-metodo").textContent = `Total por método de pago (${rangoLabel})`;
   document.getElementById("th-periodo").textContent = tipo === "dia" ? "Fecha" : tipo === "semana" ? "Semana" : "Mes";
 
-  // Tarjetas de arriba: siempre reflejan el período actual real (hoy / esta semana / este mes)
-  // La ganancia neta combina minorista + mayorista, y el gasto se resta una sola vez (no está separado por canal)
+  // Tarjetas de arriba: reflejan el rango visible (semana elegida / mes elegido / mes actual)
   const netaActual = (actual.gananciaBruta + actual.gananciaBrutaMayorista) - actual.gasto;
   const ticketActual = actual.cantVentas ? actual.volumen / actual.cantVentas : 0;
-  const diasEnPeriodo = tipo === "dia" ? 1 : tipo === "semana" ? 7 : getDiasEnMes(keyActual);
 
-  document.getElementById("label-volumen").textContent = `Volumen ${nombrePeriodoDel} (${actual.label})`;
-  document.getElementById("label-volumen-mayorista").textContent = `Volumen Mayorista ${nombrePeriodoDel}`;
+  document.getElementById("label-volumen").textContent = `Volumen (${actual.label})`;
+  document.getElementById("label-volumen-mayorista").textContent = `Volumen Mayorista (${actual.label})`;
   document.getElementById("label-ganancia-neta").textContent = `Ganancia neta ${nombrePeriodoDel}`;
   document.getElementById("label-gasto").textContent = `Gasto ${nombrePeriodoDel}`;
   document.getElementById("label-cant-ventas").textContent = `Ventas ${nombrePeriodoDel}`;
-  document.getElementById("label-dias").textContent = tipo === "dia" ? "Ventas registradas" : `Días con actividad ${nombrePeriodoDel}`;
+  document.getElementById("label-dias").textContent = `Días con actividad ${nombrePeriodoDel}`;
 
   document.getElementById("stat-volumen").textContent = money(actual.volumen);
   document.getElementById("stat-volumen-mayorista").textContent = money(actual.volumenMayorista);
@@ -379,7 +395,7 @@ function renderPeriodo(tipo) {
   document.getElementById("stat-gasto").textContent = money(actual.gasto);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
-  document.getElementById("stat-dias").textContent = tipo === "dia" ? actual.cantVentas : `${actual.diasConDatos} de ${diasEnPeriodo}`;
+  document.getElementById("stat-dias").textContent = `${actual.diasConDatos} de ${diasEnPeriodo}`;
 
   renderDualBarChart(
     document.getElementById("chart-volumen-dia"),
@@ -415,15 +431,50 @@ function renderPeriodo(tipo) {
           </tr>
         `;
       }).join("");
+
+  // ---- Top productos y total por método de pago, filtrados al rango visible ----
+  const fechasSet = fechasEnRango ? new Set(fechasEnRango) : null;
+  const ventasEnRango = fechasSet ? ventasGlobal.filter(v => fechasSet.has(v.fecha)) : ventasGlobal;
+  const itemsEnRango = fechasSet ? itemsGlobal.filter(it => fechasSet.has(it.fecha)) : itemsGlobal;
+
+  const productoStats = {};
+  itemsEnRango.forEach(it => {
+    if (!productoStats[it.producto]) productoStats[it.producto] = { unidades: 0, volumen: 0 };
+    productoStats[it.producto].unidades++;
+    productoStats[it.producto].volumen += it.precio;
+  });
+  const topProductos = Object.entries(productoStats)
+    .map(([producto, s]) => ({ producto, ...s }))
+    .sort((a, b) => b.volumen - a.volumen)
+    .slice(0, 10);
+
+  const topBody = document.getElementById("top-productos-body");
+  topBody.innerHTML = topProductos.length === 0
+    ? `<tr class="empty-row"><td colspan="3">Sin datos en este rango.</td></tr>`
+    : topProductos.map(p => `
+        <tr>
+          <td>${escapeHtml(p.producto)}</td>
+          <td>${p.unidades}</td>
+          <td>${money(p.volumen)}</td>
+        </tr>
+      `).join("");
+
+  const porMetodo = {};
+  ventasEnRango.forEach(v => { porMetodo[v.metodo] = (porMetodo[v.metodo] || 0) + v.precio; });
+  const metodoBody = document.getElementById("por-metodo-body");
+  const metodosOrdenados = Object.entries(porMetodo).sort((a, b) => b[1] - a[1]);
+  metodoBody.innerHTML = metodosOrdenados.length === 0
+    ? `<tr class="empty-row"><td colspan="2">Sin datos en este rango.</td></tr>`
+    : metodosOrdenados.map(([metodo, total]) => `
+        <tr>
+          <td><span class="pm-tag ${metodo}">${METODO_LABELS[metodo] || metodo}</span></td>
+          <td>${money(total)}</td>
+        </tr>
+      `).join("");
 }
 
 document.querySelectorAll(".periodo-tab").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".periodo-tab").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    periodoActual = btn.dataset.periodo;
-    renderPeriodo(periodoActual);
-  });
+  btn.addEventListener("click", () => renderPeriodo(btn.dataset.periodo));
 });
 document.querySelector('.periodo-tab[data-periodo="dia"]').classList.add("active");
 

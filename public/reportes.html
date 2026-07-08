@@ -74,6 +74,8 @@
         <button type="button" class="periodo-tab" data-periodo="semana">Semana</button>
         <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
       </div>
+      <select id="selector-semana" class="periodo-selector" style="display:none;"></select>
+      <select id="selector-mes" class="periodo-selector" style="display:none;"></select>
     </section>
 
     <section class="card">
@@ -102,7 +104,7 @@
 
     <section class="side-by-side">
       <div class="card">
-        <h2>Top productos (por volumen vendido)</h2>
+        <h2 id="titulo-top-productos">Top productos (por volumen vendido)</h2>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Producto</th><th>Unidades</th><th>Volumen</th></tr></thead>
@@ -114,7 +116,7 @@
       </div>
 
       <div class="card">
-        <h2>Total histórico por método de pago</h2>
+        <h2 id="titulo-por-metodo">Total por método de pago</h2>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Método</th><th>Total</th></tr></thead>

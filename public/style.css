@@ -458,6 +458,18 @@ tbody tr:last-child td { border-bottom: none; }
   color: var(--accent);
 }
 
+.periodo-selector {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: 1fr; }
