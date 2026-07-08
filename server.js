@@ -369,13 +369,24 @@ const server = http.createServer(async (req, res) => {
       if (!concepto) return sendJson(res, 400, { error: "Falta el concepto" });
       if (!Number.isFinite(monto) || monto <= 0) return sendJson(res, 400, { error: "Monto inválido" });
 
-      const now = getArgentinaNow();
+      // El dueño puede elegir una fecha pasada (para completar gastos de días que no se cargaron a tiempo)
+      let fecha, horaLabel;
+      if (body.fecha) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(body.fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
+        fecha = body.fecha;
+        horaLabel = typeof body.horaLabel === "string" && body.horaLabel ? body.horaLabel : "12:00:00";
+      } else {
+        const now = getArgentinaNow();
+        fecha = now.fecha;
+        horaLabel = now.horaLabel;
+      }
+
       const row = {
         id: crypto.randomUUID(),
         concepto,
         monto,
-        fecha: now.fecha,
-        horaLabel: now.horaLabel,
+        fecha,
+        horaLabel,
         creadoEn: new Date().toISOString(),
       };
       await db.insertGasto(row);

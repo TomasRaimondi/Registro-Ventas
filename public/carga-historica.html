@@ -103,6 +103,29 @@
       </div>
     </section>
 
+    <section class="card">
+      <h2>Gastos de esa fecha</h2>
+      <p class="hint" style="text-align:left;">Necesarios para que Reportes pueda calcular la ganancia neta de este día (ganancia bruta − gastos).</p>
+      <form id="gasto-form" class="inline-form">
+        <input type="text" id="gasto-concepto" placeholder="Concepto (ej: Sueldo, Alquiler)" required>
+        <div class="input-prefix">
+          <span>$</span>
+          <input type="number" id="gasto-monto" placeholder="Monto" min="0" step="0.01" required>
+        </div>
+        <button type="submit" class="submit-btn">Registrar gasto</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Concepto</th><th>Monto</th><th></th></tr>
+          </thead>
+          <tbody id="gastos-body">
+            <tr class="empty-row"><td colspan="3">Elegí una fecha para ver sus gastos.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </div>
 
 </main>

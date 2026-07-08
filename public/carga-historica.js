@@ -46,6 +46,7 @@ function showApp() {
   }
   cargarProductos();
   renderHistorial();
+  renderGastos();
 }
 
 function showLogin() {
@@ -247,7 +248,10 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-document.getElementById("fecha-venta").addEventListener("change", renderHistorial);
+document.getElementById("fecha-venta").addEventListener("change", () => {
+  renderHistorial();
+  renderGastos();
+});
 
 // ---------- Historial de la fecha elegida ----------
 
@@ -296,6 +300,79 @@ async function renderHistorial() {
 
   tbody.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", () => deleteSale(btn.dataset.id));
+  });
+}
+
+// ---------- Gastos de la fecha elegida ----------
+
+document.getElementById("gasto-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fecha = document.getElementById("fecha-venta").value;
+  const concepto = document.getElementById("gasto-concepto").value.trim();
+  const monto = parseFloat(document.getElementById("gasto-monto").value);
+
+  if (!fecha) {
+    alert("Elegí la fecha primero.");
+    return;
+  }
+  if (!concepto || isNaN(monto) || monto <= 0) return;
+
+  try {
+    await api("/api/gastos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ concepto, monto, fecha }),
+    });
+    e.target.reset();
+    await renderGastos();
+  } catch (err) {
+    alert("No se pudo registrar el gasto.\n" + err.message);
+  }
+});
+
+async function deleteGasto(id) {
+  try {
+    await api("/api/gastos/" + encodeURIComponent(id), { method: "DELETE" });
+    await renderGastos();
+  } catch (err) {
+    alert("No se pudo borrar el gasto.\n" + err.message);
+  }
+}
+
+async function renderGastos() {
+  const fecha = document.getElementById("fecha-venta").value;
+  const tbody = document.getElementById("gastos-body");
+  if (!fecha) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="3">Elegí una fecha para ver sus gastos.</td></tr>`;
+    return;
+  }
+
+  let gastos;
+  try {
+    gastos = await api("/api/gastos?fecha=" + encodeURIComponent(fecha));
+  } catch (err) {
+    console.error("No se pudo cargar los gastos:", err);
+    return;
+  }
+
+  if (gastos.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="3">Todavía no hay gastos cargados para esta fecha.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = "";
+  [...gastos].reverse().forEach(g => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(g.concepto)}</td>
+      <td>${money(g.monto)}</td>
+      <td><button class="del-btn" title="Eliminar" data-id="${g.id}">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".del-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteGasto(btn.dataset.id));
   });
 }
 
