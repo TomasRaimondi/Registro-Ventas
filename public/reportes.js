@@ -144,6 +144,50 @@ function renderBarChart(container, entries, { colorBySign = false } = {}) {
   });
 }
 
+// ---------- Gráfico de dos barras (minorista + mayorista, con total arriba) ----------
+
+function renderDualBarChart(container, entries) {
+  container.innerHTML = "";
+  if (entries.length === 0) return;
+
+  const maxTotal = Math.max(...entries.map(e => e.valueA + e.valueB), 1);
+
+  entries.forEach(({ label, valueA, valueB }) => {
+    const total = valueA + valueB;
+    const wrap = document.createElement("div");
+    wrap.className = "chart-bar-wrap";
+
+    const totalLabel = document.createElement("span");
+    totalLabel.className = "chart-bar-value";
+    totalLabel.textContent = money(total);
+
+    const pair = document.createElement("div");
+    pair.className = "chart-bar-pair";
+
+    const barA = document.createElement("div");
+    barA.className = "chart-bar";
+    barA.style.height = Math.max((valueA / maxTotal) * 100, valueA > 0 ? 4 : 1) + "%";
+    barA.title = `${label} — Minorista: ${money(valueA)}`;
+
+    const barB = document.createElement("div");
+    barB.className = "chart-bar chart-bar-mayorista";
+    barB.style.height = Math.max((valueB / maxTotal) * 100, valueB > 0 ? 4 : 1) + "%";
+    barB.title = `${label} — Mayorista: ${money(valueB)}`;
+
+    pair.appendChild(barA);
+    pair.appendChild(barB);
+
+    const hLabel = document.createElement("span");
+    hLabel.className = "chart-bar-label";
+    hLabel.textContent = label;
+
+    wrap.appendChild(totalLabel);
+    wrap.appendChild(pair);
+    wrap.appendChild(hLabel);
+    container.appendChild(wrap);
+  });
+}
+
 // ---------- Render principal ----------
 
 let hoyFecha = null;
@@ -170,13 +214,14 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0 };
     return porFecha[fecha];
   }
 
   ventas.forEach(v => {
     const dia = getDia(v.fecha);
-    if (v.metodo !== "mayorista") dia.volumen += v.precio;
+    if (v.metodo === "mayorista") dia.volumenMayorista += v.precio;
+    else dia.volumen += v.precio;
     dia.cantVentas++;
   });
 
@@ -247,9 +292,10 @@ function agruparPorPeriodo(porFecha, tipo) {
   const grupos = {};
 
   function addFecha(fecha, key, label) {
-    if (!grupos[key]) grupos[key] = { key, label, volumen: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0, diasConDatos: 0 };
+    if (!grupos[key]) grupos[key] = { key, label, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0, diasConDatos: 0 };
     const d = porFecha[fecha];
     grupos[key].volumen += d.volumen;
+    grupos[key].volumenMayorista += d.volumenMayorista;
     grupos[key].cantVentas += d.cantVentas;
     grupos[key].gananciaBruta += d.gananciaBruta;
     grupos[key].gasto += d.gasto;
@@ -295,7 +341,7 @@ function renderPeriodo(tipo) {
   const { key: keyActual, label: labelActual } = claveYLabelActual(tipo);
   let actual = grupos.find(g => g.key === keyActual);
   if (!actual) {
-    actual = { key: keyActual, label: labelActual, volumen: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0, diasConDatos: 0 };
+    actual = { key: keyActual, label: labelActual, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0, diasConDatos: 0 };
     grupos.push(actual);
   }
   grupos.sort((a, b) => a.key.localeCompare(b.key));
@@ -314,21 +360,23 @@ function renderPeriodo(tipo) {
   const diasEnPeriodo = tipo === "dia" ? 1 : tipo === "semana" ? 7 : getDiasEnMes(keyActual);
 
   document.getElementById("label-volumen").textContent = `Volumen ${nombrePeriodoDel} (${actual.label})`;
+  document.getElementById("label-volumen-mayorista").textContent = `Volumen Mayorista ${nombrePeriodoDel}`;
   document.getElementById("label-ganancia-neta").textContent = `Ganancia neta ${nombrePeriodoDel}`;
   document.getElementById("label-gasto").textContent = `Gasto ${nombrePeriodoDel}`;
   document.getElementById("label-cant-ventas").textContent = `Ventas ${nombrePeriodoDel}`;
   document.getElementById("label-dias").textContent = tipo === "dia" ? "Ventas registradas" : `Días con actividad ${nombrePeriodoDel}`;
 
   document.getElementById("stat-volumen").textContent = money(actual.volumen);
+  document.getElementById("stat-volumen-mayorista").textContent = money(actual.volumenMayorista);
   document.getElementById("stat-ganancia-neta").textContent = money(netaActual);
   document.getElementById("stat-gasto").textContent = money(actual.gasto);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
   document.getElementById("stat-dias").textContent = tipo === "dia" ? actual.cantVentas : `${actual.diasConDatos} de ${diasEnPeriodo}`;
 
-  renderBarChart(
+  renderDualBarChart(
     document.getElementById("chart-volumen-dia"),
-    grupos.map(g => ({ label: g.label, value: g.volumen }))
+    grupos.map(g => ({ label: g.label, valueA: g.volumen, valueB: g.volumenMayorista }))
   );
   renderBarChart(
     document.getElementById("chart-ganancia-dia"),
@@ -339,7 +387,7 @@ function renderPeriodo(tipo) {
   const resumenBody = document.getElementById("resumen-periodo-body");
   const gruposDesc = [...grupos].reverse();
   resumenBody.innerHTML = gruposDesc.length === 0
-    ? `<tr class="empty-row"><td colspan="6">Sin datos todavía.</td></tr>`
+    ? `<tr class="empty-row"><td colspan="7">Sin datos todavía.</td></tr>`
     : gruposDesc.map(g => {
         const neta = g.gananciaBruta - g.gasto;
         return `
@@ -347,6 +395,7 @@ function renderPeriodo(tipo) {
             <td>${g.label}</td>
             <td>${g.cantVentas}</td>
             <td>${money(g.volumen)}</td>
+            <td style="color:var(--orange);">${money(g.volumenMayorista)}</td>
             <td>${money(g.gananciaBruta)}</td>
             <td>${money(g.gasto)}</td>
             <td style="${neta < 0 ? 'color:#e15b5b;' : ''}">${money(neta)}</td>

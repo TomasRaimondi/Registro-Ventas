@@ -337,6 +337,17 @@ input[type="text"]:focus, input[type="number"]:focus {
   margin-top: 6px;
 }
 
+.chart-bar-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+}
+.chart-bar-pair .chart-bar { max-width: 12px; }
+.chart-bar-mayorista { background: linear-gradient(180deg, var(--orange), #c98a2e); }
+
 .history-card { grid-column: 1 / -1; }
 .history-header {
   display: flex;
