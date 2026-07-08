@@ -146,33 +146,36 @@ function renderBarChart(container, entries, { colorBySign = false } = {}) {
 
 // ---------- Gráfico de dos barras (minorista + mayorista, con total arriba) ----------
 
-function renderDualBarChart(container, entries) {
+function renderDualBarChart(container, entries, { colorBySignA = false, labelA = "Minorista", labelB = "Mayorista" } = {}) {
   container.innerHTML = "";
   if (entries.length === 0) return;
 
-  const maxTotal = Math.max(...entries.map(e => e.valueA + e.valueB), 1);
+  const maxAbs = Math.max(...entries.map(e => Math.abs(e.valueA) + Math.abs(e.valueB)), 1);
 
-  entries.forEach(({ label, valueA, valueB }) => {
-    const total = valueA + valueB;
+  entries.forEach(({ label, valueA, valueB, total }) => {
+    const totalMostrado = total !== undefined ? total : valueA + valueB;
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
 
     const totalLabel = document.createElement("span");
     totalLabel.className = "chart-bar-value";
-    totalLabel.textContent = money(total);
+    totalLabel.textContent = money(totalMostrado);
 
     const pair = document.createElement("div");
     pair.className = "chart-bar-pair";
 
     const barA = document.createElement("div");
     barA.className = "chart-bar";
-    barA.style.height = Math.max((valueA / maxTotal) * 100, valueA > 0 ? 4 : 1) + "%";
-    barA.title = `${label} — Minorista: ${money(valueA)}`;
+    barA.style.height = Math.max((Math.abs(valueA) / maxAbs) * 100, valueA !== 0 ? 4 : 1) + "%";
+    if (colorBySignA && valueA < 0) {
+      barA.style.background = "linear-gradient(180deg, #e15b5b, #b83f3f)";
+    }
+    barA.title = `${label} — ${labelA}: ${money(valueA)}`;
 
     const barB = document.createElement("div");
     barB.className = "chart-bar chart-bar-mayorista";
-    barB.style.height = Math.max((valueB / maxTotal) * 100, valueB > 0 ? 4 : 1) + "%";
-    barB.title = `${label} — Mayorista: ${money(valueB)}`;
+    barB.style.height = Math.max((Math.abs(valueB) / maxAbs) * 100, valueB !== 0 ? 4 : 1) + "%";
+    barB.title = `${label} — ${labelB}: ${money(valueB)}`;
 
     pair.appendChild(barA);
     pair.appendChild(barB);
@@ -214,7 +217,7 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0 };
     return porFecha[fecha];
   }
 
@@ -230,7 +233,9 @@ async function renderAll() {
     const dia = getDia(it.fecha);
     const key = normalizeNombre(it.producto);
     if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
-      dia.gananciaBruta += it.precio - costoPorProducto[key];
+      const margen = it.precio - costoPorProducto[key];
+      if (it.metodo === "mayorista") dia.gananciaBrutaMayorista += margen;
+      else dia.gananciaBruta += margen;
     }
     if (!productoStats[it.producto]) productoStats[it.producto] = { unidades: 0, volumen: 0 };
     productoStats[it.producto].unidades++;
@@ -292,12 +297,13 @@ function agruparPorPeriodo(porFecha, tipo) {
   const grupos = {};
 
   function addFecha(fecha, key, label) {
-    if (!grupos[key]) grupos[key] = { key, label, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0, diasConDatos: 0 };
+    if (!grupos[key]) grupos[key] = { key, label, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
     const d = porFecha[fecha];
     grupos[key].volumen += d.volumen;
     grupos[key].volumenMayorista += d.volumenMayorista;
     grupos[key].cantVentas += d.cantVentas;
     grupos[key].gananciaBruta += d.gananciaBruta;
+    grupos[key].gananciaBrutaMayorista += d.gananciaBrutaMayorista;
     grupos[key].gasto += d.gasto;
     grupos[key].diasConDatos += 1;
   }
@@ -341,7 +347,7 @@ function renderPeriodo(tipo) {
   const { key: keyActual, label: labelActual } = claveYLabelActual(tipo);
   let actual = grupos.find(g => g.key === keyActual);
   if (!actual) {
-    actual = { key: keyActual, label: labelActual, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gasto: 0, diasConDatos: 0 };
+    actual = { key: keyActual, label: labelActual, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
     grupos.push(actual);
   }
   grupos.sort((a, b) => a.key.localeCompare(b.key));
@@ -355,7 +361,8 @@ function renderPeriodo(tipo) {
   document.getElementById("th-periodo").textContent = tipo === "dia" ? "Fecha" : tipo === "semana" ? "Semana" : "Mes";
 
   // Tarjetas de arriba: siempre reflejan el período actual real (hoy / esta semana / este mes)
-  const netaActual = actual.gananciaBruta - actual.gasto;
+  // La ganancia neta combina minorista + mayorista, y el gasto se resta una sola vez (no está separado por canal)
+  const netaActual = (actual.gananciaBruta + actual.gananciaBrutaMayorista) - actual.gasto;
   const ticketActual = actual.cantVentas ? actual.volumen / actual.cantVentas : 0;
   const diasEnPeriodo = tipo === "dia" ? 1 : tipo === "semana" ? 7 : getDiasEnMes(keyActual);
 
@@ -378,18 +385,23 @@ function renderPeriodo(tipo) {
     document.getElementById("chart-volumen-dia"),
     grupos.map(g => ({ label: g.label, valueA: g.volumen, valueB: g.volumenMayorista }))
   );
-  renderBarChart(
+  renderDualBarChart(
     document.getElementById("chart-ganancia-dia"),
-    grupos.map(g => ({ label: g.label, value: g.gananciaBruta - g.gasto })),
-    { colorBySign: true }
+    grupos.map(g => ({
+      label: g.label,
+      valueA: g.gananciaBruta - g.gasto,
+      valueB: g.gananciaBrutaMayorista,
+      total: (g.gananciaBruta + g.gananciaBrutaMayorista) - g.gasto,
+    })),
+    { colorBySignA: true, labelA: "Minorista (neto de gastos)", labelB: "Mayorista" }
   );
 
   const resumenBody = document.getElementById("resumen-periodo-body");
   const gruposDesc = [...grupos].reverse();
   resumenBody.innerHTML = gruposDesc.length === 0
-    ? `<tr class="empty-row"><td colspan="7">Sin datos todavía.</td></tr>`
+    ? `<tr class="empty-row"><td colspan="8">Sin datos todavía.</td></tr>`
     : gruposDesc.map(g => {
-        const neta = g.gananciaBruta - g.gasto;
+        const neta = (g.gananciaBruta + g.gananciaBrutaMayorista) - g.gasto;
         return `
           <tr>
             <td>${g.label}</td>
@@ -397,6 +409,7 @@ function renderPeriodo(tipo) {
             <td>${money(g.volumen)}</td>
             <td style="color:var(--orange);">${money(g.volumenMayorista)}</td>
             <td>${money(g.gananciaBruta)}</td>
+            <td style="color:var(--orange);">${money(g.gananciaBrutaMayorista)}</td>
             <td>${money(g.gasto)}</td>
             <td style="${neta < 0 ? 'color:#e15b5b;' : ''}">${money(neta)}</td>
           </tr>
