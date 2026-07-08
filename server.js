@@ -257,7 +257,25 @@ const server = http.createServer(async (req, res) => {
         db.getAllItems(),
         db.getAllGastos(),
       ]);
-      return sendJson(res, 200, { ventas, items, gastos });
+
+      // Ventas de antes del carrito no tienen fila en venta_items: se reconstruye
+      // un item único a partir de la venta original para que su ganancia no se pierda.
+      const ventaIdsConItems = new Set(items.map((it) => it.ventaId));
+      const itemsCompletos = items.slice();
+      for (const venta of ventas) {
+        if (!ventaIdsConItems.has(venta.id)) {
+          itemsCompletos.push({
+            ventaId: venta.id,
+            producto: venta.producto,
+            precio: venta.precio,
+            fecha: venta.fecha,
+            horaLabel: venta.horaLabel,
+            metodo: venta.metodo,
+          });
+        }
+      }
+
+      return sendJson(res, 200, { ventas, items: itemsCompletos, gastos });
     }
 
     // ---------- Autenticación del panel de ganancias ----------
