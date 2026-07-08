@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reportes</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Reportes</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:20px;">
+      <div class="card">
+        <span class="label" id="label-volumen">Volumen del día</span>
+        <span class="big-number" id="stat-volumen" style="font-size:26px;">$0</span>
+      </div>
+      <div class="card">
+        <span class="label" id="label-ganancia-neta">Ganancia neta del día</span>
+        <span class="big-number" id="stat-ganancia-neta" style="font-size:26px;">$0</span>
+      </div>
+      <div class="card">
+        <span class="label" id="label-gasto">Gasto del día</span>
+        <span class="big-number" id="stat-gasto" style="font-size:26px; color:#e15b5b;">$0</span>
+      </div>
+      <div class="card">
+        <span class="label" id="label-cant-ventas">Ventas del día</span>
+        <span class="big-number" id="stat-cant-ventas" style="font-size:26px;">0</span>
+      </div>
+      <div class="card">
+        <span class="label">Ticket promedio</span>
+        <span class="big-number" id="stat-ticket-promedio" style="font-size:26px;">$0</span>
+      </div>
+      <div class="card">
+        <span class="label" id="label-dias">Días con actividad (en el día)</span>
+        <span class="big-number" id="stat-dias" style="font-size:26px;">0</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="periodo-tabs" id="periodo-tabs">
+        <button type="button" class="periodo-tab" data-periodo="dia">Día</button>
+        <button type="button" class="periodo-tab" data-periodo="semana">Semana</button>
+        <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 id="titulo-chart-volumen">Volumen vendido por día</h2>
+      <div class="chart chart-tall" id="chart-volumen-dia"></div>
+    </section>
+
+    <section class="card">
+      <h2 id="titulo-chart-ganancia">Ganancia neta por día</h2>
+      <div class="chart chart-tall" id="chart-ganancia-dia"></div>
+    </section>
+
+    <section class="card">
+      <h2 id="titulo-resumen">Resumen por día</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th id="th-periodo">Fecha</th><th>Ventas</th><th>Volumen</th><th>Ganancia bruta</th><th>Gasto</th><th>Ganancia neta</th></tr>
+          </thead>
+          <tbody id="resumen-periodo-body">
+            <tr class="empty-row"><td colspan="6">Sin datos todavía.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="side-by-side">
+      <div class="card">
+        <h2>Top productos (por volumen vendido)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Producto</th><th>Unidades</th><th>Volumen</th></tr></thead>
+            <tbody id="top-productos-body">
+              <tr class="empty-row"><td colspan="3">Sin datos todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Total histórico por método de pago</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Método</th><th>Total</th></tr></thead>
+            <tbody id="por-metodo-body">
+              <tr class="empty-row"><td colspan="2">Sin datos todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="reportes.js"></script>
+</body>
+</html>

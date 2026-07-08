@@ -112,6 +112,62 @@ payButtons.forEach(btn => {
   });
 });
 
+// ---------- Carrito de productos (una venta puede tener varios) ----------
+
+let carrito = [];
+const cartList = document.getElementById("cart-list");
+
+function renderCart() {
+  cartList.innerHTML = "";
+  carrito.forEach((item, idx) => {
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <div class="cart-item-info">
+        <span class="cart-item-nombre">${escapeHtml(item.producto)}</span>
+        <span class="cart-item-precio">${money(item.precio)}</span>
+      </div>
+      <button type="button" class="cart-item-remove" title="Quitar">✕</button>
+    `;
+    div.querySelector(".cart-item-remove").addEventListener("click", () => {
+      carrito.splice(idx, 1);
+      renderCart();
+    });
+    cartList.appendChild(div);
+  });
+
+  if (carrito.length > 0) {
+    const subtotal = carrito.reduce((acc, it) => acc + it.precio, 0);
+    const sub = document.createElement("div");
+    sub.className = "cart-subtotal";
+    sub.innerHTML = `<span>${carrito.length} producto${carrito.length === 1 ? "" : "s"} en esta venta</span><span>${money(subtotal)}</span>`;
+    cartList.appendChild(sub);
+  }
+}
+
+function agregarItemDesdeInputs() {
+  const producto = productoInput.value.trim();
+  const precio = parseFloat(document.getElementById("precio").value);
+
+  if (!producto || isNaN(precio) || precio <= 0) return false;
+
+  carrito.push({ producto, precio });
+  productoInput.value = "";
+  document.getElementById("precio").value = "";
+  renderSuggestions([]);
+  renderCart();
+  return true;
+}
+
+document.getElementById("add-item-btn").addEventListener("click", () => {
+  const agregado = agregarItemDesdeInputs();
+  if (!agregado) {
+    alert("Completá el producto y el precio antes de agregarlo.");
+    return;
+  }
+  productoInput.focus();
+});
+
 // ---------- Alta de venta ----------
 
 const form = document.getElementById("sale-form");
@@ -120,11 +176,13 @@ const submitBtn = form.querySelector(".submit-btn");
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const producto = document.getElementById("producto").value.trim();
-  const precio = parseFloat(document.getElementById("precio").value);
+  // Si quedó cargado un producto en los campos sin apretar "Agregar", se suma solo
+  agregarItemDesdeInputs();
 
-  if (!producto) return;
-  if (isNaN(precio) || precio <= 0) return;
+  if (carrito.length === 0) {
+    alert("Cargá al menos un producto.");
+    return;
+  }
   if (!metodoSeleccionado) {
     alert("Elegí un método de pago.");
     return;
@@ -137,9 +195,11 @@ form.addEventListener("submit", async (e) => {
     await api("/api/ventas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ producto, precio, metodo: metodoSeleccionado }),
+      body: JSON.stringify({ items: carrito, metodo: metodoSeleccionado }),
     });
 
+    carrito = [];
+    renderCart();
     form.reset();
     payButtons.forEach(b => b.classList.remove("active"));
     metodoSeleccionado = null;
@@ -266,19 +326,66 @@ async function render() {
 
   [...sales].reverse().forEach(s => {
     const tr = document.createElement("tr");
+    tr.className = "sale-row";
     tr.innerHTML = `
       <td>${s.horaLabel}</td>
-      <td>${escapeHtml(s.producto)}</td>
+      <td><span class="expand-caret">▸</span>${escapeHtml(s.producto)}</td>
       <td>${money(s.precio)}</td>
       <td><span class="pm-tag ${s.metodo}">${PAYMENT_LABELS[s.metodo] || s.metodo}</span></td>
       <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>
     `;
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest(".del-btn")) return;
+      toggleSaleDetail(s.id, tr);
+    });
     tbody.appendChild(tr);
   });
 
   tbody.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", () => deleteSale(btn.dataset.id));
   });
+}
+
+// ---------- Desglose por producto de una venta ----------
+
+const itemsCache = new Map();
+
+async function toggleSaleDetail(ventaId, row) {
+  const tbody = document.getElementById("history-body");
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains("sale-detail-row")) {
+    existing.remove();
+    row.classList.remove("expanded");
+    return;
+  }
+
+  tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
+  tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
+  row.classList.add("expanded");
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "sale-detail-row";
+  const td = document.createElement("td");
+  td.colSpan = 5;
+  td.innerHTML = `<div class="sale-detail-loading">Cargando...</div>`;
+  detailRow.appendChild(td);
+  row.after(detailRow);
+
+  try {
+    let items = itemsCache.get(ventaId);
+    if (!items) {
+      items = await api("/api/ventas/" + encodeURIComponent(ventaId) + "/items");
+      itemsCache.set(ventaId, items);
+    }
+    td.innerHTML = items.map(it => `
+      <div class="sale-detail-item">
+        <span>${escapeHtml(it.producto)}</span>
+        <span>${money(it.precio)}</span>
+      </div>
+    `).join("");
+  } catch (err) {
+    td.innerHTML = `<div class="sale-detail-loading">No se pudo cargar el detalle.</div>`;
+  }
 }
 
 function escapeHtml(str) {

@@ -31,6 +31,12 @@ const SCHEMA = `
     nota TEXT,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS venta_items (
+    id TEXT PRIMARY KEY,
+    ventaId TEXT NOT NULL,
+    producto TEXT NOT NULL,
+    precio REAL NOT NULL
+  );
 `;
 
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
@@ -58,6 +64,22 @@ if (USE_TURSO) {
       });
       return res.rows;
     },
+    async getAllVentas() {
+      const res = await client.execute("SELECT * FROM ventas ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async getAllItems() {
+      const res = await client.execute(`
+        SELECT vi.*, v.fecha as fecha, v.horaLabel as horaLabel, v.metodo as metodo
+        FROM venta_items vi JOIN ventas v ON v.id = vi.ventaId
+        ORDER BY v.creadoEn ASC
+      `);
+      return res.rows;
+    },
+    async getAllGastos() {
+      const res = await client.execute("SELECT * FROM gastos ORDER BY creadoEn ASC");
+      return res.rows;
+    },
     async insert(row) {
       await client.execute({
         sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn)
@@ -69,6 +91,10 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM ventas WHERE id = ?", args: [id] });
     },
     async deleteByFecha(fecha) {
+      await client.execute({
+        sql: "DELETE FROM venta_items WHERE ventaId IN (SELECT id FROM ventas WHERE fecha = ?)",
+        args: [fecha],
+      });
       await client.execute({ sql: "DELETE FROM ventas WHERE fecha = ?", args: [fecha] });
     },
 
@@ -119,6 +145,34 @@ if (USE_TURSO) {
     async deleteSalario(id) {
       await client.execute({ sql: "DELETE FROM salario WHERE id = ?", args: [id] });
     },
+
+    async insertItem(row) {
+      await client.execute({
+        sql: `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`,
+        args: [row.id, row.ventaId, row.producto, row.precio],
+      });
+    },
+    async getItemsByFecha(fecha) {
+      const res = await client.execute({
+        sql: `SELECT vi.* FROM venta_items vi
+              JOIN ventas v ON v.id = vi.ventaId
+              WHERE v.fecha = ?
+              ORDER BY vi.id ASC`,
+        args: [fecha],
+      });
+      return res.rows;
+    },
+    async deleteItemsByVentaId(ventaId) {
+      await client.execute({ sql: "DELETE FROM venta_items WHERE ventaId = ?", args: [ventaId] });
+    },
+    async getItemsByVentaId(ventaId) {
+      const res = await client.execute({ sql: "SELECT * FROM venta_items WHERE ventaId = ? ORDER BY id ASC", args: [ventaId] });
+      return res.rows;
+    },
+    async getVentaById(id) {
+      const res = await client.execute({ sql: "SELECT * FROM ventas WHERE id = ?", args: [id] });
+      return res.rows[0] || null;
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -133,6 +187,19 @@ if (USE_TURSO) {
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
     },
+    async getAllVentas() {
+      return db.prepare("SELECT * FROM ventas ORDER BY creadoEn ASC").all();
+    },
+    async getAllItems() {
+      return db.prepare(`
+        SELECT vi.*, v.fecha as fecha, v.horaLabel as horaLabel, v.metodo as metodo
+        FROM venta_items vi JOIN ventas v ON v.id = vi.ventaId
+        ORDER BY v.creadoEn ASC
+      `).all();
+    },
+    async getAllGastos() {
+      return db.prepare("SELECT * FROM gastos ORDER BY creadoEn ASC").all();
+    },
     async insert(row) {
       db.prepare(
         `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn)
@@ -143,6 +210,9 @@ if (USE_TURSO) {
       db.prepare("DELETE FROM ventas WHERE id = ?").run(id);
     },
     async deleteByFecha(fecha) {
+      db.prepare(
+        "DELETE FROM venta_items WHERE ventaId IN (SELECT id FROM ventas WHERE fecha = ?)"
+      ).run(fecha);
       db.prepare("DELETE FROM ventas WHERE fecha = ?").run(fecha);
     },
 
@@ -183,6 +253,29 @@ if (USE_TURSO) {
     },
     async deleteSalario(id) {
       db.prepare("DELETE FROM salario WHERE id = ?").run(id);
+    },
+
+    async insertItem(row) {
+      db.prepare(
+        `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`
+      ).run(row.id, row.ventaId, row.producto, row.precio);
+    },
+    async getItemsByFecha(fecha) {
+      return db.prepare(
+        `SELECT vi.* FROM venta_items vi
+         JOIN ventas v ON v.id = vi.ventaId
+         WHERE v.fecha = ?
+         ORDER BY vi.id ASC`
+      ).all(fecha);
+    },
+    async deleteItemsByVentaId(ventaId) {
+      db.prepare("DELETE FROM venta_items WHERE ventaId = ?").run(ventaId);
+    },
+    async getItemsByVentaId(ventaId) {
+      return db.prepare("SELECT * FROM venta_items WHERE ventaId = ? ORDER BY id ASC").all(ventaId);
+    },
+    async getVentaById(id) {
+      return db.prepare("SELECT * FROM ventas WHERE id = ?").get(id) || null;
     },
   };
 }

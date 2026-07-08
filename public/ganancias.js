@@ -180,10 +180,10 @@ function escapeHtml(str) {
 }
 
 async function renderAll() {
-  let ventas, costos, gastos, salarios;
+  let items, costos, gastos, salarios;
   try {
-    [ventas, costos, gastos, salarios] = await Promise.all([
-      api("/api/ventas"),
+    [items, costos, gastos, salarios] = await Promise.all([
+      api("/api/venta-items"),
       api("/api/costos"),
       api("/api/gastos"),
       api("/api/salario"),
@@ -198,16 +198,16 @@ async function renderAll() {
   costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
 
   let gananciaBruta = 0;
-  let ventasConsideradas = 0;
+  let itemsConsiderados = 0;
   const sinCostoSet = new Set();
 
-  ventas.forEach(v => {
-    const key = normalizeNombre(v.producto);
+  items.forEach(it => {
+    const key = normalizeNombre(it.producto);
     if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
-      gananciaBruta += v.precio - costoPorProducto[key];
-      ventasConsideradas++;
+      gananciaBruta += it.precio - costoPorProducto[key];
+      itemsConsiderados++;
     } else {
-      sinCostoSet.add(v.producto);
+      sinCostoSet.add(it.producto);
     }
   });
 
@@ -216,7 +216,7 @@ async function renderAll() {
 
   document.getElementById("ganancia-bruta").textContent = money(gananciaBruta);
   document.getElementById("ventas-consideradas").textContent =
-    `${ventasConsideradas} de ${ventas.length} ventas con costo cargado`;
+    `${itemsConsiderados} de ${items.length} productos con costo cargado`;
   document.getElementById("gasto-total").textContent = money(gastoTotal);
   document.getElementById("ganancia-neta").textContent = money(gananciaNeta);
 
@@ -249,23 +249,23 @@ async function renderAll() {
     });
   }
 
-  // Detalle de ventas de hoy (precio, costo y ganancia por venta)
+  // Detalle de ventas de hoy (precio, costo y ganancia por producto)
   const detalleBody = document.getElementById("detalle-ventas-body");
   detalleBody.innerHTML = "";
-  if (ventas.length === 0) {
+  if (items.length === 0) {
     detalleBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay ventas hoy.</td></tr>`;
   } else {
-    [...ventas].reverse().forEach(v => {
-      const key = normalizeNombre(v.producto);
+    [...items].reverse().forEach(it => {
+      const key = normalizeNombre(it.producto);
       const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
       const costo = tieneCosto ? costoPorProducto[key] : null;
-      const ganancia = tieneCosto ? v.precio - costo : null;
+      const ganancia = tieneCosto ? it.precio - costo : null;
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${v.horaLabel}</td>
-        <td>${escapeHtml(v.producto)}</td>
-        <td>${money(v.precio)}</td>
+        <td>${it.horaLabel}</td>
+        <td>${escapeHtml(it.producto)}</td>
+        <td>${money(it.precio)}</td>
         <td>${tieneCosto ? money(costo) : "—"}</td>
         <td style="${ganancia !== null && ganancia < 0 ? 'color:#e15b5b;' : ''}">${ganancia !== null ? money(ganancia) : "—"}</td>
       `;

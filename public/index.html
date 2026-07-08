@@ -31,7 +31,7 @@
     <form id="sale-form" autocomplete="off">
       <div class="field autocomplete-field">
         <label for="producto">Producto</label>
-        <input type="text" id="producto" name="producto" placeholder="Ej: Coca Cola 500ml" autocomplete="off" required>
+        <input type="text" id="producto" name="producto" placeholder="Ej: Coca Cola 500ml" autocomplete="off">
         <div class="suggestions" id="producto-suggestions"></div>
       </div>
 
@@ -39,9 +39,13 @@
         <label for="precio">Precio</label>
         <div class="input-prefix">
           <span>$</span>
-          <input type="number" id="precio" name="precio" placeholder="0" min="0" step="0.01" required>
+          <input type="number" id="precio" name="precio" placeholder="0" min="0" step="0.01">
         </div>
       </div>
+
+      <button type="button" id="add-item-btn" class="add-item-btn">+ Agregar otro producto a esta venta</button>
+
+      <div class="cart-list" id="cart-list"></div>
 
       <div class="field">
         <label>Método de pago</label>

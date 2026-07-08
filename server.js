@@ -136,25 +136,51 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, rows);
     }
 
+    if (pathname.startsWith("/api/ventas/") && pathname.endsWith("/items") && req.method === "GET") {
+      // Público: el precio de cada producto ya se ve en el total, no es información privada (el costo sí lo es)
+      const ventaId = decodeURIComponent(pathname.slice("/api/ventas/".length, -"/items".length));
+      let items = await db.getItemsByVentaId(ventaId);
+      if (!items.length) {
+        const venta = await db.getVentaById(ventaId);
+        if (venta) items = [{ producto: venta.producto, precio: venta.precio }];
+      }
+      return sendJson(res, 200, items);
+    }
+
     if (pathname === "/api/ventas" && req.method === "POST") {
       const body = await readJsonBody(req);
-      const producto = String(body.producto || "").trim();
-      const precio = Number(body.precio);
       const metodo = String(body.metodo || "");
 
-      if (!producto) return sendJson(res, 400, { error: "Falta el producto" });
-      if (!Number.isFinite(precio) || precio <= 0) return sendJson(res, 400, { error: "Precio inválido" });
+      // Acepta una lista de productos (carrito) o, por compatibilidad, un solo producto suelto
+      const itemsInput = Array.isArray(body.items) && body.items.length
+        ? body.items
+        : (body.producto ? [{ producto: body.producto, precio: body.precio }] : []);
+
+      if (!itemsInput.length) return sendJson(res, 400, { error: "No hay productos cargados en la venta" });
       if (!METODOS_VALIDOS.has(metodo)) return sendJson(res, 400, { error: "Método de pago inválido" });
 
-      const precioNeto = metodo === "cuentadni"
-        ? Math.round(precio * (1 - CUENTA_DNI_COMISION) * 100) / 100
-        : precio;
+      const itemsProcessed = [];
+      for (const it of itemsInput) {
+        const producto = String(it.producto || "").trim();
+        const precio = Number(it.precio);
+        if (!producto) return sendJson(res, 400, { error: "Falta el nombre de un producto" });
+        if (!Number.isFinite(precio) || precio <= 0) return sendJson(res, 400, { error: `Precio inválido para "${producto}"` });
+
+        const precioNeto = metodo === "cuentadni"
+          ? Math.round(precio * (1 - CUENTA_DNI_COMISION) * 100) / 100
+          : precio;
+
+        itemsProcessed.push({ producto, precio: precioNeto });
+      }
+
+      const total = itemsProcessed.reduce((acc, it) => acc + it.precio, 0);
+      const productoResumen = itemsProcessed.map((it) => it.producto).join(", ");
 
       const now = getArgentinaNow();
       const row = {
         id: crypto.randomUUID(),
-        producto,
-        precio: precioNeto,
+        producto: productoResumen,
+        precio: Math.round(total * 100) / 100,
         metodo,
         fecha: now.fecha,
         hora: now.hora,
@@ -163,12 +189,16 @@ const server = http.createServer(async (req, res) => {
       };
 
       await db.insert(row);
+      for (const it of itemsProcessed) {
+        await db.insertItem({ id: crypto.randomUUID(), ventaId: row.id, producto: it.producto, precio: it.precio });
+      }
 
-      return sendJson(res, 201, row);
+      return sendJson(res, 201, { ...row, items: itemsProcessed });
     }
 
     if (pathname.startsWith("/api/ventas/") && req.method === "DELETE") {
       const id = decodeURIComponent(pathname.slice("/api/ventas/".length));
+      await db.deleteItemsByVentaId(id);
       await db.deleteById(id);
       return sendJson(res, 200, { ok: true });
     }
@@ -187,6 +217,47 @@ const server = http.createServer(async (req, res) => {
       // Público: solo nombres, nunca el costo (eso es privado del panel de ganancias)
       const costos = await db.getCostos();
       return sendJson(res, 200, costos.map((c) => c.producto));
+    }
+
+    if (pathname === "/api/venta-items" && req.method === "GET") {
+      // Protegido: detalle por producto (precio, no el costo) para calcular ganancia en el panel.
+      // Las ventas viejas (de antes del carrito) no tienen items propios: se reconstruye
+      // un item único a partir de la venta original para que sigan apareciendo acá.
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const fecha = query.get("fecha") || getArgentinaNow().fecha;
+      const [ventasDelDia, items] = await Promise.all([db.getByFecha(fecha), db.getItemsByFecha(fecha)]);
+
+      const itemsPorVenta = new Map();
+      for (const it of items) {
+        if (!itemsPorVenta.has(it.ventaId)) itemsPorVenta.set(it.ventaId, []);
+        itemsPorVenta.get(it.ventaId).push(it);
+      }
+
+      const resultado = [];
+      for (const venta of ventasDelDia) {
+        const itemsDeEstaVenta = itemsPorVenta.get(venta.id);
+        if (itemsDeEstaVenta && itemsDeEstaVenta.length) {
+          for (const it of itemsDeEstaVenta) {
+            resultado.push({ ventaId: venta.id, producto: it.producto, precio: it.precio, horaLabel: venta.horaLabel });
+          }
+        } else {
+          // Venta antigua sin items propios: se usa el producto/precio original como único item
+          resultado.push({ ventaId: venta.id, producto: venta.producto, precio: venta.precio, horaLabel: venta.horaLabel });
+        }
+      }
+
+      return sendJson(res, 200, resultado);
+    }
+
+    if (pathname === "/api/reportes" && req.method === "GET") {
+      // Protegido: historial completo (todos los días) para el panel de reportes.
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const [ventas, items, gastos] = await Promise.all([
+        db.getAllVentas(),
+        db.getAllItems(),
+        db.getAllGastos(),
+      ]);
+      return sendJson(res, 200, { ventas, items, gastos });
     }
 
     // ---------- Autenticación del panel de ganancias ----------
