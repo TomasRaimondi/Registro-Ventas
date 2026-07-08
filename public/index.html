@@ -129,8 +129,12 @@
   <!-- Historial -->
   <section class="card history-card">
     <div class="history-header">
-      <h2>Ventas de hoy</h2>
-      <button id="clear-day" class="clear-btn">Vaciar historial de hoy</button>
+      <h2>Ventas de <span id="historial-fecha-label">hoy</span></h2>
+      <div class="history-actions">
+        <input type="date" id="historial-fecha-input" title="Ver ventas de otro día">
+        <button type="button" id="historial-hoy-btn" class="clear-btn" style="display:none;">Volver a hoy</button>
+        <button id="clear-day" class="clear-btn">Vaciar este día</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>

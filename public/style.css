@@ -128,7 +128,7 @@ body {
 }
 .suggestion-item:hover { background: var(--accent-soft); color: var(--accent); }
 
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], input[type="date"] {
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
@@ -138,9 +138,21 @@ input[type="text"], input[type="number"] {
   font-size: 15px;
   outline: none;
   transition: border-color .15s;
+  font-family: inherit;
+  color-scheme: dark;
 }
-input[type="text"]:focus, input[type="number"]:focus {
+input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
   border-color: var(--accent);
+}
+
+#historial-fecha-input {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+@media (prefers-color-scheme: light) {
+  input[type="date"] { color-scheme: light; }
 }
 
 .input-prefix {
@@ -369,6 +381,14 @@ input[type="text"]:focus, input[type="number"]:focus {
   margin-bottom: 14px;
 }
 .history-header h2 { margin: 0; }
+.history-header h2 #historial-fecha-label { text-transform: capitalize; }
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 .clear-btn {
   background: none;

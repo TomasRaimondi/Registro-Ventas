@@ -52,6 +52,20 @@ async function fetchTodaySales() {
   return api("/api/ventas");
 }
 
+async function fetchSalesForDate(fecha) {
+  return api("/api/ventas?fecha=" + encodeURIComponent(fecha));
+}
+
+function getHoyFechaArgentina() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date());
+}
+
+function formatFechaLarga(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
 // ---------- Autocompletado de producto ----------
 
 let listaProductos = [];
@@ -218,7 +232,11 @@ form.addEventListener("submit", async (e) => {
     metodoSeleccionado = null;
     document.getElementById("producto").focus();
 
-    await render();
+    // Si estaba viendo el historial de otro día, la venta nueva se cargó hoy: volvemos a hoy para verla.
+    fechaSeleccionada = null;
+    if (fechaInput) fechaInput.value = getHoyFechaArgentina();
+
+    await refresh();
   } catch (err) {
     alert("No se pudo registrar la venta.\n" + err.message + "\n\nRevisá que el servidor esté encendido y que estés conectado al WiFi del local.");
   } finally {
@@ -227,38 +245,53 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
+// ---------- Ver el historial de otro día ----------
+
+let fechaSeleccionada = null; // null = sigue mostrando "hoy" automáticamente
+const fechaInput = document.getElementById("historial-fecha-input");
+const hoyBtn = document.getElementById("historial-hoy-btn");
+
+fechaInput.addEventListener("change", () => {
+  if (!fechaInput.value) return;
+  fechaSeleccionada = fechaInput.value;
+  refresh();
+});
+
+hoyBtn.addEventListener("click", () => {
+  fechaSeleccionada = null;
+  fechaInput.value = getHoyFechaArgentina();
+  refresh();
+});
+
 // ---------- Borrar una venta / vaciar historial ----------
 
 async function deleteSale(id) {
   try {
     await api("/api/ventas/" + encodeURIComponent(id), { method: "DELETE" });
-    await render();
+    await refresh();
   } catch (err) {
     alert("No se pudo eliminar la venta.\n" + err.message);
   }
 }
 
 document.getElementById("clear-day").addEventListener("click", async () => {
-  if (!confirm("¿Vaciar todas las ventas registradas hoy? Esta acción no se puede deshacer.")) return;
+  const hoyFecha = getHoyFechaArgentina();
+  const fechaActiva = fechaSeleccionada || hoyFecha;
+  const mensaje = fechaActiva === hoyFecha
+    ? "¿Vaciar todas las ventas registradas hoy? Esta acción no se puede deshacer."
+    : `¿Vaciar todas las ventas del ${formatFechaLarga(fechaActiva)}? Esta acción no se puede deshacer.`;
+  if (!confirm(mensaje)) return;
   try {
-    await api("/api/ventas", { method: "DELETE" });
-    await render();
+    await api("/api/ventas?fecha=" + encodeURIComponent(fechaActiva), { method: "DELETE" });
+    await refresh();
   } catch (err) {
     alert("No se pudo vaciar el historial.\n" + err.message);
   }
 });
 
-// ---------- Render de métricas e historial ----------
+// ---------- Render de métricas (siempre de hoy) ----------
 
-async function render() {
-  let sales;
-  try {
-    sales = await fetchTodaySales();
-  } catch (err) {
-    console.error("No se pudo cargar el estado del servidor:", err);
-    return;
-  }
-
+function renderMetrics(sales) {
   // Total del día y cantidad de ventas (no incluye Mayorista, que tiene su total aparte)
   const ventasSinMayorista = sales.filter(s => s.metodo !== "mayorista");
   const total = ventasSinMayorista.reduce((acc, s) => acc + s.precio, 0);
@@ -327,13 +360,20 @@ async function render() {
     wrap.appendChild(hLabel);
     chart.appendChild(wrap);
   }
+}
 
-  // Historial de ventas de hoy (más reciente primero)
+// ---------- Render del historial (de hoy o del día elegido) ----------
+
+function renderHistory(sales, fecha, hoyFecha) {
+  const esHoy = fecha === hoyFecha;
+  document.getElementById("historial-fecha-label").textContent = esHoy ? "hoy" : formatFechaLarga(fecha);
+  hoyBtn.style.display = esHoy ? "none" : "inline-block";
+
   const tbody = document.getElementById("history-body");
   tbody.innerHTML = "";
 
   if (sales.length === 0) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no cargaste ninguna venta hoy.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">${esHoy ? "Todavía no cargaste ninguna venta hoy." : "No hay ventas registradas ese día."}</td></tr>`;
     return;
   }
 
@@ -357,6 +397,31 @@ async function render() {
   tbody.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", () => deleteSale(btn.dataset.id));
   });
+}
+
+// ---------- Combina metricas + historial en cada actualización ----------
+
+async function refresh() {
+  const hoyFecha = getHoyFechaArgentina();
+  const fechaActiva = fechaSeleccionada || hoyFecha;
+  fechaInput.max = hoyFecha;
+  if (!fechaInput.value) fechaInput.value = hoyFecha;
+
+  let todaySales, historySales;
+  try {
+    if (fechaActiva === hoyFecha) {
+      todaySales = await fetchTodaySales();
+      historySales = todaySales;
+    } else {
+      [todaySales, historySales] = await Promise.all([fetchTodaySales(), fetchSalesForDate(fechaActiva)]);
+    }
+  } catch (err) {
+    console.error("No se pudo cargar el estado del servidor:", err);
+    return;
+  }
+
+  renderMetrics(todaySales);
+  renderHistory(historySales, fechaActiva, hoyFecha);
 }
 
 // ---------- Desglose por producto de una venta ----------
@@ -407,7 +472,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-render();
+refresh();
 
 // Se refresca solo, para que las métricas se actualicen aunque carguen ventas desde otro dispositivo
-setInterval(render, 5000);
+setInterval(refresh, 5000);
