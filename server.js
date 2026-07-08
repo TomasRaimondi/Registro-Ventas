@@ -123,6 +123,35 @@ function readJsonBody(req) {
   });
 }
 
+// ---------- Stock: descuenta/restaura, resolviendo combos a sus componentes ----------
+
+async function ajustarStockPorItems(items, direccion) {
+  // direccion: -1 al vender (descuenta), +1 al borrar una venta (restaura)
+  try {
+    const composicion = await db.getComposicion();
+    const composicionPorCombo = new Map();
+    for (const c of composicion) {
+      if (!composicionPorCombo.has(c.comboProducto)) composicionPorCombo.set(c.comboProducto, []);
+      composicionPorCombo.get(c.comboProducto).push(c);
+    }
+
+    for (const it of items) {
+      const componentes = composicionPorCombo.get(it.producto);
+      if (componentes && componentes.length) {
+        for (const c of componentes) {
+          if (direccion < 0) await db.decrementStock(c.componenteProducto, c.cantidad);
+          else await db.incrementStock(c.componenteProducto, c.cantidad);
+        }
+      } else {
+        if (direccion < 0) await db.decrementStock(it.producto, 1);
+        else await db.incrementStock(it.producto, 1);
+      }
+    }
+  } catch (e) {
+    console.error("No se pudo ajustar el stock:", e);
+  }
+}
+
 // ---------- Servidor ----------
 
 const server = http.createServer(async (req, res) => {
@@ -214,12 +243,19 @@ const server = http.createServer(async (req, res) => {
       for (const it of itemsProcessed) {
         await db.insertItem({ id: crypto.randomUUID(), ventaId: row.id, producto: it.producto, precio: it.precio });
       }
+      await ajustarStockPorItems(itemsProcessed, -1);
 
       return sendJson(res, 201, { ...row, items: itemsProcessed });
     }
 
     if (pathname.startsWith("/api/ventas/") && req.method === "DELETE") {
       const id = decodeURIComponent(pathname.slice("/api/ventas/".length));
+      let itemsDeLaVenta = await db.getItemsByVentaId(id);
+      if (!itemsDeLaVenta.length) {
+        const venta = await db.getVentaById(id);
+        if (venta) itemsDeLaVenta = [{ producto: venta.producto, precio: venta.precio }];
+      }
+      await ajustarStockPorItems(itemsDeLaVenta, +1);
       await db.deleteItemsByVentaId(id);
       await db.deleteById(id);
       return sendJson(res, 200, { ok: true });
@@ -227,6 +263,17 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === "/api/ventas" && req.method === "DELETE") {
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
+
+      const [ventasDelDia, itemsDelDia] = await Promise.all([db.getByFecha(fecha), db.getItemsByFecha(fecha)]);
+      const ventaIdsConItems = new Set(itemsDelDia.map((it) => it.ventaId));
+      const itemsCompletos = itemsDelDia.slice();
+      for (const venta of ventasDelDia) {
+        if (!ventaIdsConItems.has(venta.id)) {
+          itemsCompletos.push({ producto: venta.producto, precio: venta.precio });
+        }
+      }
+      await ajustarStockPorItems(itemsCompletos, +1);
+
       await db.deleteByFecha(fecha);
       return sendJson(res, 200, { ok: true });
     }

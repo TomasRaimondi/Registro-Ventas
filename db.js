@@ -132,6 +132,18 @@ if (USE_TURSO) {
     async updateStock(producto, stock) {
       await client.execute({ sql: "UPDATE costos SET stock = ? WHERE producto = ?", args: [stock, producto] });
     },
+    async decrementStock(producto, cantidad) {
+      await client.execute({
+        sql: "UPDATE costos SET stock = MAX(0, stock - ?) WHERE producto = ?",
+        args: [cantidad, producto],
+      });
+    },
+    async incrementStock(producto, cantidad) {
+      await client.execute({
+        sql: "UPDATE costos SET stock = stock + ? WHERE producto = ?",
+        args: [cantidad, producto],
+      });
+    },
 
     async getComposicion() {
       const res = await client.execute("SELECT * FROM producto_composicion ORDER BY comboProducto ASC");
@@ -265,6 +277,12 @@ if (USE_TURSO) {
     },
     async updateStock(producto, stock) {
       db.prepare("UPDATE costos SET stock = ? WHERE producto = ?").run(stock, producto);
+    },
+    async decrementStock(producto, cantidad) {
+      db.prepare("UPDATE costos SET stock = MAX(0, stock - ?) WHERE producto = ?").run(cantidad, producto);
+    },
+    async incrementStock(producto, cantidad) {
+      db.prepare("UPDATE costos SET stock = stock + ? WHERE producto = ?").run(cantidad, producto);
     },
 
     async getComposicion() {
