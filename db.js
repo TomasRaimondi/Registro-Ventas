@@ -37,7 +37,23 @@ const SCHEMA = `
     producto TEXT NOT NULL,
     precio REAL NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS producto_composicion (
+    id TEXT PRIMARY KEY,
+    comboProducto TEXT NOT NULL,
+    componenteProducto TEXT NOT NULL,
+    cantidad INTEGER NOT NULL DEFAULT 1
+  );
 `;
+
+// Migración aditiva: agrega la columna "stock" a costos si todavía no existe
+// (las instalaciones viejas no la tienen; ALTER TABLE falla si ya está, por eso el try/catch).
+async function migrarStock(execFn) {
+  try {
+    await execFn("ALTER TABLE costos ADD COLUMN stock INTEGER DEFAULT 0");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
 
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
@@ -56,6 +72,7 @@ if (USE_TURSO) {
       for (const stmt of SCHEMA.split(";").map(s => s.trim()).filter(Boolean)) {
         await client.execute(stmt);
       }
+      await migrarStock((sql) => client.execute(sql));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -111,6 +128,23 @@ if (USE_TURSO) {
     },
     async deleteCosto(producto) {
       await client.execute({ sql: "DELETE FROM costos WHERE producto = ?", args: [producto] });
+    },
+    async updateStock(producto, stock) {
+      await client.execute({ sql: "UPDATE costos SET stock = ? WHERE producto = ?", args: [stock, producto] });
+    },
+
+    async getComposicion() {
+      const res = await client.execute("SELECT * FROM producto_composicion ORDER BY comboProducto ASC");
+      return res.rows;
+    },
+    async insertComponente(row) {
+      await client.execute({
+        sql: `INSERT INTO producto_composicion (id, comboProducto, componenteProducto, cantidad) VALUES (?, ?, ?, ?)`,
+        args: [row.id, row.comboProducto, row.componenteProducto, row.cantidad],
+      });
+    },
+    async deleteComponente(id) {
+      await client.execute({ sql: "DELETE FROM producto_composicion WHERE id = ?", args: [id] });
     },
 
     async getGastosByFecha(fecha) {
@@ -183,6 +217,7 @@ if (USE_TURSO) {
   impl = {
     async init() {
       db.exec(SCHEMA);
+      await migrarStock(async (sql) => db.exec(sql));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -227,6 +262,21 @@ if (USE_TURSO) {
     },
     async deleteCosto(producto) {
       db.prepare("DELETE FROM costos WHERE producto = ?").run(producto);
+    },
+    async updateStock(producto, stock) {
+      db.prepare("UPDATE costos SET stock = ? WHERE producto = ?").run(stock, producto);
+    },
+
+    async getComposicion() {
+      return db.prepare("SELECT * FROM producto_composicion ORDER BY comboProducto ASC").all();
+    },
+    async insertComponente(row) {
+      db.prepare(
+        `INSERT INTO producto_composicion (id, comboProducto, componenteProducto, cantidad) VALUES (?, ?, ?, ?)`
+      ).run(row.id, row.comboProducto, row.componenteProducto, row.cantidad);
+    },
+    async deleteComponente(id) {
+      db.prepare("DELETE FROM producto_composicion WHERE id = ?").run(id);
     },
 
     async getGastosByFecha(fecha) {

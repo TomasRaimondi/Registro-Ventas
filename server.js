@@ -361,6 +361,50 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (pathname === "/api/costos/stock" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const producto = String(body.producto || "").trim();
+      const stock = Number(body.stock);
+
+      if (!producto) return sendJson(res, 400, { error: "Falta el producto" });
+      if (!Number.isFinite(stock) || stock < 0) return sendJson(res, 400, { error: "Stock inválido" });
+
+      await db.updateStock(producto, stock);
+      return sendJson(res, 200, { ok: true, producto, stock });
+    }
+
+    // ---------- Composición de combos (para no duplicar stock entre combo y componentes) ----------
+
+    if (pathname === "/api/composicion" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getComposicion();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/composicion" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const comboProducto = String(body.comboProducto || "").trim();
+      const componenteProducto = String(body.componenteProducto || "").trim();
+      const cantidad = Number.isInteger(body.cantidad) ? body.cantidad : parseInt(body.cantidad, 10);
+
+      if (!comboProducto || !componenteProducto) return sendJson(res, 400, { error: "Falta el combo o el componente" });
+      if (comboProducto === componenteProducto) return sendJson(res, 400, { error: "Un producto no puede ser componente de sí mismo" });
+      if (!Number.isInteger(cantidad) || cantidad <= 0) return sendJson(res, 400, { error: "Cantidad inválida" });
+
+      const row = { id: crypto.randomUUID(), comboProducto, componenteProducto, cantidad };
+      await db.insertComponente(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/composicion/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/composicion/".length));
+      await db.deleteComponente(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (pathname === "/api/gastos" && req.method === "GET") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
