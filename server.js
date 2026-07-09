@@ -697,6 +697,45 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Situación financiera (capital manual: transferencias, efectivo, deudas, etc.) ----------
+
+    if (pathname === "/api/balance" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllBalanceManual();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/balance" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const fecha = String(body.fecha || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
+
+      const campos = ["capitalTransferencia", "capitalEfectivo", "capitalEnProceso", "deudas", "inversionInicial"];
+      const valores = {};
+      for (const campo of campos) {
+        const v = Number(body[campo] || 0);
+        if (!Number.isFinite(v) || v < 0) return sendJson(res, 400, { error: `Valor inválido en "${campo}"` });
+        valores[campo] = v;
+      }
+
+      const row = {
+        fecha,
+        ...valores,
+        nota: body.nota ? String(body.nota).trim() : null,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.upsertBalanceManual(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/balance/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const fecha = decodeURIComponent(pathname.slice("/api/balance/".length));
+      await db.deleteBalanceManual(fecha);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (req.method === "GET") {
       return serveStatic(req, res);
     }

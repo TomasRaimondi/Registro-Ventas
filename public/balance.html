@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Situación Financiera</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Situación Financiera</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/compras-stock.html" class="link-btn">Compras de Stock →</a>
+    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="card">
+      <div class="history-header">
+        <h2>Evaluando al <span id="fecha-label">hoy</span></h2>
+        <div class="history-actions">
+          <input type="date" id="fecha-evaluacion">
+          <button type="button" id="hoy-btn" class="clear-btn" style="display:none;">Volver a hoy</button>
+        </div>
+      </div>
+      <p class="hint" id="sin-snapshot-hint" style="text-align:left; display:none;">
+        Todavía no cargaste datos manuales para esta fecha. Se muestran los últimos que cargaste (<span id="sin-snapshot-fecha"></span>) como punto de partida — ajustalos y guardalos para esta fecha.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Datos que solo vos podés cargar</h2>
+      <p class="hint" style="text-align:left;">
+        El stock y la ganancia se calculan solos con lo que ya está cargado en la web. Esto es lo que falta para tener el cuadro completo: cuánta plata tenés en el banco, en efectivo, en camino, y cuánto debés.
+      </p>
+      <form id="balance-form" class="inline-form" style="flex-direction:column; align-items:stretch;">
+        <div class="field-row">
+          <div class="field">
+            <label for="capital-transferencia">Capital en transferencia (bancos)</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="capital-transferencia" min="0" step="0.01"></div>
+          </div>
+          <div class="field">
+            <label for="capital-efectivo">Capital en efectivo</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="capital-efectivo" min="0" step="0.01"></div>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="capital-proceso">Capital en proceso de ingreso <span class="opcional">(cheques, transferencias pendientes, etc.)</span></label>
+            <div class="input-prefix"><span>$</span><input type="number" id="capital-proceso" min="0" step="0.01"></div>
+          </div>
+          <div class="field">
+            <label for="deudas">Deudas <span class="opcional">(lo que debés a proveedores, préstamos, etc.)</span></label>
+            <div class="input-prefix"><span>$</span><input type="number" id="deudas" min="0" step="0.01"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="inversion-inicial">Inversión inicial del negocio</label>
+          <div class="input-prefix"><span>$</span><input type="number" id="inversion-inicial" min="0" step="0.01"></div>
+        </div>
+        <div class="field">
+          <label for="balance-nota">Nota <span class="opcional">(opcional)</span></label>
+          <input type="text" id="balance-nota" placeholder="Ej: Saldo de Mercado Pago actualizado hoy">
+        </div>
+        <button type="submit" class="submit-btn" id="balance-submit-btn">Guardar datos de esta fecha</button>
+      </form>
+    </section>
+
+    <section class="card total-card" style="text-align:left;">
+      <span class="label">Patrimonio neto total al <span id="patrimonio-fecha-label">hoy</span></span>
+      <span class="big-number" id="stat-patrimonio">$0</span>
+      <span class="sub" id="patrimonio-detalle">Stock + transferencia + efectivo + en proceso − deudas</span>
+    </section>
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+      <div class="card metric-card">
+        <span class="label">Capital en stock (a costo)</span>
+        <span class="big-number" id="stat-capital-stock">$0</span>
+        <span class="metric-sub">unidades × costo promedio a esta fecha</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Capital en transferencia</span>
+        <span class="big-number" id="stat-capital-transferencia" style="color:var(--accent);">$0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Capital en efectivo</span>
+        <span class="big-number" id="stat-capital-efectivo" style="color:var(--green);">$0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Capital en proceso</span>
+        <span class="big-number" id="stat-capital-proceso" style="color:var(--purple);">$0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Deudas</span>
+        <span class="big-number" id="stat-deudas" style="color:var(--red);">$0</span>
+      </div>
+    </section>
+
+    <section class="side-by-side">
+      <div class="card">
+        <h2>Ganancia acumulada a la fecha</h2>
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr><td>Ganancia bruta</td><td id="stat-ganancia-bruta">$0</td></tr>
+              <tr><td>Gastos</td><td id="stat-gastos-acum" style="color:var(--red);">$0</td></tr>
+              <tr><td>Sueldos y comisiones pagados</td><td id="stat-sueldos-acum" style="color:var(--red);">$0</td></tr>
+              <tr><td><strong>Ganancia neta acumulada</strong></td><td id="stat-ganancia-neta-acum"><strong>$0</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Análisis</h2>
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr><td>Retorno sobre inversión inicial</td><td id="stat-retorno">$0</td></tr>
+              <tr><td>Retorno (%)</td><td id="stat-retorno-pct">—</td></tr>
+              <tr><td>Liquidez (activos líquidos / deudas)</td><td id="stat-liquidez">—</td></tr>
+              <tr><td>Variación vs. último dato guardado</td><td id="stat-variacion">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Capital en stock por producto (a esta fecha)</h2>
+      <p class="hint" style="text-align:left;">El stock se reconstruye a partir del actual, deshaciendo ventas y compras posteriores a esta fecha. Si un producto no tiene ninguna compra cargada hasta esta fecha, se usa su costo actual como estimación.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Producto</th><th>Stock</th><th>Costo promedio</th><th>Capital</th></tr></thead>
+          <tbody id="stock-detalle-body">
+            <tr class="empty-row"><td colspan="4">Sin datos todavía.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Evolución del patrimonio neto</h2>
+      <div class="chart chart-tall" id="chart-patrimonio"></div>
+    </section>
+
+    <section class="card">
+      <div class="history-header">
+        <h2>Historial de datos cargados</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Transferencia</th>
+              <th>Efectivo</th>
+              <th>En proceso</th>
+              <th>Deudas</th>
+              <th>Inversión inicial</th>
+              <th>Nota</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="historial-balance-body">
+            <tr class="empty-row"><td colspan="8">Todavía no cargaste datos.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="balance.js"></script>
+</body>
+</html>

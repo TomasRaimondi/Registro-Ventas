@@ -59,6 +59,16 @@ const SCHEMA = `
     fecha TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS balance_manual (
+    fecha TEXT PRIMARY KEY,
+    capitalTransferencia REAL NOT NULL DEFAULT 0,
+    capitalEfectivo REAL NOT NULL DEFAULT 0,
+    capitalEnProceso REAL NOT NULL DEFAULT 0,
+    deudas REAL NOT NULL DEFAULT 0,
+    inversionInicial REAL NOT NULL DEFAULT 0,
+    nota TEXT,
+    creadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -219,6 +229,29 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM salario WHERE id = ?", args: [id] });
     },
 
+    async getAllBalanceManual() {
+      const res = await client.execute("SELECT * FROM balance_manual ORDER BY fecha ASC");
+      return res.rows;
+    },
+    async upsertBalanceManual(row) {
+      await client.execute({
+        sql: `INSERT INTO balance_manual
+              (fecha, capitalTransferencia, capitalEfectivo, capitalEnProceso, deudas, inversionInicial, nota, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(fecha) DO UPDATE SET
+                capitalTransferencia = excluded.capitalTransferencia,
+                capitalEfectivo = excluded.capitalEfectivo,
+                capitalEnProceso = excluded.capitalEnProceso,
+                deudas = excluded.deudas,
+                inversionInicial = excluded.inversionInicial,
+                nota = excluded.nota`,
+        args: [row.fecha, row.capitalTransferencia, row.capitalEfectivo, row.capitalEnProceso, row.deudas, row.inversionInicial, row.nota || null, row.creadoEn],
+      });
+    },
+    async deleteBalanceManual(fecha) {
+      await client.execute({ sql: "DELETE FROM balance_manual WHERE fecha = ?", args: [fecha] });
+    },
+
     async insertItem(row) {
       await client.execute({
         sql: `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`,
@@ -376,6 +409,27 @@ if (USE_TURSO) {
     },
     async deleteSalario(id) {
       db.prepare("DELETE FROM salario WHERE id = ?").run(id);
+    },
+
+    async getAllBalanceManual() {
+      return db.prepare("SELECT * FROM balance_manual ORDER BY fecha ASC").all();
+    },
+    async upsertBalanceManual(row) {
+      db.prepare(
+        `INSERT INTO balance_manual
+         (fecha, capitalTransferencia, capitalEfectivo, capitalEnProceso, deudas, inversionInicial, nota, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(fecha) DO UPDATE SET
+           capitalTransferencia = excluded.capitalTransferencia,
+           capitalEfectivo = excluded.capitalEfectivo,
+           capitalEnProceso = excluded.capitalEnProceso,
+           deudas = excluded.deudas,
+           inversionInicial = excluded.inversionInicial,
+           nota = excluded.nota`
+      ).run(row.fecha, row.capitalTransferencia, row.capitalEfectivo, row.capitalEnProceso, row.deudas, row.inversionInicial, row.nota || null, row.creadoEn);
+    },
+    async deleteBalanceManual(fecha) {
+      db.prepare("DELETE FROM balance_manual WHERE fecha = ?").run(fecha);
     },
 
     async insertItem(row) {
