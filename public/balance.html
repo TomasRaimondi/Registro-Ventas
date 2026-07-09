@@ -90,9 +90,14 @@
     </section>
 
     <section class="card total-card" style="text-align:left;">
-      <span class="label">Patrimonio neto total al <span id="patrimonio-fecha-label">hoy</span></span>
+      <span class="label">Patrimonio neto al <span id="patrimonio-fecha-label">hoy</span></span>
       <span class="big-number" id="stat-patrimonio">$0</span>
-      <span class="sub" id="patrimonio-detalle">Stock + transferencia + efectivo + en proceso − deudas</span>
+      <span class="sub" id="patrimonio-detalle">Capital total del negocio − inversión inicial</span>
+
+      <div class="mayorista-total">
+        <span class="label">Capital total del negocio <span class="opcional">(antes de descontar tu inversión inicial)</span></span>
+        <span class="mayorista-number" id="stat-capital-total" style="color:var(--accent);">$0</span>
+      </div>
     </section>
 
     <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
@@ -139,8 +144,7 @@
         <div class="table-wrap">
           <table>
             <tbody>
-              <tr><td>Retorno sobre inversión inicial</td><td id="stat-retorno">$0</td></tr>
-              <tr><td>Retorno (%)</td><td id="stat-retorno-pct">—</td></tr>
+              <tr><td>Retorno sobre inversión inicial (%)</td><td id="stat-retorno-pct">—</td></tr>
               <tr><td>Liquidez (activos líquidos / deudas)</td><td id="stat-liquidez">—</td></tr>
               <tr><td>Variación vs. último dato guardado</td><td id="stat-variacion">—</td></tr>
             </tbody>

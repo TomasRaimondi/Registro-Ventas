@@ -346,6 +346,19 @@ function renderBarChart(container, entries) {
   });
 }
 
+// Capital total = todo lo que tiene el negocio neto de deudas. Patrimonio neto = eso
+// menos lo que el dueño puso al principio, así el número principal muestra la ganancia
+// real generada, no la plata que el dueño ya había puesto de su bolsillo.
+function calcularPatrimonio(fecha) {
+  const { capitalStock, detalle } = calcularStockYCostoAsOf(fecha);
+  const snapshot = buscarSnapshot(fecha) || buscarUltimoSnapshotHasta(fecha) || {
+    capitalTransferencia: 0, capitalEfectivo: 0, capitalEnProceso: 0, deudas: 0, inversionInicial: 0,
+  };
+  const capitalTotal = capitalStock + snapshot.capitalTransferencia + snapshot.capitalEfectivo + snapshot.capitalEnProceso - snapshot.deudas;
+  const patrimonio = capitalTotal - snapshot.inversionInicial;
+  return { capitalStock, detalle, snapshot, capitalTotal, patrimonio };
+}
+
 // ---------- Render principal ----------
 
 function renderTodo() {
@@ -358,14 +371,13 @@ function renderTodo() {
 
   poblarFormulario(fecha);
 
-  const { capitalStock, detalle } = calcularStockYCostoAsOf(fecha);
-  const snapshot = buscarSnapshot(fecha) || buscarUltimoSnapshotHasta(fecha) || {
-    capitalTransferencia: 0, capitalEfectivo: 0, capitalEnProceso: 0, deudas: 0, inversionInicial: 0,
-  };
+  const { capitalStock, detalle, snapshot, capitalTotal, patrimonio } = calcularPatrimonio(fecha);
 
-  const patrimonio = capitalStock + snapshot.capitalTransferencia + snapshot.capitalEfectivo + snapshot.capitalEnProceso - snapshot.deudas;
-
-  document.getElementById("stat-patrimonio").textContent = money(patrimonio);
+  const patrimonioEl = document.getElementById("stat-patrimonio");
+  patrimonioEl.textContent = money(patrimonio);
+  patrimonioEl.classList.toggle("value-positive", patrimonio > 0);
+  patrimonioEl.classList.toggle("value-negative", patrimonio < 0);
+  document.getElementById("stat-capital-total").textContent = money(capitalTotal);
   document.getElementById("stat-capital-stock").textContent = money(capitalStock);
   document.getElementById("stat-capital-transferencia").textContent = money(snapshot.capitalTransferencia);
   document.getElementById("stat-capital-efectivo").textContent = money(snapshot.capitalEfectivo);
@@ -380,11 +392,8 @@ function renderTodo() {
   gananciaNetaEl.innerHTML = `<strong>${money(ganancia.gananciaNeta)}</strong>`;
   gananciaNetaEl.style.color = ganancia.gananciaNeta >= 0 ? "var(--green)" : "var(--red)";
 
-  const retorno = patrimonio - snapshot.inversionInicial;
-  const retornoPct = snapshot.inversionInicial > 0 ? (retorno / snapshot.inversionInicial) * 100 : null;
-  const retornoEl = document.getElementById("stat-retorno");
-  retornoEl.textContent = money(retorno);
-  retornoEl.style.color = retorno >= 0 ? "var(--green)" : "var(--red)";
+  // El patrimonio ya es "capital total - inversión inicial", así que retorno == patrimonio.
+  const retornoPct = snapshot.inversionInicial > 0 ? (patrimonio / snapshot.inversionInicial) * 100 : null;
   document.getElementById("stat-retorno-pct").textContent = retornoPct !== null ? retornoPct.toFixed(1) + "%" : "— (cargá la inversión inicial)";
 
   const activosLiquidos = snapshot.capitalEfectivo + snapshot.capitalTransferencia + snapshot.capitalEnProceso;
@@ -395,8 +404,7 @@ function renderTodo() {
   const anterior = balanceManualGlobal.filter(b => b.fecha < fecha).sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
   const variacionEl = document.getElementById("stat-variacion");
   if (anterior) {
-    const { capitalStock: capitalStockAnterior } = calcularStockYCostoAsOf(anterior.fecha);
-    const patrimonioAnterior = capitalStockAnterior + anterior.capitalTransferencia + anterior.capitalEfectivo + anterior.capitalEnProceso - anterior.deudas;
+    const { patrimonio: patrimonioAnterior } = calcularPatrimonio(anterior.fecha);
     const variacion = patrimonio - patrimonioAnterior;
     variacionEl.textContent = `${money(variacion)} desde el ${formatFechaCorta(anterior.fecha)}`;
     variacionEl.style.color = variacion >= 0 ? "var(--green)" : "var(--red)";
@@ -451,9 +459,7 @@ function renderHistorialBalance() {
 function renderChartPatrimonio() {
   const fechas = [...balanceManualGlobal].map(b => b.fecha).sort();
   const entries = fechas.slice(-24).map(fecha => {
-    const snap = buscarSnapshot(fecha);
-    const { capitalStock } = calcularStockYCostoAsOf(fecha);
-    const patrimonio = capitalStock + snap.capitalTransferencia + snap.capitalEfectivo + snap.capitalEnProceso - snap.deudas;
+    const { patrimonio } = calcularPatrimonio(fecha);
     return { label: formatFechaCorta(fecha), value: patrimonio };
   });
   renderBarChart(document.getElementById("chart-patrimonio"), entries);
