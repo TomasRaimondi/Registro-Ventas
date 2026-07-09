@@ -331,10 +331,78 @@ document.getElementById("add-item-btn").addEventListener("click", () => {
   productoInput.focus();
 });
 
+// ---------- Reautenticación sin perder lo que ya se cargó ----------
+// Si la sesión se vence a mitad de armar una compra grande, no queremos que se
+// pierda el carrito: se pide la contraseña de nuevo arriba de todo y se reintenta
+// el mismo guardado apenas el login vuelve a funcionar.
+
+const reauthModal = document.getElementById("reauth-modal");
+const reauthForm = document.getElementById("reauth-form");
+const reauthError = document.getElementById("reauth-error");
+let reintentoPendiente = null;
+
+function pedirReautenticacion(reintentar) {
+  reintentoPendiente = reintentar;
+  reauthError.style.display = "none";
+  document.getElementById("reauth-password").value = "";
+  reauthModal.style.display = "flex";
+  document.getElementById("reauth-password").focus();
+}
+
+reauthForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const password = document.getElementById("reauth-password").value;
+  try {
+    await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    reauthModal.style.display = "none";
+    const fn = reintentoPendiente;
+    reintentoPendiente = null;
+    if (fn) await fn();
+  } catch (err) {
+    reauthError.textContent = err.message || "Contraseña incorrecta.";
+    reauthError.style.display = "block";
+  }
+});
+
 // ---------- Alta de la compra/ajuste completo ----------
 
 const form = document.getElementById("compra-form");
 const submitBtn = document.getElementById("submit-btn");
+
+async function guardarCompra(bodyPayload) {
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Guardando...";
+
+  try {
+    await api("/api/compras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyPayload),
+    });
+
+    carrito = [];
+    renderCart();
+    document.getElementById("proveedor").value = "";
+    document.getElementById("vencimiento").value = "";
+    document.getElementById("nota").value = "";
+    // La fecha se deja como está: es común cargar varias compras seguidas del mismo día.
+
+    await renderAll();
+  } catch (err) {
+    if (err.status === 401) {
+      pedirReautenticacion(() => guardarCompra(bodyPayload));
+      return;
+    }
+    alert("No se pudo registrar la compra.\n" + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = tipoActual === "compra" ? "Registrar compra" : "Registrar ajuste";
+  }
+}
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -361,30 +429,7 @@ form.addEventListener("submit", async (e) => {
     bodyPayload.nota = document.getElementById("nota").value.trim();
   }
 
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Guardando...";
-
-  try {
-    await api("/api/compras", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(bodyPayload),
-    });
-
-    carrito = [];
-    renderCart();
-    document.getElementById("proveedor").value = "";
-    document.getElementById("vencimiento").value = "";
-    document.getElementById("nota").value = "";
-    // La fecha se deja como está: es común cargar varias compras seguidas del mismo día.
-
-    await renderAll();
-  } catch (err) {
-    alert("No se pudo registrar la compra.\n" + err.message);
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = tipoActual === "compra" ? "Registrar compra" : "Registrar ajuste";
-  }
+  await guardarCompra(bodyPayload);
 });
 
 // ---------- Historial, agrupado por compra ----------

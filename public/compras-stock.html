@@ -200,6 +200,22 @@
 
 </main>
 
+<!-- Se muestra si la sesión se vence a mitad de carga, sin borrar lo que ya está escrito -->
+<div id="reauth-modal" class="modal-overlay" style="display:none;">
+  <div class="card modal-card">
+    <h2>Tu sesión se venció</h2>
+    <p class="hint" style="text-align:left;">Lo que ya cargaste sigue ahí. Ingresá la contraseña de nuevo para guardarlo.</p>
+    <form id="reauth-form" autocomplete="off">
+      <div class="field">
+        <label for="reauth-password">Contraseña</label>
+        <input type="password" id="reauth-password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Reingresar y guardar</button>
+      <p class="hint error-hint" id="reauth-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </div>
+</div>
+
 <script src="compras-stock.js"></script>
 </body>
 </html>
