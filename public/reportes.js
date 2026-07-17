@@ -399,11 +399,13 @@ function renderPeriodo(tipo) {
   document.getElementById("th-periodo").textContent = tipo === "dia" ? "Fecha" : tipo === "semana" ? "Semana" : "Mes";
 
   // Tarjetas de arriba: reflejan el rango visible (semana elegida / mes elegido / mes actual)
-  const netaActual = (actual.gananciaBruta + actual.gananciaBrutaMayorista) - actual.gasto;
+  const brutaActual = actual.gananciaBruta + actual.gananciaBrutaMayorista;
+  const netaActual = brutaActual - actual.gasto;
   const ticketActual = actual.cantVentas ? actual.volumen / actual.cantVentas : 0;
 
   document.getElementById("label-volumen").textContent = actual.label;
   document.getElementById("label-volumen-mayorista").textContent = actual.label;
+  document.getElementById("label-ganancia-bruta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-neta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -411,6 +413,10 @@ function renderPeriodo(tipo) {
 
   document.getElementById("stat-volumen").textContent = money(actual.volumen);
   document.getElementById("stat-volumen-mayorista").textContent = money(actual.volumenMayorista);
+  const statGananciaBruta = document.getElementById("stat-ganancia-bruta");
+  statGananciaBruta.textContent = money(brutaActual);
+  statGananciaBruta.classList.toggle("value-positive", brutaActual > 0);
+  statGananciaBruta.classList.toggle("value-negative", brutaActual < 0);
   const statGananciaNeta = document.getElementById("stat-ganancia-neta");
   statGananciaNeta.textContent = money(netaActual);
   statGananciaNeta.classList.toggle("value-positive", netaActual > 0);
