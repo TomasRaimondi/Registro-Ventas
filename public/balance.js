@@ -434,25 +434,59 @@ function renderHistorialBalance() {
   const filas = [...balanceManualGlobal].sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   if (filas.length === 0) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="8">Todavía no cargaste datos.</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">Todavía no cargaste datos.</td></tr>`;
     return;
   }
 
-  body.innerHTML = filas.map(b => `
-    <tr>
-      <td>${formatFechaCorta(b.fecha)}</td>
-      <td>${money(b.capitalTransferencia)}</td>
-      <td>${money(b.capitalEfectivo)}</td>
-      <td>${money(b.capitalEnProceso)}</td>
-      <td>${money(b.deudas)}</td>
-      <td>${money(b.inversionInicial)}</td>
-      <td>${b.nota ? escapeHtml(b.nota) : "—"}</td>
-      <td><button class="del-btn" title="Borrar" data-fecha="${b.fecha}">✕</button></td>
-    </tr>
-  `).join("");
+  body.innerHTML = filas.map(b => {
+    const { capitalStock, detalle } = calcularStockYCostoAsOf(b.fecha);
+    const detalleFilas = detalle.length
+      ? detalle.map(d => `
+          <tr>
+            <td>${escapeHtml(d.producto)}</td>
+            <td>${d.stock}</td>
+            <td>${money(d.costoPromedio)}</td>
+            <td>${money(d.capital)}</td>
+          </tr>
+        `).join("")
+      : `<tr class="empty-row"><td colspan="4">Sin stock a esta fecha.</td></tr>`;
+
+    return `
+      <tr class="historial-fila" data-toggle="${b.fecha}">
+        <td>${formatFechaCorta(b.fecha)}</td>
+        <td><button type="button" class="link-btn toggle-desglose" data-fecha="${b.fecha}">${money(capitalStock)} ▾</button></td>
+        <td>${money(b.capitalTransferencia)}</td>
+        <td>${money(b.capitalEfectivo)}</td>
+        <td>${money(b.capitalEnProceso)}</td>
+        <td>${money(b.deudas)}</td>
+        <td>${money(b.inversionInicial)}</td>
+        <td>${b.nota ? escapeHtml(b.nota) : "—"}</td>
+        <td><button class="del-btn" title="Borrar" data-fecha="${b.fecha}">✕</button></td>
+      </tr>
+      <tr class="historial-desglose" data-desglose="${b.fecha}" style="display:none;">
+        <td colspan="9">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Producto</th><th>Stock</th><th>Costo promedio</th><th>Capital</th></tr></thead>
+              <tbody>${detalleFilas}</tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
 
   body.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", () => deleteSnapshot(btn.dataset.fecha));
+  });
+
+  body.querySelectorAll(".toggle-desglose").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const fila = body.querySelector(`tr.historial-desglose[data-desglose="${btn.dataset.fecha}"]`);
+      const abierto = fila.style.display !== "none";
+      fila.style.display = abierto ? "none" : "table-row";
+      btn.textContent = btn.textContent.replace(abierto ? "▴" : "▾", abierto ? "▾" : "▴");
+    });
   });
 }
 
