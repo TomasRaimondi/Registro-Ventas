@@ -449,8 +449,36 @@ const server = http.createServer(async (req, res) => {
       if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
       if (!Number.isFinite(stock) || stock < 0) return sendJson(res, 400, { error: "Stock inválido" });
 
-      const producto = resolverProductoExistente(await db.getCostos(), productoIngresado);
+      const costosActuales = await db.getCostos();
+      const producto = resolverProductoExistente(costosActuales, productoIngresado);
+      const costoRow = costosActuales.find((c) => c.producto === producto);
+      const stockAntes = costoRow ? costoRow.stock || 0 : 0;
+
       await db.updateStock(producto, stock);
+
+      // Deja constancia en el historial de movimientos: este endpoint pisa el stock
+      // directamente (lo usa el campo "Stock actual" de Rentabilidad), y antes no
+      // quedaba ningún rastro de estos cambios.
+      if (stock !== stockAntes) {
+        const { fecha } = getArgentinaNow();
+        await db.insertCompra({
+          id: crypto.randomUUID(),
+          loteId: null,
+          tipo: "ajuste",
+          producto,
+          cantidad: stock - stockAntes,
+          precioUnitario: null,
+          costoTotal: null,
+          stockAntes,
+          stockDespues: stock,
+          proveedor: null,
+          vencimiento: null,
+          nota: "Ajuste manual desde Rentabilidad (\"Stock actual\")",
+          fecha,
+          creadoEn: new Date().toISOString(),
+        });
+      }
+
       return sendJson(res, 200, { ok: true, producto, stock });
     }
 
