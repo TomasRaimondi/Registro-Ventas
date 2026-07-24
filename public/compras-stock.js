@@ -40,11 +40,21 @@ const loginCard = document.getElementById("login-card");
 const appContent = document.getElementById("app-content");
 const logoutBtn = document.getElementById("logout-btn");
 
-function showApp() {
+async function showApp() {
   loginCard.style.display = "none";
   appContent.style.display = "block";
   logoutBtn.style.display = "inline-block";
-  document.getElementById("fecha").value = hoyISO();
+  // Se pide la fecha de hoy al servidor (hora argentina) en vez de usar el reloj/huso
+  // horario del navegador: de noche, toISOString() del cliente da UTC y ya cae en el
+  // día siguiente, lo que hacía que las compras cargadas a la noche quedaran fechadas
+  // "mañana" y no contaran en Situación Financiera hasta el día siguiente.
+  try {
+    const hora = await api("/api/hora");
+    hoyFecha = hora.fecha;
+  } catch (e) {
+    hoyFecha = hoyISO();
+  }
+  document.getElementById("fecha").value = hoyFecha;
   renderAll();
 }
 
@@ -86,6 +96,7 @@ async function checkAuth() {
 
 // ---------- Estado global ----------
 
+let hoyFecha = null; // fecha de hoy segun el servidor (hora argentina), ver showApp()
 let costosGlobal = [];
 let comprasGlobal = [];
 let composicionGlobal = [];
@@ -124,7 +135,7 @@ function renderStats() {
   const valorInventario = costosSinCombos.reduce((acc, c) => acc + (c.stock || 0) * (c.costo || 0), 0);
   const productosConStock = costosSinCombos.filter(c => (c.stock || 0) > 0).length;
 
-  const mesActual = hoyISO().slice(0, 7);
+  const mesActual = (hoyFecha || hoyISO()).slice(0, 7);
   const invertidoMes = comprasGlobal
     .filter(c => c.tipo === "compra" && c.fecha.slice(0, 7) === mesActual)
     .reduce((acc, c) => acc + (c.costoTotal || 0), 0);
@@ -474,7 +485,7 @@ async function deleteLote(loteId) {
 }
 
 function diasHasta(fecha) {
-  const a = new Date(hoyISO() + "T00:00:00Z");
+  const a = new Date((hoyFecha || hoyISO()) + "T00:00:00Z");
   const b = new Date(fecha + "T00:00:00Z");
   return Math.round((b - a) / 86400000);
 }

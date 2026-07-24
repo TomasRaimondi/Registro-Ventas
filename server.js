@@ -592,6 +592,16 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 201, { loteId, items: filasInsertadas });
     }
 
+    if (pathname.startsWith("/api/compras/lote/") && pathname.endsWith("/fecha") && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const loteId = decodeURIComponent(pathname.slice("/api/compras/lote/".length, -"/fecha".length));
+      const body = await readJsonBody(req);
+      const fecha = String(body.fecha || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
+      const filas = await db.updateFechaLote(loteId, fecha);
+      return sendJson(res, 200, { ok: true, actualizadas: filas });
+    }
+
     if (pathname.startsWith("/api/compras/lote/") && req.method === "DELETE") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const loteId = decodeURIComponent(pathname.slice("/api/compras/lote/".length));

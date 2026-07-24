@@ -306,6 +306,10 @@ if (USE_TURSO) {
       const res = await client.execute({ sql: "SELECT * FROM compras_stock WHERE id = ?", args: [id] });
       return res.rows[0] || null;
     },
+    async updateFechaLote(loteId, fecha) {
+      const res = await client.execute({ sql: "UPDATE compras_stock SET fecha = ? WHERE loteId = ?", args: [fecha, loteId] });
+      return res.rowsAffected;
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -473,6 +477,10 @@ if (USE_TURSO) {
     },
     async getCompraById(id) {
       return db.prepare("SELECT * FROM compras_stock WHERE id = ?").get(id) || null;
+    },
+    async updateFechaLote(loteId, fecha) {
+      const info = db.prepare("UPDATE compras_stock SET fecha = ? WHERE loteId = ?").run(fecha, loteId);
+      return info.changes;
     },
   };
 }
