@@ -104,7 +104,7 @@
       <div class="card metric-card">
         <span class="label">Capital en stock (a costo)</span>
         <span class="big-number" id="stat-capital-stock">$0</span>
-        <span class="metric-sub">unidades × costo promedio a esta fecha</span>
+        <span class="metric-sub">unidades × costo actual del producto</span>
       </div>
       <div class="card metric-card">
         <span class="label">Capital en transferencia</span>
@@ -155,10 +155,10 @@
 
     <section class="card">
       <h2>Capital en stock por producto (a esta fecha)</h2>
-      <p class="hint" style="text-align:left;">El stock se reconstruye a partir del actual, deshaciendo ventas y compras posteriores a esta fecha. Si un producto no tiene ninguna compra cargada hasta esta fecha, se usa su costo actual como estimación.</p>
+      <p class="hint" style="text-align:left;">El stock se reconstruye a partir del actual, deshaciendo ventas y compras posteriores a esta fecha. La valuación usa el costo actual de cada producto.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Producto</th><th>Stock</th><th>Costo promedio</th><th>Capital</th></tr></thead>
+          <thead><tr><th>Producto</th><th>Stock</th><th>Costo actual</th><th>Capital</th></tr></thead>
           <tbody id="stock-detalle-body">
             <tr class="empty-row"><td colspan="4">Sin datos todavía.</td></tr>
           </tbody>
