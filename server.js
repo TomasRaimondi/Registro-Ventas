@@ -592,6 +592,48 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 201, { loteId, items: filasInsertadas });
     }
 
+    // Inserta filas de compras_stock puramente como registro historico (auditoria),
+    // SIN tocar el stock ni el costo actual del producto. Sirve para reconstruir
+    // movimientos que ocurrieron pero no quedaron asentados (ej: un ajuste manual de
+    // stock hecho fuera de esta pantalla), para que "Situacion Financiera" pueda
+    // reconstruir el stock de fechas pasadas correctamente.
+    if (pathname === "/api/compras/registro-historico" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const itemsInput = Array.isArray(body.items) ? body.items : [];
+      if (!itemsInput.length) return sendJson(res, 400, { error: "No hay items" });
+
+      const loteId = crypto.randomUUID();
+      const insertadas = [];
+      for (const it of itemsInput) {
+        const producto = String(it.producto || "").trim();
+        const cantidad = parseInt(it.cantidad, 10);
+        const fecha = typeof it.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(it.fecha) ? it.fecha : null;
+        if (!producto || !Number.isInteger(cantidad) || cantidad === 0 || !fecha) {
+          return sendJson(res, 400, { error: `Item inválido para "${producto || "?"}"` });
+        }
+        const row = {
+          id: crypto.randomUUID(),
+          loteId,
+          tipo: "ajuste",
+          producto,
+          cantidad,
+          precioUnitario: null,
+          costoTotal: null,
+          stockAntes: Number.isFinite(it.stockAntes) ? it.stockAntes : 0,
+          stockDespues: Number.isFinite(it.stockDespues) ? it.stockDespues : 0,
+          proveedor: null,
+          vencimiento: null,
+          nota: it.nota ? String(it.nota).trim() : "Registro histórico (no modifica el stock actual)",
+          fecha,
+          creadoEn: new Date().toISOString(),
+        };
+        await db.insertCompra(row);
+        insertadas.push(row);
+      }
+      return sendJson(res, 201, { loteId, insertadas: insertadas.length });
+    }
+
     if (pathname.startsWith("/api/compras/lote/") && pathname.endsWith("/fecha") && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const loteId = decodeURIComponent(pathname.slice("/api/compras/lote/".length, -"/fecha".length));
