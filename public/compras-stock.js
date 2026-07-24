@@ -88,6 +88,7 @@ async function checkAuth() {
 
 let costosGlobal = [];
 let comprasGlobal = [];
+let composicionGlobal = [];
 let tipoActual = "compra";
 let carrito = []; // productos ya agregados a la compra/ajuste que se está armando
 
@@ -95,9 +96,10 @@ let carrito = []; // productos ya agregados a la compra/ajuste que se está arma
 
 async function renderAll() {
   try {
-    [costosGlobal, comprasGlobal] = await Promise.all([
+    [costosGlobal, comprasGlobal, composicionGlobal] = await Promise.all([
       api("/api/costos"),
       api("/api/compras"),
+      api("/api/composicion"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -114,8 +116,13 @@ async function renderAll() {
 // ---------- Tarjetas de estadísticas ----------
 
 function renderStats() {
-  const valorInventario = costosGlobal.reduce((acc, c) => acc + (c.stock || 0) * (c.costo || 0), 0);
-  const productosConStock = costosGlobal.filter(c => (c.stock || 0) > 0).length;
+  // Los combos no tienen stock propio (se arma a partir de sus componentes), por eso
+  // se excluyen acá igual que en Situación Financiera.
+  const combosSet = new Set(composicionGlobal.map(c => c.comboProducto));
+  const costosSinCombos = costosGlobal.filter(c => !combosSet.has(c.producto));
+
+  const valorInventario = costosSinCombos.reduce((acc, c) => acc + (c.stock || 0) * (c.costo || 0), 0);
+  const productosConStock = costosSinCombos.filter(c => (c.stock || 0) > 0).length;
 
   const mesActual = hoyISO().slice(0, 7);
   const invertidoMes = comprasGlobal
