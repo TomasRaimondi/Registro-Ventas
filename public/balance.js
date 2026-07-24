@@ -193,12 +193,16 @@ function calcularStockYCostoAsOf(fechaCorte) {
     const vendido = consumidoDespues[producto] || 0;
     const stockAsOf = Math.max(0, stockActual - entrado + vendido);
 
-    // Valuación al costo actual del producto (no promedio histórico de compras).
-    const costoActual = costoRow ? costoRow.costo : 0;
+    // Costo promedio ponderado con las compras hasta esa fecha (si no hay ninguna
+    // todavía a esa altura, se usa el costo actual como mejor estimación disponible).
+    const comprasProductoHasta = comprasGlobal.filter(c => c.producto === producto && c.tipo === "compra" && c.fecha <= fechaCorte);
+    const totalUnidades = comprasProductoHasta.reduce((a, c) => a + c.cantidad, 0);
+    const totalCosto = comprasProductoHasta.reduce((a, c) => a + c.cantidad * c.precioUnitario, 0);
+    const costoPromedio = totalUnidades > 0 ? totalCosto / totalUnidades : (costoRow ? costoRow.costo : 0);
 
-    const capital = stockAsOf * costoActual;
+    const capital = stockAsOf * costoPromedio;
     capitalStock += capital;
-    if (stockAsOf > 0) detalle.push({ producto, stock: stockAsOf, costoActual, capital });
+    if (stockAsOf > 0) detalle.push({ producto, stock: stockAsOf, costoPromedio, capital });
   });
 
   detalle.sort((a, b) => b.capital - a.capital);
@@ -416,7 +420,7 @@ function renderTodo() {
         <tr>
           <td>${escapeHtml(d.producto)}</td>
           <td>${d.stock}</td>
-          <td>${money(d.costoActual)}</td>
+          <td>${money(d.costoPromedio)}</td>
           <td>${money(d.capital)}</td>
         </tr>
       `).join("");
