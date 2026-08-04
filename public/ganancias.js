@@ -99,12 +99,14 @@ const fechaSelectorHoyBtn = document.getElementById("fecha-selector-hoy-btn");
 fechaSelectorInput.addEventListener("change", () => {
   if (!fechaSelectorInput.value) return;
   fechaSeleccionada = fechaSelectorInput.value;
+  pedidoExpandidoId = null;
   renderAll();
 });
 
 fechaSelectorHoyBtn.addEventListener("click", () => {
   fechaSeleccionada = null;
   if (hoyFechaCache) fechaSelectorInput.value = hoyFechaCache;
+  pedidoExpandidoId = null;
   renderAll();
 });
 
@@ -416,6 +418,10 @@ function resumenProductos(itemsDelPedido) {
     .join(", ");
 }
 
+// Guarda qué pedido está desplegado para que sobreviva al auto-refresh de renderAll()
+// (que reconstruye toda la tabla cada 8s) en vez de cerrarse solo.
+let pedidoExpandidoId = null;
+
 function renderPedidos(items, costoPorProducto, esHoy) {
   const body = document.getElementById("pedidos-body");
   body.innerHTML = "";
@@ -449,6 +455,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
 
       const tr = document.createElement("tr");
       tr.className = "sale-row";
+      tr.dataset.ventaId = ventaId;
       tr.innerHTML = `
         <td>${horaLabel}</td>
         <td><span class="expand-caret">▸</span>${escapeHtml(resumenProductos(itemsDelPedido))}</td>
@@ -463,6 +470,10 @@ function renderPedidos(items, costoPorProducto, esHoy) {
       `;
       tr.addEventListener("click", () => togglePedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto));
       body.appendChild(tr);
+
+      if (pedidoExpandidoId === ventaId) {
+        expandirPedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto);
+      }
     });
   }
 
@@ -472,18 +483,9 @@ function renderPedidos(items, costoPorProducto, esHoy) {
   document.getElementById("rentabilidad-mayorista").textContent = mayPct !== null ? mayPct.toFixed(1) + "%" : "—";
 }
 
-function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
-  const tbody = document.getElementById("pedidos-body");
-  const existing = row.nextElementSibling;
-  if (existing && existing.classList.contains("sale-detail-row")) {
-    existing.remove();
-    row.classList.remove("expanded");
-    return;
-  }
-
-  tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
-  tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
+function expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   row.classList.add("expanded");
+  pedidoExpandidoId = ventaId;
 
   const detailRow = document.createElement("tr");
   detailRow.className = "sale-detail-row";
@@ -492,13 +494,15 @@ function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   td.innerHTML = agruparProductosPedido(itemsDelPedido).map(g => {
     const key = normalizeNombre(g.producto);
     const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
+    const costoUnit = tieneCosto ? costoPorProducto[key] : null;
     const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
-    const costoTotal = tieneCosto ? costoPorProducto[key] * g.cantidad : null;
+    const costoTotal = tieneCosto ? costoUnit * g.cantidad : null;
     const ganancia = tieneCosto ? precioTotal - costoTotal : null;
     const etiqueta = g.cantidad > 1 ? `x${g.cantidad} ${g.producto}` : g.producto;
+    const costoUnitTag = tieneCosto ? ` <span class="hint" style="margin:0;">(costo c/u: ${money(costoUnit)})</span>` : "";
     return `
       <div class="lote-detail-item" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
-        <span>${escapeHtml(etiqueta)}</span>
+        <span>${escapeHtml(etiqueta)}${costoUnitTag}</span>
         <span>${money(precioTotal)}</span>
         <span>${tieneCosto ? money(costoTotal) : "—"}</span>
         <span style="${ganancia !== null && ganancia < 0 ? 'color:var(--red);' : ''}">${ganancia !== null ? money(ganancia) : "—"}</span>
@@ -507,6 +511,22 @@ function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   }).join("");
   detailRow.appendChild(td);
   row.after(detailRow);
+}
+
+function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains("sale-detail-row")) {
+    existing.remove();
+    row.classList.remove("expanded");
+    pedidoExpandidoId = null;
+    return;
+  }
+
+  const tbody = document.getElementById("pedidos-body");
+  tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
+  tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
+
+  expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto);
 }
 
 checkAuth();

@@ -501,6 +501,27 @@ tbody tr:last-child td { border-bottom: none; }
 .collapsible-header { cursor: pointer; }
 .collapsible-header.expanded .expand-caret { transform: rotate(90deg); color: var(--accent); }
 
+.rentabilidad-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.rentabilidad-stat {
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  border-left: 4px solid transparent;
+}
+.rentabilidad-stat .label { margin-bottom: 6px; }
+.rentabilidad-stat .big-number { font-size: 26px; }
+.rentabilidad-stat .sub { display: block; color: var(--text-dim); font-size: 12px; margin-top: 6px; }
+.rentabilidad-stat.minorista { border-left-color: var(--accent); }
+.rentabilidad-stat.minorista .big-number { color: var(--accent); }
+.rentabilidad-stat.mayorista { border-left-color: var(--orange); }
+.rentabilidad-stat.mayorista .big-number { color: var(--orange); }
+
 .sale-detail-row td, .lote-detail-row td {
   padding: 0;
   background: var(--bg);

@@ -115,14 +115,15 @@
     <section class="card">
       <h2>Ganancias por pedido</h2>
       <p class="hint" style="text-align:left;">Cada fila es un pedido completo (puede tener varios productos). Hacé clic en una fila para ver el desglose producto por producto.</p>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
-        <div>
-          <span class="label">Rentabilidad prom. Minorista (Efectivo, Transf., Débito, Crédito, Cuenta DNI)</span>
-          <span class="big-number" id="rentabilidad-minorista" style="font-size:28px;">—</span>
+      <div class="rentabilidad-resumen">
+        <div class="rentabilidad-stat minorista">
+          <span class="label">Rentabilidad prom. Minorista</span>
+          <span class="big-number" id="rentabilidad-minorista">—</span>
+          <span class="sub">Efectivo, transferencia, débito, crédito, cuenta DNI</span>
         </div>
-        <div>
+        <div class="rentabilidad-stat mayorista">
           <span class="label">Rentabilidad prom. Mayorista</span>
-          <span class="big-number" id="rentabilidad-mayorista" style="font-size:28px; color:var(--orange);">—</span>
+          <span class="big-number" id="rentabilidad-mayorista">—</span>
         </div>
       </div>
       <div class="table-wrap">
