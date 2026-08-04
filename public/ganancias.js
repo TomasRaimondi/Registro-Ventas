@@ -108,6 +108,15 @@ fechaSelectorHoyBtn.addEventListener("click", () => {
   renderAll();
 });
 
+// ---------- Detalle de ventas: tabla desplegable ----------
+const detalleVentasHeader = document.getElementById("detalle-ventas-header");
+const detalleVentasWrap = document.getElementById("detalle-ventas-wrap");
+detalleVentasHeader.addEventListener("click", () => {
+  const abierto = detalleVentasWrap.style.display !== "none";
+  detalleVentasWrap.style.display = abierto ? "none" : "block";
+  detalleVentasHeader.classList.toggle("expanded", !abierto);
+});
+
 // ---------- Costos ----------
 
 document.getElementById("costo-form").addEventListener("submit", async (e) => {
@@ -385,13 +394,25 @@ function agruparPorPedido(items) {
   return orden.map(ventaId => porPedido.get(ventaId));
 }
 
+// Agrupa las unidades de un pedido por producto (ej: 3 renglones de "Pancake" -> un grupo
+// con cantidad 3), y las ordena alfabéticamente para que no salgan salteadas ni repetidas.
+function agruparProductosPedido(itemsDelPedido) {
+  const mapa = new Map();
+  itemsDelPedido.forEach(it => {
+    const key = normalizeNombre(it.producto);
+    if (!mapa.has(key)) mapa.set(key, { producto: it.producto, cantidad: 0, items: [] });
+    const grupo = mapa.get(key);
+    grupo.cantidad += 1;
+    grupo.items.push(it);
+  });
+  return [...mapa.values()].sort((a, b) => a.producto.localeCompare(b.producto, "es"));
+}
+
 // Junta los nombres de los productos de un pedido en un resumen legible,
-// agrupando repetidos (ej: "Pancake x3, Café"), igual que hace el servidor al crear la venta.
+// agrupando repetidos y ordenados (ej: "Café, Pancake x3").
 function resumenProductos(itemsDelPedido) {
-  const conteo = new Map();
-  itemsDelPedido.forEach(it => conteo.set(it.producto, (conteo.get(it.producto) || 0) + 1));
-  return [...conteo.entries()]
-    .map(([producto, cantidad]) => (cantidad > 1 ? `${producto} x${cantidad}` : producto))
+  return agruparProductosPedido(itemsDelPedido)
+    .map(g => (g.cantidad > 1 ? `${g.producto} x${g.cantidad}` : g.producto))
     .join(", ");
 }
 
@@ -400,40 +421,55 @@ function renderPedidos(items, costoPorProducto, esHoy) {
   body.innerHTML = "";
 
   const pedidos = agruparPorPedido(items);
+
+  let minGanancia = 0, minVenta = 0, mayGanancia = 0, mayVenta = 0;
+
   if (pedidos.length === 0) {
     body.innerHTML = `<tr class="empty-row"><td colspan="7">Todavía no hay ventas ${esHoy ? "hoy" : "ese día"}.</td></tr>`;
-    return;
+  } else {
+    [...pedidos].reverse().forEach(itemsDelPedido => {
+      const ventaId = itemsDelPedido[0].ventaId;
+      const horaLabel = itemsDelPedido[0].horaLabel;
+      const metodo = itemsDelPedido[0].metodo;
+
+      const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
+      const itemsConCosto = itemsDelPedido.filter(it => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
+      const costoTotal = itemsConCosto.reduce((acc, it) => acc + costoPorProducto[normalizeNombre(it.producto)], 0);
+      const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - costoPorProducto[normalizeNombre(it.producto)]), 0);
+      const completo = itemsConCosto.length === itemsDelPedido.length;
+      const rentabilidadPct = precioTotal > 0 ? (gananciaTotal / precioTotal) * 100 : null;
+
+      if (metodo === "mayorista") {
+        mayGanancia += gananciaTotal;
+        mayVenta += precioTotal;
+      } else {
+        minGanancia += gananciaTotal;
+        minVenta += precioTotal;
+      }
+
+      const tr = document.createElement("tr");
+      tr.className = "sale-row";
+      tr.innerHTML = `
+        <td>${horaLabel}</td>
+        <td><span class="expand-caret">▸</span>${escapeHtml(resumenProductos(itemsDelPedido))}</td>
+        <td>${metodo ? `<span class="pm-tag ${metodo}">${PAYMENT_LABELS[metodo] || metodo}</span>` : "—"}</td>
+        <td>${money(precioTotal)}</td>
+        <td>${completo ? money(costoTotal) : `${money(costoTotal)} <span class="hint" style="margin:0;">(parcial)</span>`}</td>
+        <td style="${gananciaTotal < 0 ? 'color:var(--red);' : ''}">${money(gananciaTotal)}</td>
+        <td>
+          ${rentabilidadPct !== null ? rentabilidadPct.toFixed(1) + "%" : "—"}
+          ${!completo ? `<span class="hint" style="margin:0;">(${itemsConCosto.length}/${itemsDelPedido.length} con costo)</span>` : ""}
+        </td>
+      `;
+      tr.addEventListener("click", () => togglePedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto));
+      body.appendChild(tr);
+    });
   }
 
-  [...pedidos].reverse().forEach(itemsDelPedido => {
-    const ventaId = itemsDelPedido[0].ventaId;
-    const horaLabel = itemsDelPedido[0].horaLabel;
-    const metodo = itemsDelPedido[0].metodo;
-
-    const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
-    const itemsConCosto = itemsDelPedido.filter(it => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
-    const costoTotal = itemsConCosto.reduce((acc, it) => acc + costoPorProducto[normalizeNombre(it.producto)], 0);
-    const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - costoPorProducto[normalizeNombre(it.producto)]), 0);
-    const completo = itemsConCosto.length === itemsDelPedido.length;
-    const rentabilidadPct = precioTotal > 0 ? (gananciaTotal / precioTotal) * 100 : null;
-
-    const tr = document.createElement("tr");
-    tr.className = "sale-row";
-    tr.innerHTML = `
-      <td>${horaLabel}</td>
-      <td><span class="expand-caret">▸</span>${escapeHtml(resumenProductos(itemsDelPedido))}</td>
-      <td>${metodo ? `<span class="pm-tag ${metodo}">${PAYMENT_LABELS[metodo] || metodo}</span>` : "—"}</td>
-      <td>${money(precioTotal)}</td>
-      <td>${completo ? money(costoTotal) : `${money(costoTotal)} <span class="hint" style="margin:0;">(parcial)</span>`}</td>
-      <td style="${gananciaTotal < 0 ? 'color:var(--red);' : ''}">${money(gananciaTotal)}</td>
-      <td>
-        ${rentabilidadPct !== null ? rentabilidadPct.toFixed(1) + "%" : "—"}
-        ${!completo ? `<span class="hint" style="margin:0;">(${itemsConCosto.length}/${itemsDelPedido.length} con costo)</span>` : ""}
-      </td>
-    `;
-    tr.addEventListener("click", () => togglePedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto));
-    body.appendChild(tr);
-  });
+  const minPct = minVenta > 0 ? (minGanancia / minVenta) * 100 : null;
+  const mayPct = mayVenta > 0 ? (mayGanancia / mayVenta) * 100 : null;
+  document.getElementById("rentabilidad-minorista").textContent = minPct !== null ? minPct.toFixed(1) + "%" : "—";
+  document.getElementById("rentabilidad-mayorista").textContent = mayPct !== null ? mayPct.toFixed(1) + "%" : "—";
 }
 
 function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
@@ -453,16 +489,18 @@ function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   detailRow.className = "sale-detail-row";
   const td = document.createElement("td");
   td.colSpan = 7;
-  td.innerHTML = itemsDelPedido.map(it => {
-    const key = normalizeNombre(it.producto);
+  td.innerHTML = agruparProductosPedido(itemsDelPedido).map(g => {
+    const key = normalizeNombre(g.producto);
     const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
-    const costo = tieneCosto ? costoPorProducto[key] : null;
-    const ganancia = tieneCosto ? it.precio - costo : null;
+    const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
+    const costoTotal = tieneCosto ? costoPorProducto[key] * g.cantidad : null;
+    const ganancia = tieneCosto ? precioTotal - costoTotal : null;
+    const etiqueta = g.cantidad > 1 ? `x${g.cantidad} ${g.producto}` : g.producto;
     return `
       <div class="lote-detail-item" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
-        <span>${escapeHtml(it.producto)}</span>
-        <span>${money(it.precio)}</span>
-        <span>${tieneCosto ? money(costo) : "—"}</span>
+        <span>${escapeHtml(etiqueta)}</span>
+        <span>${money(precioTotal)}</span>
+        <span>${tieneCosto ? money(costoTotal) : "—"}</span>
         <span style="${ganancia !== null && ganancia < 0 ? 'color:var(--red);' : ''}">${ganancia !== null ? money(ganancia) : "—"}</span>
       </div>
     `;

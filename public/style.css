@@ -498,6 +498,9 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .sale-row.expanded .expand-caret, .lote-row.expanded .expand-caret { transform: rotate(90deg); color: var(--accent); }
 
+.collapsible-header { cursor: pointer; }
+.collapsible-header.expanded .expand-caret { transform: rotate(90deg); color: var(--accent); }
+
 .sale-detail-row td, .lote-detail-row td {
   padding: 0;
   background: var(--bg);
