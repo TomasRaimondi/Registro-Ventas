@@ -4,6 +4,15 @@ function money(n) {
   return sign + "$" + Math.abs(num).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
+const PAYMENT_LABELS = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  debito: "Débito",
+  credito: "Crédito",
+  cuentadni: "Cuenta DNI",
+  mayorista: "Mayorista",
+};
+
 async function api(url, options) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -278,6 +287,8 @@ async function renderAll() {
     });
   }
 
+  renderPedidos(items, costoPorProducto);
+
   // Tabla de gastos
   const gastosBody = document.getElementById("gastos-body");
   gastosBody.innerHTML = "";
@@ -320,6 +331,109 @@ async function renderAll() {
       btn.addEventListener("click", () => deleteSalario(btn.dataset.id));
     });
   }
+}
+
+// ---------- Ganancias por pedido (desglose, en vez de listar todo unitariamente) ----------
+
+// Agrupa los venta_items (que ya vienen con ventaId) en pedidos, conservando
+// el orden de aparición de cada pedido según la primera vez que aparece un item suyo.
+function agruparPorPedido(items) {
+  const orden = [];
+  const porPedido = new Map();
+  items.forEach(it => {
+    if (!porPedido.has(it.ventaId)) {
+      porPedido.set(it.ventaId, []);
+      orden.push(it.ventaId);
+    }
+    porPedido.get(it.ventaId).push(it);
+  });
+  return orden.map(ventaId => porPedido.get(ventaId));
+}
+
+// Junta los nombres de los productos de un pedido en un resumen legible,
+// agrupando repetidos (ej: "Pancake x3, Café"), igual que hace el servidor al crear la venta.
+function resumenProductos(itemsDelPedido) {
+  const conteo = new Map();
+  itemsDelPedido.forEach(it => conteo.set(it.producto, (conteo.get(it.producto) || 0) + 1));
+  return [...conteo.entries()]
+    .map(([producto, cantidad]) => (cantidad > 1 ? `${producto} x${cantidad}` : producto))
+    .join(", ");
+}
+
+function renderPedidos(items, costoPorProducto) {
+  const body = document.getElementById("pedidos-body");
+  body.innerHTML = "";
+
+  const pedidos = agruparPorPedido(items);
+  if (pedidos.length === 0) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="7">Todavía no hay ventas hoy.</td></tr>`;
+    return;
+  }
+
+  [...pedidos].reverse().forEach(itemsDelPedido => {
+    const ventaId = itemsDelPedido[0].ventaId;
+    const horaLabel = itemsDelPedido[0].horaLabel;
+    const metodo = itemsDelPedido[0].metodo;
+
+    const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
+    const itemsConCosto = itemsDelPedido.filter(it => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
+    const costoTotal = itemsConCosto.reduce((acc, it) => acc + costoPorProducto[normalizeNombre(it.producto)], 0);
+    const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - costoPorProducto[normalizeNombre(it.producto)]), 0);
+    const completo = itemsConCosto.length === itemsDelPedido.length;
+    const rentabilidadPct = precioTotal > 0 ? (gananciaTotal / precioTotal) * 100 : null;
+
+    const tr = document.createElement("tr");
+    tr.className = "sale-row";
+    tr.innerHTML = `
+      <td>${horaLabel}</td>
+      <td><span class="expand-caret">▸</span>${escapeHtml(resumenProductos(itemsDelPedido))}</td>
+      <td>${metodo ? `<span class="pm-tag ${metodo}">${PAYMENT_LABELS[metodo] || metodo}</span>` : "—"}</td>
+      <td>${money(precioTotal)}</td>
+      <td>${completo ? money(costoTotal) : `${money(costoTotal)} <span class="hint" style="margin:0;">(parcial)</span>`}</td>
+      <td style="${gananciaTotal < 0 ? 'color:var(--red);' : ''}">${money(gananciaTotal)}</td>
+      <td>
+        ${rentabilidadPct !== null ? rentabilidadPct.toFixed(1) + "%" : "—"}
+        ${!completo ? `<span class="hint" style="margin:0;">(${itemsConCosto.length}/${itemsDelPedido.length} con costo)</span>` : ""}
+      </td>
+    `;
+    tr.addEventListener("click", () => togglePedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto));
+    body.appendChild(tr);
+  });
+}
+
+function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
+  const tbody = document.getElementById("pedidos-body");
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains("sale-detail-row")) {
+    existing.remove();
+    row.classList.remove("expanded");
+    return;
+  }
+
+  tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
+  tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
+  row.classList.add("expanded");
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "sale-detail-row";
+  const td = document.createElement("td");
+  td.colSpan = 7;
+  td.innerHTML = itemsDelPedido.map(it => {
+    const key = normalizeNombre(it.producto);
+    const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
+    const costo = tieneCosto ? costoPorProducto[key] : null;
+    const ganancia = tieneCosto ? it.precio - costo : null;
+    return `
+      <div class="lote-detail-item" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
+        <span>${escapeHtml(it.producto)}</span>
+        <span>${money(it.precio)}</span>
+        <span>${tieneCosto ? money(costo) : "—"}</span>
+        <span style="${ganancia !== null && ganancia < 0 ? 'color:var(--red);' : ''}">${ganancia !== null ? money(ganancia) : "—"}</span>
+      </div>
+    `;
+  }).join("");
+  detailRow.appendChild(td);
+  row.after(detailRow);
 }
 
 checkAuth();

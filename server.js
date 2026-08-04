@@ -338,11 +338,11 @@ const server = http.createServer(async (req, res) => {
         const itemsDeEstaVenta = itemsPorVenta.get(venta.id);
         if (itemsDeEstaVenta && itemsDeEstaVenta.length) {
           for (const it of itemsDeEstaVenta) {
-            resultado.push({ ventaId: venta.id, producto: it.producto, precio: it.precio, horaLabel: venta.horaLabel });
+            resultado.push({ ventaId: venta.id, producto: it.producto, precio: it.precio, horaLabel: venta.horaLabel, metodo: venta.metodo });
           }
         } else {
           // Venta antigua sin items propios: se usa el producto/precio original como único item
-          resultado.push({ ventaId: venta.id, producto: venta.producto, precio: venta.precio, horaLabel: venta.horaLabel });
+          resultado.push({ ventaId: venta.id, producto: venta.producto, precio: venta.precio, horaLabel: venta.horaLabel, metodo: venta.metodo });
         }
       }
 

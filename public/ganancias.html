@@ -103,6 +103,21 @@
     </section>
 
     <section class="card">
+      <h2>Ganancias por pedido</h2>
+      <p class="hint" style="text-align:left;">Cada fila es un pedido completo (puede tener varios productos). Hacé clic en una fila para ver el desglose producto por producto.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Hora</th><th>Pedido</th><th>Método</th><th>Total</th><th>Costo</th><th>Ganancia</th><th>Rentabilidad</th></tr>
+          </thead>
+          <tbody id="pedidos-body">
+            <tr class="empty-row"><td colspan="7">Todavía no hay ventas hoy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Gastos de hoy</h2>
       <form id="gasto-form" class="inline-form">
         <input type="text" id="gasto-concepto" placeholder="Concepto (ej: Sueldo, Alquiler)" required>
