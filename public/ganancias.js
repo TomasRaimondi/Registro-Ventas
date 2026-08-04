@@ -28,6 +28,12 @@ function normalizeNombre(s) {
   return (s || "").trim().toLowerCase();
 }
 
+function formatFechaLarga(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
 // ---------- Login ----------
 
 const loginCard = document.getElementById("login-card");
@@ -82,6 +88,25 @@ async function checkAuth() {
   if (authenticated) showApp();
   else showLogin();
 }
+
+// ---------- Ver los datos de otro día ----------
+
+let fechaSeleccionada = null; // null = sigue mostrando "hoy" automáticamente
+let hoyFechaCache = null;
+const fechaSelectorInput = document.getElementById("fecha-selector-input");
+const fechaSelectorHoyBtn = document.getElementById("fecha-selector-hoy-btn");
+
+fechaSelectorInput.addEventListener("change", () => {
+  if (!fechaSelectorInput.value) return;
+  fechaSeleccionada = fechaSelectorInput.value;
+  renderAll();
+});
+
+fechaSelectorHoyBtn.addEventListener("click", () => {
+  fechaSeleccionada = null;
+  if (hoyFechaCache) fechaSelectorInput.value = hoyFechaCache;
+  renderAll();
+});
 
 // ---------- Costos ----------
 
@@ -193,10 +218,13 @@ function escapeHtml(str) {
 async function renderAll() {
   let items, costos, gastos, salarios;
   try {
+    const hora = await api("/api/hora");
+    hoyFechaCache = hora.fecha;
+    const fechaActiva = fechaSeleccionada || hoyFechaCache;
     [items, costos, gastos, salarios] = await Promise.all([
-      api("/api/venta-items"),
+      api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
-      api("/api/gastos"),
+      api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/salario"),
     ]);
   } catch (err) {
@@ -204,6 +232,13 @@ async function renderAll() {
     console.error(err);
     return;
   }
+
+  const fechaActiva = fechaSeleccionada || hoyFechaCache;
+  const esHoy = fechaActiva === hoyFechaCache;
+  const fechaLabel = esHoy ? "hoy" : formatFechaLarga(fechaActiva);
+  document.querySelectorAll(".fecha-dinamica").forEach(el => { el.textContent = fechaLabel; });
+  if (!fechaSelectorInput.value) fechaSelectorInput.value = fechaActiva;
+  fechaSelectorHoyBtn.style.display = esHoy ? "none" : "inline-block";
 
   const costoPorProducto = {};
   costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
@@ -267,7 +302,7 @@ async function renderAll() {
   const detalleBody = document.getElementById("detalle-ventas-body");
   detalleBody.innerHTML = "";
   if (items.length === 0) {
-    detalleBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay ventas hoy.</td></tr>`;
+    detalleBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay ventas ${esHoy ? "hoy" : "ese día"}.</td></tr>`;
   } else {
     [...items].reverse().forEach(it => {
       const key = normalizeNombre(it.producto);
@@ -287,13 +322,13 @@ async function renderAll() {
     });
   }
 
-  renderPedidos(items, costoPorProducto);
+  renderPedidos(items, costoPorProducto, esHoy);
 
   // Tabla de gastos
   const gastosBody = document.getElementById("gastos-body");
   gastosBody.innerHTML = "";
   if (gastos.length === 0) {
-    gastosBody.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no cargaste ningún gasto hoy.</td></tr>`;
+    gastosBody.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no cargaste ningún gasto ${esHoy ? "hoy" : "ese día"}.</td></tr>`;
   } else {
     [...gastos].reverse().forEach(g => {
       const tr = document.createElement("tr");
@@ -360,13 +395,13 @@ function resumenProductos(itemsDelPedido) {
     .join(", ");
 }
 
-function renderPedidos(items, costoPorProducto) {
+function renderPedidos(items, costoPorProducto, esHoy) {
   const body = document.getElementById("pedidos-body");
   body.innerHTML = "";
 
   const pedidos = agruparPorPedido(items);
   if (pedidos.length === 0) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="7">Todavía no hay ventas hoy.</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="7">Todavía no hay ventas ${esHoy ? "hoy" : "ese día"}.</td></tr>`;
     return;
   }
 

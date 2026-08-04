@@ -42,24 +42,34 @@
   <!-- Contenido protegido -->
   <div id="app-content" style="display:none;">
 
+    <section class="card">
+      <div class="history-header">
+        <h2>Viendo datos de <span id="fecha-label" class="fecha-dinamica">hoy</span></h2>
+        <div class="history-actions">
+          <input type="date" id="fecha-selector-input" title="Ver otro día">
+          <button type="button" id="fecha-selector-hoy-btn" class="clear-btn" style="display:none;">Volver a hoy</button>
+        </div>
+      </div>
+    </section>
+
     <section class="metrics-single">
       <div class="card total-card">
-        <span class="label">Ganancia bruta hoy</span>
+        <span class="label">Ganancia bruta <span class="fecha-dinamica">hoy</span></span>
         <span class="big-number" id="ganancia-bruta">$0</span>
         <span class="sub" id="ventas-consideradas">0 ventas con costo cargado</span>
       </div>
       <div class="card metric-card metric-card-wide">
-        <span class="label">Gasto total hoy</span>
+        <span class="label">Gasto total <span class="fecha-dinamica">hoy</span></span>
         <span class="big-number" id="gasto-total" style="color:var(--red);">$0</span>
       </div>
       <div class="card metric-card metric-card-wide">
-        <span class="label">Ganancia neta hoy</span>
+        <span class="label">Ganancia neta <span class="fecha-dinamica">hoy</span></span>
         <span class="big-number" id="ganancia-neta">$0</span>
       </div>
     </section>
 
     <section class="card" id="sin-costo-card" style="display:none;">
-      <h2>⚠ Productos vendidos hoy sin costo cargado</h2>
+      <h2>⚠ Productos vendidos <span class="fecha-dinamica">hoy</span> sin costo cargado</h2>
       <p class="hint" style="text-align:left;">Estas ventas no se incluyeron en la ganancia bruta porque no tienen un costo cargado abajo:</p>
       <ul id="sin-costo-list"></ul>
     </section>
@@ -88,7 +98,7 @@
       </div>
 
       <div class="card">
-        <h2>Detalle de ventas de hoy</h2>
+        <h2>Detalle de ventas de <span class="fecha-dinamica">hoy</span></h2>
         <div class="table-wrap">
           <table>
             <thead>
@@ -118,7 +128,7 @@
     </section>
 
     <section class="card">
-      <h2>Gastos de hoy</h2>
+      <h2>Gastos de <span class="fecha-dinamica">hoy</span></h2>
       <form id="gasto-form" class="inline-form">
         <input type="text" id="gasto-concepto" placeholder="Concepto (ej: Sueldo, Alquiler)" required>
         <div class="input-prefix">
