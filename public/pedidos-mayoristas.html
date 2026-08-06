@@ -60,6 +60,48 @@
         <input type="text" id="pedido-cliente" placeholder="Ej: Distribuidora Sur">
       </div>
 
+      <h3 class="pedido-datos-titulo">Datos para el comprobante (opcional)</h3>
+      <div class="pedido-datos-grid">
+        <div class="field">
+          <label for="pedido-domicilio">Domicilio</label>
+          <input type="text" id="pedido-domicilio" placeholder="Calle y número">
+        </div>
+        <div class="field">
+          <label for="pedido-localidad">Localidad</label>
+          <input type="text" id="pedido-localidad" placeholder="Ej: La Plata">
+        </div>
+        <div class="field">
+          <label for="pedido-provincia">Provincia</label>
+          <input type="text" id="pedido-provincia" placeholder="Ej: Buenos Aires">
+        </div>
+        <div class="field">
+          <label for="pedido-telefono">Teléfono</label>
+          <input type="text" id="pedido-telefono" placeholder="Opcional">
+        </div>
+        <div class="field">
+          <label for="pedido-email">Correo electrónico</label>
+          <input type="text" id="pedido-email" placeholder="Opcional">
+        </div>
+        <div class="field">
+          <label for="pedido-iva">Condición frente al IVA</label>
+          <select id="pedido-iva">
+            <option value="">— Sin especificar —</option>
+            <option value="Consumidor Final">Consumidor Final</option>
+            <option value="Responsable Inscripto">Responsable Inscripto</option>
+            <option value="Monotributista">Monotributista</option>
+            <option value="Exento">Exento</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pedido-vencimiento">Válido hasta</label>
+          <input type="date" id="pedido-vencimiento">
+        </div>
+        <div class="field">
+          <label for="pedido-cuit-propio">Tu CUIT</label>
+          <input type="text" id="pedido-cuit-propio" placeholder="Opcional, ej: 20-12345678-9">
+        </div>
+      </div>
+
       <div class="field autocomplete-field">
         <label for="pedido-producto-input">Agregar producto (solo productos con costo cargado)</label>
         <div class="pedido-producto-row">
@@ -128,13 +170,22 @@
 
       <div id="factura-documento" class="factura-documento">
         <div class="factura-header">
-          <h2 id="factura-titulo">PRESUPUESTO</h2>
-          <div class="factura-datos">
-            <span><strong>Fecha:</strong> <span id="factura-fecha"></span></span>
-            <span><strong>Hora:</strong> <span id="factura-hora"></span></span>
+          <div class="factura-marca">
+            <img src="/logo-platense-fit.png" alt="Platense Fit" class="factura-logo">
+            <div class="factura-marca-texto">
+              <strong>Platense Fit Suplementos</strong>
+              <span>Calle 14 e/ 57 y 58 N° 1242, La Plata</span>
+            </div>
+          </div>
+          <div class="factura-doc-info">
+            <h2 id="factura-titulo">PRESUPUESTO</h2>
+            <span>N° <span id="factura-numero"></span></span>
+            <span>Fecha: <span id="factura-fecha"></span></span>
           </div>
         </div>
-        <p class="factura-cliente"><strong>Cliente / empresa:</strong> <span id="factura-cliente"></span></p>
+
+        <div class="factura-datos-cliente" id="factura-datos-cliente"></div>
+
         <div class="table-wrap">
           <table>
             <thead>

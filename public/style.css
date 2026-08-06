@@ -564,10 +564,49 @@ tbody tr:last-child td { border-bottom: none; }
 .secondary-btn:hover { background: var(--accent-soft); }
 
 .factura-acciones { display: flex; gap: 10px; margin-bottom: 20px; }
-.factura-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
-.factura-header h2 { margin: 0; letter-spacing: 1px; }
-.factura-datos { display: flex; gap: 20px; font-size: 13px; color: var(--text-dim); }
-.factura-cliente { font-size: 15px; margin: 10px 0 18px; }
+
+.pedido-datos-titulo { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin: 22px 0 12px; }
+.pedido-datos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 22px; }
+
+/* El documento imprimible siempre se ve como una hoja blanca, sin importar el tema de la app */
+.factura-documento {
+  background: #ffffff;
+  color: #1a2230;
+  padding: 30px;
+  border-radius: 12px;
+}
+.factura-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #1a2230;
+  margin-bottom: 18px;
+}
+.factura-marca { display: flex; align-items: center; gap: 14px; }
+.factura-logo { width: 62px; height: 62px; object-fit: contain; border-radius: 50%; }
+.factura-marca-texto { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #4a5468; }
+.factura-marca-texto strong { font-size: 17px; color: #1a2230; }
+.factura-doc-info { text-align: right; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #667088; }
+.factura-doc-info h2 { margin: 0 0 4px; font-size: 21px; letter-spacing: 1.5px; color: #1a2230; }
+
+.factura-datos-cliente {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 28px;
+  padding: 14px 16px;
+  border: 1px solid #e3e7f0;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 13.5px;
+}
+.factura-datos-cliente .dato-label { color: #667088; margin-right: 4px; }
+.factura-datos-cliente .dato-cliente-nombre { grid-column: 1 / -1; font-size: 15px; margin-bottom: 4px; }
+
+.factura-documento thead th { color: #667088; border-bottom: 1px solid #e3e7f0; }
+.factura-documento tbody td { color: #1a2230; border-bottom: 1px solid #eef1f6; }
 .factura-totales { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; font-size: 15px; }
 .factura-total-final { font-size: 20px; font-weight: 800; }
 

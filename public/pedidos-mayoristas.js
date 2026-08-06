@@ -105,14 +105,33 @@ async function cargarProductosDisponibles() {
   productosDisponibles = costos.filter(c => !combosSet.has(c.producto));
 }
 
+const CAMPOS_DATOS_CLIENTE = [
+  "pedido-cliente", "pedido-domicilio", "pedido-localidad", "pedido-provincia",
+  "pedido-telefono", "pedido-email", "pedido-iva", "pedido-vencimiento", "pedido-cuit-propio",
+];
+
 function resetPedido() {
   itemsPedido = [];
-  document.getElementById("pedido-cliente").value = "";
+  CAMPOS_DATOS_CLIENTE.forEach(id => { document.getElementById(id).value = ""; });
   document.getElementById("pedido-producto-input").value = "";
   document.getElementById("pedido-producto-error").style.display = "none";
   document.getElementById("pedido-error").style.display = "none";
   renderSuggestions([]);
   renderItemsTable();
+}
+
+function obtenerDatosCliente() {
+  return {
+    nombre: document.getElementById("pedido-cliente").value.trim(),
+    domicilio: document.getElementById("pedido-domicilio").value.trim(),
+    localidad: document.getElementById("pedido-localidad").value.trim(),
+    provincia: document.getElementById("pedido-provincia").value.trim(),
+    telefono: document.getElementById("pedido-telefono").value.trim(),
+    email: document.getElementById("pedido-email").value.trim(),
+    iva: document.getElementById("pedido-iva").value,
+    vencimiento: document.getElementById("pedido-vencimiento").value,
+    cuit: document.getElementById("pedido-cuit-propio").value.trim(),
+  };
 }
 
 // Momento (hora Argentina, autoritativa del servidor) en que se abrió el pedido actual.
@@ -312,8 +331,8 @@ function validarPedido() {
   const errorEl = document.getElementById("pedido-error");
   errorEl.style.display = "none";
 
-  const cliente = document.getElementById("pedido-cliente").value.trim();
-  if (!cliente) {
+  const datosCliente = obtenerDatosCliente();
+  if (!datosCliente.nombre) {
     errorEl.textContent = "Ingresá el nombre del cliente o empresa.";
     errorEl.style.display = "block";
     return null;
@@ -329,14 +348,14 @@ function validarPedido() {
     errorEl.style.display = "block";
     return null;
   }
-  return cliente;
+  return datosCliente;
 }
 
 // ---------- Guardar como venta real (descuenta stock) ----------
 
 document.getElementById("pedido-guardar-stock-btn").addEventListener("click", async () => {
-  const cliente = validarPedido();
-  if (!cliente) return;
+  const datosCliente = validarPedido();
+  if (!datosCliente) return;
 
   const btn = document.getElementById("pedido-guardar-stock-btn");
   btn.disabled = true;
@@ -353,9 +372,9 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
     await api("/api/ventas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ metodo: "mayorista", items: itemsExpandidos, cliente }),
+      body: JSON.stringify({ metodo: "mayorista", items: itemsExpandidos, cliente: datosCliente.nombre }),
     });
-    mostrarFactura({ titulo: "FACTURA", cliente, guardado: true });
+    mostrarFactura({ titulo: "FACTURA", datosCliente });
     cargarRecientes();
   } catch (err) {
     const errorEl = document.getElementById("pedido-error");
@@ -370,9 +389,9 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
 // ---------- Solo generar presupuesto/factura (no toca el stock) ----------
 
 document.getElementById("pedido-solo-presupuesto-btn").addEventListener("click", () => {
-  const cliente = validarPedido();
-  if (!cliente) return;
-  mostrarFactura({ titulo: "PRESUPUESTO", cliente, guardado: false });
+  const datosCliente = validarPedido();
+  if (!datosCliente) return;
+  mostrarFactura({ titulo: "PRESUPUESTO", datosCliente });
 });
 
 // ---------- Vista de factura / presupuesto ----------
@@ -380,12 +399,44 @@ document.getElementById("pedido-solo-presupuesto-btn").addEventListener("click",
 // "empresa" = versión completa (con costo y ganancia, uso interno).
 // "cliente" = solo Producto, Cantidad, Precio venta y Subtotal, para archivarle/imprimirle al cliente.
 let facturaVistaModo = "empresa";
+let facturaDatosClienteActual = null;
+let facturaNumeroActual = null;
 
-function mostrarFactura({ titulo, cliente }) {
+// Numeración correlativa simple, guardada en este navegador (no hay backend de
+// facturación numerada). Sirve para tener un N° de comprobante prolijo y único.
+function obtenerProximoNumeroComprobante() {
+  const key = "pedidosMayoristasUltimoNumero";
+  const n = (parseInt(localStorage.getItem(key) || "0", 10) || 0) + 1;
+  localStorage.setItem(key, String(n));
+  return String(n).padStart(8, "0");
+}
+
+function renderDatosClienteBox() {
+  const d = facturaDatosClienteActual;
+  const el = document.getElementById("factura-datos-cliente");
+  if (!d) { el.innerHTML = ""; return; }
+
+  const filas = [];
+  if (d.domicilio) filas.push(`<span><span class="dato-label">Domicilio:</span>${escapeHtml(d.domicilio)}</span>`);
+  if (d.localidad) filas.push(`<span><span class="dato-label">Localidad:</span>${escapeHtml(d.localidad)}</span>`);
+  if (d.provincia) filas.push(`<span><span class="dato-label">Provincia:</span>${escapeHtml(d.provincia)}</span>`);
+  if (d.telefono) filas.push(`<span><span class="dato-label">Teléfono:</span>${escapeHtml(d.telefono)}</span>`);
+  if (d.email) filas.push(`<span><span class="dato-label">Email:</span>${escapeHtml(d.email)}</span>`);
+  if (d.iva) filas.push(`<span><span class="dato-label">Cond. IVA:</span>${escapeHtml(d.iva)}</span>`);
+  if (d.vencimiento) filas.push(`<span><span class="dato-label">Válido hasta:</span>${formatFechaCorta(d.vencimiento)}</span>`);
+  if (d.cuit) filas.push(`<span><span class="dato-label">CUIT:</span>${escapeHtml(d.cuit)}</span>`);
+
+  el.innerHTML = `<span class="dato-cliente-nombre"><strong>Cliente / Empresa:</strong> ${escapeHtml(d.nombre)}</span>` + filas.join("");
+}
+
+function mostrarFactura({ titulo, datosCliente }) {
+  facturaDatosClienteActual = datosCliente;
+  facturaNumeroActual = obtenerProximoNumeroComprobante();
+
   document.getElementById("factura-titulo").textContent = titulo;
   document.getElementById("factura-fecha").textContent = pedidoFechaHora ? formatFechaCorta(pedidoFechaHora.fecha) : "—";
-  document.getElementById("factura-hora").textContent = pedidoFechaHora ? pedidoFechaHora.horaLabel : "—";
-  document.getElementById("factura-cliente").textContent = cliente;
+  document.getElementById("factura-numero").textContent = facturaNumeroActual;
+  renderDatosClienteBox();
 
   facturaVistaModo = "empresa";
   document.querySelectorAll(".factura-vista-tab").forEach(btn => {
@@ -459,25 +510,56 @@ document.getElementById("factura-volver-btn").addEventListener("click", () => mo
 
 // ---------- Guardar la factura/presupuesto como archivo en la computadora ----------
 
-function construirHtmlFactura() {
+let logoBase64Cache = null;
+
+async function obtenerLogoBase64() {
+  if (logoBase64Cache) return logoBase64Cache;
+  const res = await fetch("/logo-platense-fit.png");
+  const blob = await res.blob();
+  logoBase64Cache = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  return logoBase64Cache;
+}
+
+async function construirHtmlFactura() {
   const titulo = document.getElementById("factura-titulo").textContent;
+  const numero = document.getElementById("factura-numero").textContent;
   const fecha = document.getElementById("factura-fecha").textContent;
-  const hora = document.getElementById("factura-hora").textContent;
-  const cliente = document.getElementById("factura-cliente").textContent;
+  const datosClienteHtml = document.getElementById("factura-datos-cliente").innerHTML;
   const theadHtml = document.getElementById("factura-thead-row").innerHTML;
   const bodyHtml = document.getElementById("factura-body").innerHTML;
   const totalesHtml = document.getElementById("factura-totales").innerHTML;
+  const cliente = facturaDatosClienteActual ? facturaDatosClienteActual.nombre : "";
+
+  let logoImgTag = "";
+  try {
+    const logoData = await obtenerLogoBase64();
+    logoImgTag = `<img src="${logoData}" alt="Platense Fit" class="factura-logo">`;
+  } catch (err) {
+    console.error("No se pudo incrustar el logo:", err);
+  }
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>${escapeHtml(titulo)} - ${escapeHtml(cliente)}</title>
+<title>${escapeHtml(titulo)} ${escapeHtml(numero)} - ${escapeHtml(cliente)}</title>
 <style>
   body { font-family: Arial, Helvetica, sans-serif; background:#fff; color:#1a2230; padding:32px; max-width:800px; margin:0 auto; }
-  h1 { font-size:22px; letter-spacing:1px; margin:0 0 6px; }
-  .datos { color:#667088; font-size:13px; margin-bottom:4px; }
-  .cliente { font-size:15px; margin:14px 0 20px; }
+  .factura-header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; padding-bottom:18px; border-bottom:2px solid #1a2230; margin-bottom:18px; }
+  .factura-marca { display:flex; align-items:center; gap:14px; }
+  .factura-logo { width:62px; height:62px; object-fit:contain; border-radius:50%; }
+  .factura-marca-texto { display:flex; flex-direction:column; gap:2px; font-size:13px; color:#4a5468; }
+  .factura-marca-texto strong { font-size:17px; color:#1a2230; }
+  .factura-doc-info { text-align:right; display:flex; flex-direction:column; gap:4px; font-size:13px; color:#667088; }
+  .factura-doc-info h2 { margin:0 0 4px; font-size:21px; letter-spacing:1.5px; color:#1a2230; }
+  .factura-datos-cliente { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:6px 28px; padding:14px 16px; border:1px solid #e3e7f0; border-radius:10px; margin-bottom:20px; font-size:13.5px; }
+  .factura-datos-cliente .dato-label { color:#667088; margin-right:4px; }
+  .factura-datos-cliente .dato-cliente-nombre { grid-column: 1 / -1; font-size:15px; margin-bottom:4px; }
   table { width:100%; border-collapse:collapse; margin-top:10px; }
   th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #e3e7f0; font-size:14px; }
   th { text-transform:uppercase; font-size:11px; color:#667088; letter-spacing:0.4px; }
@@ -487,9 +569,21 @@ function construirHtmlFactura() {
 </style>
 </head>
 <body>
-  <h1>${escapeHtml(titulo)}</h1>
-  <div class="datos">Fecha: ${escapeHtml(fecha)} &nbsp;&nbsp; Hora: ${escapeHtml(hora)}</div>
-  <div class="cliente"><strong>Cliente / empresa:</strong> ${escapeHtml(cliente)}</div>
+  <div class="factura-header">
+    <div class="factura-marca">
+      ${logoImgTag}
+      <div class="factura-marca-texto">
+        <strong>Platense Fit Suplementos</strong>
+        <span>Calle 14 e/ 57 y 58 N° 1242, La Plata</span>
+      </div>
+    </div>
+    <div class="factura-doc-info">
+      <h2>${escapeHtml(titulo)}</h2>
+      <span>N° ${escapeHtml(numero)}</span>
+      <span>Fecha: ${escapeHtml(fecha)}</span>
+    </div>
+  </div>
+  <div class="factura-datos-cliente">${datosClienteHtml}</div>
   <table>
     <thead><tr>${theadHtml}</tr></thead>
     <tbody>${bodyHtml}</tbody>
@@ -499,24 +593,30 @@ function construirHtmlFactura() {
 </html>`;
 }
 
-document.getElementById("factura-guardar-btn").addEventListener("click", () => {
-  const html = construirHtmlFactura();
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
+document.getElementById("factura-guardar-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("factura-guardar-btn");
+  btn.disabled = true;
+  try {
+    const html = await construirHtmlFactura();
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
 
-  const titulo = document.getElementById("factura-titulo").textContent.toLowerCase();
-  const cliente = document.getElementById("factura-cliente").textContent;
-  const fecha = pedidoFechaHora ? pedidoFechaHora.fecha : "sin-fecha";
-  const sufijoVista = facturaVistaModo === "cliente" ? "cliente" : "completa";
-  const nombreArchivo = `${titulo}_${sufijoVista}_${cliente}_${fecha}`.replace(/[^a-zA-Z0-9-_]+/g, "_") + ".html";
+    const titulo = document.getElementById("factura-titulo").textContent.toLowerCase();
+    const cliente = facturaDatosClienteActual ? facturaDatosClienteActual.nombre : "cliente";
+    const fecha = pedidoFechaHora ? pedidoFechaHora.fecha : "sin-fecha";
+    const sufijoVista = facturaVistaModo === "cliente" ? "cliente" : "completa";
+    const nombreArchivo = `${titulo}_${sufijoVista}_${cliente}_${fecha}`.replace(/[^a-zA-Z0-9-_]+/g, "_") + ".html";
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombreArchivo;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------- Pedidos mayoristas recientes ----------
