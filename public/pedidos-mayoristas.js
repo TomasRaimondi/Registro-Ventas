@@ -245,12 +245,32 @@ function agregarProductoAlPedido(nombre) {
 
 // ---------- Tabla de productos del pedido ----------
 
+function calcularFila(it) {
+  const cantidad = it.cantidad;
+  const subtotalCosto = it.costo * cantidad;
+  const precioVentaNum = Number(it.precioVenta) || 0;
+  const subtotalVenta = precioVentaNum * cantidad;
+  const ganancia = subtotalVenta - subtotalCosto;
+  const pctRetorno = subtotalVenta > 0 ? (ganancia / subtotalVenta) * 100 : null;
+  return { subtotalCosto, subtotalVenta, ganancia, pctRetorno };
+}
+
+// Actualiza solo las celdas calculadas de una fila (sin tocar los <input>, para no
+// perderles el foco mientras el usuario está escribiendo cantidad o precio).
+function actualizarCalculosFila(tr, it) {
+  const { subtotalCosto, subtotalVenta, ganancia, pctRetorno } = calcularFila(it);
+  tr.querySelector(".subtotal-costo").textContent = money(subtotalCosto);
+  tr.querySelector(".subtotal-venta").textContent = money(subtotalVenta);
+  tr.querySelector(".ganancia-fila").textContent = money(ganancia);
+  tr.querySelector(".pct-retorno-fila").textContent = pctRetorno !== null ? pctRetorno.toFixed(1) + "%" : "—";
+}
+
 function renderItemsTable() {
   const body = document.getElementById("pedido-items-body");
   body.innerHTML = "";
 
   if (itemsPedido.length === 0) {
-    const colspan = modoActual === "cliente" ? 5 : 7;
+    const colspan = modoActual === "cliente" ? 5 : 9;
     body.innerHTML = `<tr class="empty-row"><td colspan="${colspan}">Todavía no agregaste productos.</td></tr>`;
     recomputeTotales();
     return;
@@ -258,9 +278,7 @@ function renderItemsTable() {
 
   itemsPedido.forEach((it, idx) => {
     const tr = document.createElement("tr");
-    const subtotalCosto = it.costo * it.cantidad;
-    const precioVentaNum = Number(it.precioVenta) || 0;
-    const subtotalVenta = precioVentaNum * it.cantidad;
+    const { subtotalCosto, subtotalVenta, ganancia, pctRetorno } = calcularFila(it);
 
     tr.innerHTML = `
       <td>${escapeHtml(it.producto)}</td>
@@ -269,20 +287,29 @@ function renderItemsTable() {
       <td><input type="number" class="input-precio-venta" min="0" step="0.01" placeholder="0" value="${it.precioVenta}" style="width:100px;"></td>
       <td class="col-costo subtotal-costo">${money(subtotalCosto)}</td>
       <td class="subtotal-venta">${money(subtotalVenta)}</td>
+      <td class="col-costo ganancia-fila">${money(ganancia)}</td>
+      <td class="col-costo pct-retorno-fila">${pctRetorno !== null ? pctRetorno.toFixed(1) + "%" : "—"}</td>
       <td><button type="button" class="del-btn" title="Quitar">✕</button></td>
     `;
 
-    tr.querySelector(".input-cantidad").addEventListener("input", (e) => {
+    const inputCantidad = tr.querySelector(".input-cantidad");
+    const inputPrecioVenta = tr.querySelector(".input-precio-venta");
+
+    inputCantidad.addEventListener("focus", () => inputCantidad.select());
+    inputCantidad.addEventListener("input", (e) => {
       const val = parseInt(e.target.value, 10);
       itemsPedido[idx].cantidad = Number.isInteger(val) && val > 0 ? val : 1;
-      renderItemsTable();
-    });
-    tr.querySelector(".input-precio-venta").addEventListener("input", (e) => {
-      itemsPedido[idx].precioVenta = e.target.value;
-      const cant = itemsPedido[idx].cantidad;
-      tr.querySelector(".subtotal-venta").textContent = money((Number(e.target.value) || 0) * cant);
+      actualizarCalculosFila(tr, itemsPedido[idx]);
       recomputeTotales();
     });
+
+    inputPrecioVenta.addEventListener("focus", () => inputPrecioVenta.select());
+    inputPrecioVenta.addEventListener("input", (e) => {
+      itemsPedido[idx].precioVenta = e.target.value;
+      actualizarCalculosFila(tr, itemsPedido[idx]);
+      recomputeTotales();
+    });
+
     tr.querySelector(".del-btn").addEventListener("click", () => {
       itemsPedido.splice(idx, 1);
       renderItemsTable();
@@ -383,12 +410,12 @@ function mostrarFactura({ titulo, cliente }) {
   const theadRow = document.getElementById("factura-thead-row");
   theadRow.innerHTML = esCliente
     ? "<th>Producto</th><th>Cantidad</th><th>Precio venta</th><th>Subtotal</th>"
-    : "<th>Producto</th><th>Cantidad</th><th>Precio costo</th><th>Precio venta</th><th>Subtotal costo</th><th>Subtotal venta</th>";
+    : "<th>Producto</th><th>Cantidad</th><th>Precio costo</th><th>Precio venta</th><th>Subtotal costo</th><th>Subtotal venta</th><th>Ganancia</th><th>% Retorno</th>";
 
   const body = document.getElementById("factura-body");
   body.innerHTML = itemsPedido.map(it => {
+    const { subtotalCosto, subtotalVenta, ganancia, pctRetorno } = calcularFila(it);
     const precioVenta = Number(it.precioVenta) || 0;
-    const subtotalVenta = precioVenta * it.cantidad;
     if (esCliente) {
       return `
         <tr>
@@ -399,7 +426,6 @@ function mostrarFactura({ titulo, cliente }) {
         </tr>
       `;
     }
-    const subtotalCosto = it.costo * it.cantidad;
     return `
       <tr>
         <td>${escapeHtml(it.producto)}</td>
@@ -408,6 +434,8 @@ function mostrarFactura({ titulo, cliente }) {
         <td>${money(precioVenta)}</td>
         <td>${money(subtotalCosto)}</td>
         <td>${money(subtotalVenta)}</td>
+        <td>${money(ganancia)}</td>
+        <td>${pctRetorno !== null ? pctRetorno.toFixed(1) + "%" : "—"}</td>
       </tr>
     `;
   }).join("");
@@ -430,6 +458,67 @@ function mostrarFactura({ titulo, cliente }) {
 
 document.getElementById("factura-imprimir-btn").addEventListener("click", () => window.print());
 document.getElementById("factura-volver-btn").addEventListener("click", () => mostrarVista("inicio"));
+
+// ---------- Guardar la factura/presupuesto como archivo en la computadora ----------
+
+function construirHtmlFactura() {
+  const titulo = document.getElementById("factura-titulo").textContent;
+  const fecha = document.getElementById("factura-fecha").textContent;
+  const hora = document.getElementById("factura-hora").textContent;
+  const cliente = document.getElementById("factura-cliente").textContent;
+  const theadHtml = document.getElementById("factura-thead-row").innerHTML;
+  const bodyHtml = document.getElementById("factura-body").innerHTML;
+  const totalesHtml = document.getElementById("factura-totales").innerHTML;
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(titulo)} - ${escapeHtml(cliente)}</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; background:#fff; color:#1a2230; padding:32px; max-width:800px; margin:0 auto; }
+  h1 { font-size:22px; letter-spacing:1px; margin:0 0 6px; }
+  .datos { color:#667088; font-size:13px; margin-bottom:4px; }
+  .cliente { font-size:15px; margin:14px 0 20px; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #e3e7f0; font-size:14px; }
+  th { text-transform:uppercase; font-size:11px; color:#667088; letter-spacing:0.4px; }
+  .totales { margin-top:18px; text-align:right; font-size:15px; }
+  .totales span { display:block; margin-bottom:4px; }
+  .factura-total-final { font-size:19px; font-weight:800; }
+</style>
+</head>
+<body>
+  <h1>${escapeHtml(titulo)}</h1>
+  <div class="datos">Fecha: ${escapeHtml(fecha)} &nbsp;&nbsp; Hora: ${escapeHtml(hora)}</div>
+  <div class="cliente"><strong>Cliente / empresa:</strong> ${escapeHtml(cliente)}</div>
+  <table>
+    <thead><tr>${theadHtml}</tr></thead>
+    <tbody>${bodyHtml}</tbody>
+  </table>
+  <div class="totales">${totalesHtml}</div>
+</body>
+</html>`;
+}
+
+document.getElementById("factura-guardar-btn").addEventListener("click", () => {
+  const html = construirHtmlFactura();
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+
+  const titulo = document.getElementById("factura-titulo").textContent.toLowerCase();
+  const cliente = document.getElementById("factura-cliente").textContent;
+  const fecha = pedidoFechaHora ? pedidoFechaHora.fecha : "sin-fecha";
+  const nombreArchivo = `${titulo}_${cliente}_${fecha}`.replace(/[^a-zA-Z0-9-_]+/g, "_") + ".html";
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
 
 // ---------- Pedidos mayoristas recientes ----------
 

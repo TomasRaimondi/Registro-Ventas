@@ -102,11 +102,13 @@
               <th>Precio venta</th>
               <th class="col-costo">Subtotal costo</th>
               <th>Subtotal venta</th>
+              <th class="col-costo">Ganancia</th>
+              <th class="col-costo">% Retorno</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="pedido-items-body">
-            <tr class="empty-row"><td colspan="7">Todavía no agregaste productos.</td></tr>
+            <tr class="empty-row"><td colspan="9">Todavía no agregaste productos.</td></tr>
           </tbody>
         </table>
       </div>
@@ -138,6 +140,7 @@
     <section class="card" id="vista-factura" style="display:none;">
       <div class="factura-acciones no-print">
         <button type="button" id="factura-imprimir-btn" class="submit-btn">Imprimir</button>
+        <button type="button" id="factura-guardar-btn" class="secondary-btn" style="width:auto; padding:0 22px;">Guardar archivo</button>
         <button type="button" id="factura-volver-btn" class="clear-btn">Volver al inicio</button>
       </div>
 
