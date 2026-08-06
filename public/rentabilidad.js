@@ -174,7 +174,6 @@ async function renderAll() {
 
   renderComposicion();
   renderSelectoresProducto();
-  renderRentabilidad();
   renderCrecimiento();
 }
 
@@ -286,104 +285,6 @@ function renderComposicion() {
   body.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", () => deleteComponente(btn.dataset.id));
   });
-}
-
-// ---------- Rentabilidad por producto ----------
-
-function calcularUnidadesConsumidas(items, composicion) {
-  const composicionPorCombo = {};
-  composicion.forEach(c => {
-    if (!composicionPorCombo[c.comboProducto]) composicionPorCombo[c.comboProducto] = [];
-    composicionPorCombo[c.comboProducto].push({ componente: c.componenteProducto, cantidad: c.cantidad });
-  });
-
-  const unidades = {};
-  function sumar(producto, cant) {
-    unidades[producto] = (unidades[producto] || 0) + cant;
-  }
-
-  items.forEach(it => {
-    sumar(it.producto, 1);
-    const componentes = composicionPorCombo[it.producto];
-    if (componentes) componentes.forEach(c => sumar(c.componente, c.cantidad));
-  });
-
-  return unidades;
-}
-
-function renderRentabilidad() {
-  if (!hoyFecha) return;
-
-  const itemsUltimos30 = itemsGlobal.filter(it => diasEntre(it.fecha, hoyFecha) <= 30 && diasEntre(it.fecha, hoyFecha) >= 0);
-  const unidades30d = calcularUnidadesConsumidas(itemsUltimos30, composicionGlobal);
-
-  // Margen histórico (todas las ventas), a partir del precio de venta real vs el costo cargado.
-  // Se separa minorista/mayorista además del promedio general, porque suelen tener precios distintos.
-  const ventaPorProducto = {}; // producto -> { minorista: {totalVenta, cantidad}, mayorista: {...}, total: {...} }
-  itemsGlobal.forEach(it => {
-    if (!ventaPorProducto[it.producto]) {
-      ventaPorProducto[it.producto] = {
-        minorista: { totalVenta: 0, cantidad: 0 },
-        mayorista: { totalVenta: 0, cantidad: 0 },
-        total: { totalVenta: 0, cantidad: 0 },
-      };
-    }
-    const v = ventaPorProducto[it.producto];
-    const grupo = it.metodo === "mayorista" ? v.mayorista : v.minorista;
-    grupo.totalVenta += it.precio;
-    grupo.cantidad += 1;
-    v.total.totalVenta += it.precio;
-    v.total.cantidad += 1;
-  });
-
-  function margenDe(grupo, costo) {
-    return grupo && grupo.totalVenta > 0
-      ? ((grupo.totalVenta - costo * grupo.cantidad) / grupo.totalVenta) * 100
-      : null;
-  }
-
-  const combosSet = new Set(composicionGlobal.map(c => c.comboProducto));
-
-  const filas = costosGlobal.map(c => {
-    const venta = ventaPorProducto[c.producto];
-    const margenPct = margenDe(venta && venta.total, c.costo);
-    const margenPctMinorista = margenDe(venta && venta.minorista, c.costo);
-    const margenPctMayorista = margenDe(venta && venta.mayorista, c.costo);
-
-    const unidades = unidades30d[c.producto] || 0;
-    const stock = c.stock || 0;
-    const esCombo = combosSet.has(c.producto);
-    const capitalParado = !esCombo ? stock * c.costo : null;
-    const diasStock = unidades > 0 ? (stock / (unidades / 30)) : null;
-
-    return { producto: c.producto, margenPct, margenPctMinorista, margenPctMayorista, unidades, stock, esCombo, capitalParado, diasStock };
-  });
-
-  filas.sort((a, b) => (b.capitalParado || 0) - (a.capitalParado || 0));
-
-  const fmtPct = (v) => (v !== null ? v.toFixed(1) + "%" : "—");
-
-  const body = document.getElementById("rentabilidad-body");
-  body.innerHTML = filas.length === 0
-    ? `<tr class="empty-row"><td colspan="6">Sin datos todavía.</td></tr>`
-    : filas.map(f => `
-        <tr>
-          <td>${escapeHtml(f.producto)}${f.esCombo ? ' <span class="hint" style="margin:0;">(combo)</span>' : ''}</td>
-          <td>
-            <div class="margen-cell">
-              <span class="margen-promedio">${fmtPct(f.margenPct)} <span class="margen-promedio-tag">prom.</span></span>
-              <span class="margen-detail">
-                <span class="margen-minorista">Min ${fmtPct(f.margenPctMinorista)}</span>
-                <span class="margen-mayorista">May ${fmtPct(f.margenPctMayorista)}</span>
-              </span>
-            </div>
-          </td>
-          <td>${f.unidades}</td>
-          <td>${f.esCombo ? "—" : f.stock}</td>
-          <td style="${f.capitalParado && f.unidades === 0 && f.stock > 0 ? 'color:var(--red);' : ''}">${f.capitalParado !== null ? money(f.capitalParado) : "—"}</td>
-          <td>${f.esCombo ? "—" : (f.diasStock !== null ? Math.round(f.diasStock) + " días" : (f.stock > 0 ? "Sin ventas en 30 días" : "—"))}</td>
-        </tr>
-      `).join("");
 }
 
 // ---------- Crecimiento por producto ----------
