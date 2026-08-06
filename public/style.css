@@ -666,6 +666,8 @@ tbody tr:last-child td { border-bottom: none; }
   font-size: 16px;
 }
 .del-btn:hover { color: #e15b5b; }
+.del-btn.editar-btn:hover { color: var(--accent); }
+.del-btn.editar-btn { margin-right: 6px; }
 
 .toggle-desglose {
   background: none;

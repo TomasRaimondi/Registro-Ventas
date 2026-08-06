@@ -137,6 +137,29 @@ function obtenerDatosCliente() {
 // Momento (hora Argentina, autoritativa del servidor) en que se abrió el pedido actual.
 let pedidoFechaHora = null;
 
+// Si no es null, guardar reemplaza esta venta ya guardada en vez de crear una nueva
+// (se borra la original, revirtiendo su stock, y se crea la versión editada).
+let editandoVentaId = null;
+let editandoFecha = null;
+let editandoHora = null;
+let editandoHoraLabel = null;
+
+function actualizarEncabezadoHoja() {
+  const titulo = document.getElementById("hoja-titulo");
+  const hint = document.getElementById("hoja-editando-hint");
+  const btnGuardar = document.getElementById("pedido-guardar-stock-btn");
+  if (editandoVentaId) {
+    titulo.textContent = "Editar pedido mayorista";
+    hint.textContent = "Estás editando un pedido ya guardado. Al guardar los cambios, se reemplaza el pedido original: se revierte su stock y se aplica el del pedido editado.";
+    hint.style.display = "block";
+    btnGuardar.textContent = "Guardar cambios";
+  } else {
+    titulo.textContent = "Nuevo pedido mayorista";
+    hint.style.display = "none";
+    btnGuardar.textContent = "Guardar pedido y descontar stock";
+  }
+}
+
 document.getElementById("nuevo-pedido-btn").addEventListener("click", async () => {
   try {
     await cargarProductosDisponibles();
@@ -145,6 +168,7 @@ document.getElementById("nuevo-pedido-btn").addEventListener("click", async () =
     alert("No se pudo cargar la lista de productos con costo.");
     return;
   }
+  editandoVentaId = null;
   resetPedido();
   try {
     pedidoFechaHora = await api("/api/hora");
@@ -154,12 +178,51 @@ document.getElementById("nuevo-pedido-btn").addEventListener("click", async () =
   }
   document.getElementById("pedido-fecha").textContent = pedidoFechaHora ? formatFechaCorta(pedidoFechaHora.fecha) : "—";
   document.getElementById("pedido-hora").textContent = pedidoFechaHora ? pedidoFechaHora.horaLabel : "—";
+  actualizarEncabezadoHoja();
   mostrarVista("hoja");
   document.getElementById("pedido-cliente").focus();
 });
 
+// ---------- Editar un pedido ya guardado ----------
+
+async function iniciarEdicionPedido(venta, items, costoPorProducto) {
+  try {
+    await cargarProductosDisponibles();
+  } catch (err) {
+    console.error(err);
+    alert("No se pudo cargar la lista de productos con costo.");
+    return;
+  }
+
+  resetPedido();
+  editandoVentaId = venta.id;
+  editandoFecha = venta.fecha;
+  editandoHora = venta.hora;
+  editandoHoraLabel = venta.horaLabel;
+
+  document.getElementById("pedido-cliente").value = venta.cliente || "";
+
+  itemsPedido = agruparProductosReciente(items).map(g => {
+    const key = normalizeNombre(g.producto);
+    const costo = Object.prototype.hasOwnProperty.call(costoPorProducto, key) ? costoPorProducto[key] : 0;
+    const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
+    const precioVenta = Math.round((precioTotal / g.cantidad) * 100) / 100;
+    return { producto: g.producto, costo, cantidad: g.cantidad, precioVenta: String(precioVenta) };
+  });
+
+  pedidoFechaHora = { fecha: venta.fecha, horaLabel: venta.horaLabel };
+  document.getElementById("pedido-fecha").textContent = formatFechaCorta(venta.fecha);
+  document.getElementById("pedido-hora").textContent = venta.horaLabel;
+
+  actualizarEncabezadoHoja();
+  renderItemsTable();
+  mostrarVista("hoja");
+  document.getElementById("pedido-cliente").focus();
+}
+
 document.getElementById("pedido-cancelar-btn").addEventListener("click", () => {
-  if (itemsPedido.length > 0 && !confirm("¿Cancelar este pedido? Se va a perder lo que cargaste.")) return;
+  if (itemsPedido.length > 0 && !confirm("¿Cancelar? Se va a perder lo que cargaste.")) return;
+  editandoVentaId = null;
   mostrarVista("inicio");
 });
 
@@ -359,7 +422,7 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
 
   const btn = document.getElementById("pedido-guardar-stock-btn");
   btn.disabled = true;
-  btn.textContent = "Guardando...";
+  btn.textContent = editandoVentaId ? "Guardando cambios..." : "Guardando...";
 
   const itemsExpandidos = [];
   itemsPedido.forEach(it => {
@@ -368,12 +431,34 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
     }
   });
 
+  const bodyPayload = { metodo: "mayorista", items: itemsExpandidos, cliente: datosCliente.nombre };
+  if (editandoVentaId) {
+    // Se manda la fecha/hora original para que el pedido editado no se mueva al día de hoy.
+    bodyPayload.fecha = editandoFecha;
+    bodyPayload.hora = editandoHora;
+    bodyPayload.horaLabel = editandoHoraLabel;
+  }
+
   try {
+    // Primero se crea la versión nueva y recién si eso funciona se borra la original: así, si
+    // algo falla a mitad de camino, en el peor caso queda un duplicado (fácil de notar y borrar
+    // a mano) en vez de perderse el pedido original sin que se haya guardado el editado.
     await api("/api/ventas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ metodo: "mayorista", items: itemsExpandidos, cliente: datosCliente.nombre }),
+      body: JSON.stringify(bodyPayload),
     });
+
+    if (editandoVentaId) {
+      try {
+        await api("/api/ventas/" + encodeURIComponent(editandoVentaId), { method: "DELETE" });
+      } catch (err) {
+        console.error(err);
+        alert("Se guardó el pedido editado, pero no se pudo borrar el pedido original: quedaron los dos cargados. Borrá el que sobra a mano desde \"Pedidos mayoristas recientes\".");
+      }
+      editandoVentaId = null;
+    }
+
     mostrarFactura({ titulo: "FACTURA", datosCliente });
     cargarRecientes();
   } catch (err) {
@@ -382,7 +467,7 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
     errorEl.style.display = "block";
   } finally {
     btn.disabled = false;
-    btn.textContent = "Guardar pedido y descontar stock";
+    actualizarEncabezadoHoja();
   }
 });
 
@@ -644,7 +729,7 @@ function renderDetalleReciente(ventaId, row, items, costoPorProducto) {
   const detailRow = document.createElement("tr");
   detailRow.className = "sale-detail-row";
   const td = document.createElement("td");
-  td.colSpan = 4;
+  td.colSpan = 5;
   td.innerHTML = agruparProductosReciente(items).map(g => {
     const key = normalizeNombre(g.producto);
     const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
@@ -704,7 +789,7 @@ async function cargarRecientes() {
     .slice(0, 30);
 
   if (ventasMayoristas.length === 0) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no hay pedidos mayoristas guardados.</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay pedidos mayoristas guardados.</td></tr>`;
     return;
   }
 
@@ -724,14 +809,33 @@ async function cargarRecientes() {
       <td>${v.cliente ? escapeHtml(v.cliente) : "—"}</td>
       <td><span class="expand-caret">▸</span>${items.length} unidad${items.length === 1 ? "" : "es"}</td>
       <td>${money(v.precio)}</td>
+      <td><button type="button" class="del-btn editar-btn" title="Editar pedido">✎</button><button type="button" class="del-btn" title="Borrar pedido">✕</button></td>
     `;
     tr.addEventListener("click", () => toggleDetalleReciente(v.id, tr, items, costoPorProducto));
+    tr.querySelector(".editar-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      iniciarEdicionPedido(v, items, costoPorProducto);
+    });
+    tr.querySelector(".del-btn:not(.editar-btn)").addEventListener("click", (e) => {
+      e.stopPropagation();
+      borrarPedidoMayorista(v.id);
+    });
     body.appendChild(tr);
 
     if (recienteExpandidoId === v.id) {
       renderDetalleReciente(v.id, tr, items, costoPorProducto);
     }
   });
+}
+
+async function borrarPedidoMayorista(ventaId) {
+  if (!confirm("¿Borrar este pedido mayorista? Esto revierte el stock que había descontado.")) return;
+  try {
+    await api("/api/ventas/" + encodeURIComponent(ventaId), { method: "DELETE" });
+    await cargarRecientes();
+  } catch (err) {
+    alert("No se pudo borrar el pedido.\n" + err.message);
+  }
 }
 
 checkAuth();

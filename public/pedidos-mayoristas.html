@@ -48,7 +48,8 @@
 
     <!-- Hoja de armado del pedido -->
     <section class="card" id="vista-hoja" style="display:none;">
-      <h2>Nuevo pedido mayorista</h2>
+      <h2 id="hoja-titulo">Nuevo pedido mayorista</h2>
+      <p class="hint" id="hoja-editando-hint" style="display:none; text-align:left; color:var(--accent);"></p>
 
       <div class="pedido-meta">
         <span><strong>Fecha:</strong> <span id="pedido-fecha">—</span></span>
@@ -205,10 +206,10 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th></tr>
+            <tr><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th></th></tr>
           </thead>
           <tbody id="recientes-body">
-            <tr class="empty-row"><td colspan="4">Todavía no hay pedidos mayoristas guardados.</td></tr>
+            <tr class="empty-row"><td colspan="5">Todavía no hay pedidos mayoristas guardados.</td></tr>
           </tbody>
         </table>
       </div>
