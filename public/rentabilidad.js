@@ -190,17 +190,14 @@ function renderSelectoresProducto() {
 
   const comboSelect = document.getElementById("combo-select");
   const componenteSelect = document.getElementById("componente-select");
-  const stockSelect = document.getElementById("stock-producto-select");
   const crecimientoSelect = document.getElementById("producto-crecimiento-select");
 
   comboSelect.innerHTML = `<option value="" disabled selected>Elegí el combo</option>` + opciones;
   componenteSelect.innerHTML = `<option value="" disabled selected>Elegí el componente</option>` + opciones;
 
-  [stockSelect, crecimientoSelect].forEach(sel => {
-    const valorPrevio = sel.value;
-    sel.innerHTML = opciones;
-    if (productos.includes(valorPrevio)) sel.value = valorPrevio;
-  });
+  const valorPrevioCrecimiento = crecimientoSelect.value;
+  crecimientoSelect.innerHTML = opciones;
+  if (productos.includes(valorPrevioCrecimiento)) crecimientoSelect.value = valorPrevioCrecimiento;
 
   if (!productoCrecimientoSeleccionado && productos.length) {
     productoCrecimientoSeleccionado = productos[0];
@@ -290,28 +287,6 @@ function renderComposicion() {
     btn.addEventListener("click", () => deleteComponente(btn.dataset.id));
   });
 }
-
-// ---------- Stock ----------
-
-document.getElementById("stock-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const producto = document.getElementById("stock-producto-select").value;
-  const stock = parseInt(document.getElementById("stock-cantidad").value, 10);
-  if (!producto || isNaN(stock) || stock < 0) return;
-
-  try {
-    await api("/api/costos/stock", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ producto, stock }),
-    });
-    document.getElementById("stock-cantidad").value = "";
-    costosGlobal = await api("/api/costos");
-    renderRentabilidad();
-  } catch (err) {
-    alert("No se pudo guardar el stock.\n" + err.message);
-  }
-});
 
 // ---------- Rentabilidad por producto ----------
 

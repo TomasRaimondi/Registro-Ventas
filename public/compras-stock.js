@@ -120,6 +120,7 @@ async function renderAll() {
 
   renderStats();
   renderFiltroProducto();
+  renderStockSelect();
   renderHistorial();
   actualizarPreview();
 }
@@ -448,6 +449,35 @@ form.addEventListener("submit", async (e) => {
   }
 
   await guardarCompra(bodyPayload);
+});
+
+// ---------- Stock actual por producto ----------
+
+function renderStockSelect() {
+  const select = document.getElementById("stock-producto-select");
+  const valorPrevio = select.value;
+  const productos = costosGlobal.map(c => c.producto).sort((a, b) => a.localeCompare(b));
+  select.innerHTML = productos.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  if (productos.includes(valorPrevio)) select.value = valorPrevio;
+}
+
+document.getElementById("stock-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const producto = document.getElementById("stock-producto-select").value;
+  const stock = parseInt(document.getElementById("stock-cantidad").value, 10);
+  if (!producto || isNaN(stock) || stock < 0) return;
+
+  try {
+    await api("/api/costos/stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ producto, stock }),
+    });
+    document.getElementById("stock-cantidad").value = "";
+    await renderAll();
+  } catch (err) {
+    alert("No se pudo guardar el stock.\n" + err.message);
+  }
 });
 
 // ---------- Historial, agrupado por compra ----------
