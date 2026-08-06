@@ -229,14 +229,14 @@ function obtenerCostoRow(producto) {
   return costosGlobal.find(c => c.producto === producto);
 }
 
+// Costo promedio ponderado móvil: parte del stock y costo YA vigentes (no de todo el
+// historial de compras), porque el stock viejo puede haberse vendido y no debe seguir
+// pesando en el promedio si se vuelve a comprar a otro precio.
 function calcularNuevoPromedio(producto, cantidadNueva, precioNuevo) {
-  const historial = comprasGlobal.filter(c => c.producto === producto && c.tipo === "compra");
-  let totalUnidades = cantidadNueva;
-  let totalCosto = cantidadNueva * precioNuevo;
-  historial.forEach(h => {
-    totalUnidades += h.cantidad;
-    totalCosto += h.cantidad * h.precioUnitario;
-  });
+  const costoRow = obtenerCostoRow(producto);
+  let totalUnidades = costoRow ? (costoRow.stock || 0) : 0;
+  let totalCosto = totalUnidades * (costoRow ? (costoRow.costo || 0) : 0);
+
   // Si ya agregaste este mismo producto antes en esta misma compra, también cuenta.
   carrito.forEach(it => {
     if (it.producto === producto && it.precioUnitario != null) {
@@ -244,6 +244,10 @@ function calcularNuevoPromedio(producto, cantidadNueva, precioNuevo) {
       totalCosto += it.cantidad * it.precioUnitario;
     }
   });
+
+  totalUnidades += cantidadNueva;
+  totalCosto += cantidadNueva * precioNuevo;
+
   return totalUnidades > 0 ? totalCosto / totalUnidades : precioNuevo;
 }
 

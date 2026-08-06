@@ -609,19 +609,23 @@ const server = http.createServer(async (req, res) => {
         }
         await db.updateStock(producto, stockDespues);
 
+        // Costo promedio ponderado móvil: se combina el stock y costo YA vigentes con lo
+        // recién comprado. Promediar contra todo el historial de compras (como antes) inflaba
+        // o desinflaba el costo cuando ese stock viejo ya se había vendido y se volvía a
+        // comprar a otro precio: ese stock vendido no debe seguir pesando en el promedio.
+        let costoDespues = costoRow ? (costoRow.costo || 0) : 0;
         if (tipo === "compra") {
-          const historial = (await db.getComprasByProducto(producto)).filter((h) => h.tipo === "compra");
-          const totalUnidades = historial.reduce((a, h) => a + h.cantidad, 0);
-          const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
-          const nuevoPromedio = totalUnidades > 0 ? totalCosto / totalUnidades : precioUnitario;
-          await db.upsertCosto(producto, Math.round(nuevoPromedio * 100) / 100);
+          costoDespues = stockDespues > 0
+            ? Math.round(((stockAntes * costoDespues + cantidad * precioUnitario) / stockDespues) * 100) / 100
+            : precioUnitario;
+          await db.upsertCosto(producto, costoDespues);
         }
 
         // Mantiene costosActuales al día en memoria por si el mismo producto aparece
-        // más de una vez en esta misma tanda (el próximo item debe ver el stock ya actualizado).
+        // más de una vez en esta misma tanda (el próximo item debe ver el stock y costo ya actualizados).
         const idx = costosActuales.findIndex((c) => c.producto === producto);
-        if (idx >= 0) costosActuales[idx] = { ...costosActuales[idx], stock: stockDespues };
-        else costosActuales.push({ producto, costo: precioUnitario || 0, stock: stockDespues });
+        if (idx >= 0) costosActuales[idx] = { ...costosActuales[idx], stock: stockDespues, costo: costoDespues };
+        else costosActuales.push({ producto, costo: costoDespues, stock: stockDespues });
 
         filasInsertadas.push(row);
       }
