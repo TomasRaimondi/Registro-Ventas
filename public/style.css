@@ -535,6 +535,69 @@ tbody tr:last-child td { border-bottom: none; }
 .mes-total { color: var(--red); font-weight: 800; }
 .mes-tabla { margin-top: 10px; }
 
+/* ---------- Pedidos mayoristas ---------- */
+
+.pedido-agregar-btn { width: auto; padding: 0 22px; flex-shrink: 0; margin-top: 0; }
+
+.modo-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
+.modo-opcion-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s;
+}
+.modo-opcion-btn:hover { border-color: var(--accent); }
+.modo-opcion-titulo { font-size: 16px; font-weight: 800; }
+.modo-opcion-desc { font-size: 12.5px; color: var(--text-dim); }
+
+.pedido-meta { display: flex; gap: 24px; margin-bottom: 18px; font-size: 14px; color: var(--text-dim); }
+.pedido-producto-row { display: flex; gap: 8px; }
+.pedido-producto-row input { flex: 1; }
+
+.pedido-totales { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 18px 0; }
+.pedido-totales-item { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 10px; background: var(--bg); border: 1px solid var(--card-border); }
+.pedido-totales-item .big-number { font-size: 22px; }
+
+.pedido-acciones { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+
+.secondary-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0;
+}
+.secondary-btn:hover { background: var(--accent-soft); }
+
+#vista-hoja.modo-cliente .col-costo { display: none; }
+
+.factura-acciones { display: flex; gap: 10px; margin-bottom: 20px; }
+.factura-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.factura-header h2 { margin: 0; letter-spacing: 1px; }
+.factura-datos { display: flex; gap: 20px; font-size: 13px; color: var(--text-dim); }
+.factura-cliente { font-size: 15px; margin: 10px 0 18px; }
+.factura-totales { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; font-size: 15px; }
+.factura-total-final { font-size: 20px; font-weight: 800; }
+
+@media print {
+  body * { visibility: hidden; }
+  #factura-documento, #factura-documento * { visibility: visible; }
+  #factura-documento { position: absolute; top: 0; left: 0; width: 100%; padding: 10px; }
+  .no-print { display: none !important; }
+}
+
 .sale-detail-row td, .lote-detail-row td {
   padding: 0;
   background: var(--bg);

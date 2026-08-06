@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pedidos Mayoristas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Pedidos Mayoristas</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <!-- Vista principal: título + botón para crear -->
+    <section class="card" id="vista-inicio">
+      <div class="history-header">
+        <h2>Crear pedido mayorista</h2>
+        <button type="button" id="nuevo-pedido-btn" class="submit-btn pedido-agregar-btn">+</button>
+      </div>
+      <p class="hint" style="text-align:left;">Armá un pedido mayorista seleccionando productos con costo cargado, y generá un presupuesto o una factura para el cliente.</p>
+    </section>
+
+    <!-- Elegir para quién es el pedido -->
+    <section class="card" id="vista-elegir-modo" style="display:none;">
+      <h2>¿Para quién es este pedido?</h2>
+      <div class="modo-opciones">
+        <button type="button" class="modo-opcion-btn" data-modo="cliente">
+          <span class="modo-opcion-titulo">Para cliente</span>
+          <span class="modo-opcion-desc">Sin precios de costo. Para entregarle al cliente e imprimir.</span>
+        </button>
+        <button type="button" class="modo-opcion-btn" data-modo="empresa">
+          <span class="modo-opcion-titulo">Para empresa</span>
+          <span class="modo-opcion-desc">Con costo y ganancia. Uso interno.</span>
+        </button>
+      </div>
+      <button type="button" id="cancelar-modo-btn" class="clear-btn" style="margin-top:16px;">Cancelar</button>
+    </section>
+
+    <!-- Hoja de armado del pedido -->
+    <section class="card" id="vista-hoja" style="display:none;">
+      <div class="history-header">
+        <h2>Nuevo pedido mayorista</h2>
+        <div class="periodo-tabs" style="width:auto;">
+          <button type="button" class="periodo-tab modo-tab" data-modo="cliente">Para cliente</button>
+          <button type="button" class="periodo-tab modo-tab" data-modo="empresa">Para empresa</button>
+        </div>
+      </div>
+
+      <div class="pedido-meta">
+        <span><strong>Fecha:</strong> <span id="pedido-fecha">—</span></span>
+        <span><strong>Hora:</strong> <span id="pedido-hora">—</span></span>
+      </div>
+
+      <div class="field">
+        <label for="pedido-cliente">Nombre del cliente / empresa</label>
+        <input type="text" id="pedido-cliente" placeholder="Ej: Distribuidora Sur">
+      </div>
+
+      <div class="field autocomplete-field">
+        <label for="pedido-producto-input">Agregar producto (solo productos con costo cargado)</label>
+        <div class="pedido-producto-row">
+          <input type="text" id="pedido-producto-input" placeholder="Buscar producto..." autocomplete="off">
+          <button type="button" id="pedido-agregar-producto-btn" class="submit-btn pedido-agregar-btn">+</button>
+        </div>
+        <div class="suggestions" id="pedido-producto-suggestions"></div>
+      </div>
+      <p class="hint error-hint" id="pedido-producto-error" style="display:none;"></p>
+
+      <div class="table-wrap">
+        <table id="pedido-items-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th class="col-costo">Precio costo</th>
+              <th>Precio venta</th>
+              <th class="col-costo">Subtotal costo</th>
+              <th>Subtotal venta</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="pedido-items-body">
+            <tr class="empty-row"><td colspan="7">Todavía no agregaste productos.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pedido-totales">
+        <div class="pedido-totales-item col-costo">
+          <span class="label">Total costo</span>
+          <span class="big-number" id="pedido-total-costo">$0</span>
+        </div>
+        <div class="pedido-totales-item">
+          <span class="label">Total venta</span>
+          <span class="big-number" id="pedido-total-venta">$0</span>
+        </div>
+        <div class="pedido-totales-item col-costo">
+          <span class="label">Ganancia</span>
+          <span class="big-number" id="pedido-total-ganancia">$0</span>
+        </div>
+      </div>
+
+      <div class="pedido-acciones">
+        <button type="button" id="pedido-guardar-stock-btn" class="submit-btn">Guardar pedido y descontar stock</button>
+        <button type="button" id="pedido-solo-presupuesto-btn" class="secondary-btn">Solo generar presupuesto / factura (no descuenta stock)</button>
+        <button type="button" id="pedido-cancelar-btn" class="clear-btn">Cancelar</button>
+      </div>
+      <p class="hint error-hint" id="pedido-error" style="display:none;"></p>
+    </section>
+
+    <!-- Vista de factura/presupuesto lista para imprimir -->
+    <section class="card" id="vista-factura" style="display:none;">
+      <div class="factura-acciones no-print">
+        <button type="button" id="factura-imprimir-btn" class="submit-btn">Imprimir</button>
+        <button type="button" id="factura-volver-btn" class="clear-btn">Volver al inicio</button>
+      </div>
+
+      <div id="factura-documento" class="factura-documento">
+        <div class="factura-header">
+          <h2 id="factura-titulo">PRESUPUESTO</h2>
+          <div class="factura-datos">
+            <span><strong>Fecha:</strong> <span id="factura-fecha"></span></span>
+            <span><strong>Hora:</strong> <span id="factura-hora"></span></span>
+          </div>
+        </div>
+        <p class="factura-cliente"><strong>Cliente / empresa:</strong> <span id="factura-cliente"></span></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr id="factura-thead-row"></tr>
+            </thead>
+            <tbody id="factura-body"></tbody>
+          </table>
+        </div>
+        <div class="factura-totales" id="factura-totales"></div>
+      </div>
+    </section>
+
+    <!-- Pedidos mayoristas recientes -->
+    <section class="card">
+      <h2>Pedidos mayoristas recientes</h2>
+      <p class="hint" style="text-align:left;">Solo se muestran los pedidos guardados como venta (con stock descontado). Los presupuestos que no se guardaron no quedan registrados acá.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th></tr>
+          </thead>
+          <tbody id="recientes-body">
+            <tr class="empty-row"><td colspan="4">Todavía no hay pedidos mayoristas guardados.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="pedidos-mayoristas.js"></script>
+</body>
+</html>

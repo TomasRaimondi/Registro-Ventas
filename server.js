@@ -259,6 +259,8 @@ const server = http.createServer(async (req, res) => {
         horaLabel = now.horaLabel;
       }
 
+      const cliente = body.cliente ? String(body.cliente).trim().slice(0, 200) : null;
+
       const row = {
         id: crypto.randomUUID(),
         producto: productoResumen,
@@ -268,6 +270,7 @@ const server = http.createServer(async (req, res) => {
         hora,
         horaLabel,
         creadoEn: new Date().toISOString(),
+        cliente,
       };
 
       await db.insert(row);
