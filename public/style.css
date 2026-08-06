@@ -522,6 +522,19 @@ tbody tr:last-child td { border-bottom: none; }
 .rentabilidad-stat.mayorista { border-left-color: var(--orange); }
 .rentabilidad-stat.mayorista .big-number { color: var(--orange); }
 
+.mes-bloque { padding: 4px 0; }
+.mes-bloque:not(:last-child) { border-bottom: 1px solid var(--card-border); margin-bottom: 6px; padding-bottom: 10px; }
+.mes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 10px 0;
+  font-size: 16px;
+}
+.mes-total { color: var(--red); font-weight: 800; }
+.mes-tabla { margin-top: 10px; }
+
 .sale-detail-row td, .lote-detail-row td {
   padding: 0;
   background: var(--bg);

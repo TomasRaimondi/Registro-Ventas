@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gastos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Gastos</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="card total-card">
+      <span class="label">Total gastado en general</span>
+      <span class="big-number" id="total-general">$0</span>
+      <span class="sub" id="cantidad-general">0 gastos cargados</span>
+    </section>
+
+    <section class="card">
+      <h2>Gastos que más se repiten</h2>
+      <p class="hint" style="text-align:left;">Agrupados por concepto y ordenados por lo que más se gastó en total. Sirve para detectar gastos fijos, repetidos o innecesarios que convenga revisar.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Concepto</th><th>Veces</th><th>Total gastado</th><th>Promedio</th></tr>
+          </thead>
+          <tbody id="repetidos-body">
+            <tr class="empty-row"><td colspan="4">Todavía no hay gastos cargados.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Desglose mensual</h2>
+      <p class="hint" style="text-align:left;">Hacé clic en un mes para ver el detalle día por día.</p>
+      <div id="meses-container">
+        <p class="hint" id="meses-empty" style="display:none;">Todavía no hay gastos cargados.</p>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="gastos.js"></script>
+</body>
+</html>
