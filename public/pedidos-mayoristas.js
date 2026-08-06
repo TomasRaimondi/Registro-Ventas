@@ -621,15 +621,82 @@ document.getElementById("factura-guardar-btn").addEventListener("click", async (
 
 // ---------- Pedidos mayoristas recientes ----------
 
+// Agrupa las unidades de un pedido por producto, igual que en el armado del pedido,
+// para que el desglose muestre "x6 Producto" en vez de repetir la fila por cada unidad.
+function agruparProductosReciente(items) {
+  const mapa = new Map();
+  items.forEach(it => {
+    const key = normalizeNombre(it.producto);
+    if (!mapa.has(key)) mapa.set(key, { producto: it.producto, cantidad: 0, items: [] });
+    const grupo = mapa.get(key);
+    grupo.cantidad += 1;
+    grupo.items.push(it);
+  });
+  return [...mapa.values()].sort((a, b) => a.producto.localeCompare(b.producto, "es"));
+}
+
+let recienteExpandidoId = null;
+
+function renderDetalleReciente(ventaId, row, items, costoPorProducto) {
+  row.classList.add("expanded");
+  recienteExpandidoId = ventaId;
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "sale-detail-row";
+  const td = document.createElement("td");
+  td.colSpan = 4;
+  td.innerHTML = agruparProductosReciente(items).map(g => {
+    const key = normalizeNombre(g.producto);
+    const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
+    const costoUnit = tieneCosto ? costoPorProducto[key] : null;
+    const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
+    const precioVentaUnit = precioTotal / g.cantidad;
+    const costoTotal = tieneCosto ? costoUnit * g.cantidad : null;
+    const ganancia = tieneCosto ? precioTotal - costoTotal : null;
+    const etiqueta = g.cantidad > 1 ? `x${g.cantidad} ${g.producto}` : g.producto;
+    const costoUnitTag = tieneCosto ? ` <span class="hint" style="margin:0;">(costo c/u: ${money(costoUnit)})</span>` : "";
+    return `
+      <div class="lote-detail-item" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr;">
+        <span>${escapeHtml(etiqueta)}${costoUnitTag}</span>
+        <span>${money(precioVentaUnit)} c/u</span>
+        <span>${money(precioTotal)}</span>
+        <span>${tieneCosto ? money(costoTotal) : "—"}</span>
+        <span style="${ganancia !== null && ganancia < 0 ? 'color:var(--red);' : ''}">${ganancia !== null ? money(ganancia) : "—"}</span>
+      </div>
+    `;
+  }).join("");
+  detailRow.appendChild(td);
+  row.after(detailRow);
+}
+
+function toggleDetalleReciente(ventaId, row, items, costoPorProducto) {
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains("sale-detail-row")) {
+    existing.remove();
+    row.classList.remove("expanded");
+    recienteExpandidoId = null;
+    return;
+  }
+
+  const tbody = document.getElementById("recientes-body");
+  tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
+  tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
+
+  renderDetalleReciente(ventaId, row, items, costoPorProducto);
+}
+
 async function cargarRecientes() {
   const body = document.getElementById("recientes-body");
-  let data;
+  let data, costos;
   try {
-    data = await api("/api/reportes");
+    [data, costos] = await Promise.all([api("/api/reportes"), api("/api/costos")]);
   } catch (err) {
     console.error(err);
     return;
   }
+
+  const costoPorProducto = {};
+  costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
 
   const ventasMayoristas = data.ventas
     .filter(v => v.metodo === "mayorista")
@@ -643,18 +710,28 @@ async function cargarRecientes() {
 
   const itemsPorVenta = new Map();
   data.items.forEach(it => {
-    if (!itemsPorVenta.has(it.ventaId)) itemsPorVenta.set(it.ventaId, 0);
-    itemsPorVenta.set(it.ventaId, itemsPorVenta.get(it.ventaId) + 1);
+    if (!itemsPorVenta.has(it.ventaId)) itemsPorVenta.set(it.ventaId, []);
+    itemsPorVenta.get(it.ventaId).push(it);
   });
 
-  body.innerHTML = ventasMayoristas.map(v => `
-    <tr>
+  body.innerHTML = "";
+  ventasMayoristas.forEach(v => {
+    const items = itemsPorVenta.get(v.id) || [{ producto: v.producto, precio: v.precio }];
+    const tr = document.createElement("tr");
+    tr.className = "sale-row";
+    tr.innerHTML = `
       <td>${formatFechaCorta(v.fecha)}</td>
       <td>${v.cliente ? escapeHtml(v.cliente) : "—"}</td>
-      <td>${itemsPorVenta.get(v.id) || 1} unidad${(itemsPorVenta.get(v.id) || 1) === 1 ? "" : "es"}</td>
+      <td><span class="expand-caret">▸</span>${items.length} unidad${items.length === 1 ? "" : "es"}</td>
       <td>${money(v.precio)}</td>
-    </tr>
-  `).join("");
+    `;
+    tr.addEventListener("click", () => toggleDetalleReciente(v.id, tr, items, costoPorProducto));
+    body.appendChild(tr);
+
+    if (recienteExpandidoId === v.id) {
+      renderDetalleReciente(v.id, tr, items, costoPorProducto);
+    }
+  });
 }
 
 checkAuth();

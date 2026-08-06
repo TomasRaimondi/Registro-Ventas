@@ -496,13 +496,15 @@ function expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
     const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
     const costoUnit = tieneCosto ? costoPorProducto[key] : null;
     const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
+    const precioVentaUnit = precioTotal / g.cantidad;
     const costoTotal = tieneCosto ? costoUnit * g.cantidad : null;
     const ganancia = tieneCosto ? precioTotal - costoTotal : null;
     const etiqueta = g.cantidad > 1 ? `x${g.cantidad} ${g.producto}` : g.producto;
     const costoUnitTag = tieneCosto ? ` <span class="hint" style="margin:0;">(costo c/u: ${money(costoUnit)})</span>` : "";
     return `
-      <div class="lote-detail-item" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
+      <div class="lote-detail-item" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr;">
         <span>${escapeHtml(etiqueta)}${costoUnitTag}</span>
+        <span>${money(precioVentaUnit)} c/u</span>
         <span>${money(precioTotal)}</span>
         <span>${tieneCosto ? money(costoTotal) : "—"}</span>
         <span style="${ganancia !== null && ganancia < 0 ? 'color:var(--red);' : ''}">${ganancia !== null ? money(ganancia) : "—"}</span>
