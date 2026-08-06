@@ -539,24 +539,6 @@ tbody tr:last-child td { border-bottom: none; }
 
 .pedido-agregar-btn { width: auto; padding: 0 22px; flex-shrink: 0; margin-top: 0; }
 
-.modo-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
-.modo-opcion-btn {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 20px;
-  border-radius: 12px;
-  border: 1px solid var(--card-border);
-  background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  transition: border-color .15s;
-}
-.modo-opcion-btn:hover { border-color: var(--accent); }
-.modo-opcion-titulo { font-size: 16px; font-weight: 800; }
-.modo-opcion-desc { font-size: 12.5px; color: var(--text-dim); }
-
 .pedido-meta { display: flex; gap: 24px; margin-bottom: 18px; font-size: 14px; color: var(--text-dim); }
 .pedido-producto-row { display: flex; gap: 8px; }
 .pedido-producto-row input { flex: 1; }
@@ -580,8 +562,6 @@ tbody tr:last-child td { border-bottom: none; }
   margin-top: 0;
 }
 .secondary-btn:hover { background: var(--accent-soft); }
-
-#vista-hoja.modo-cliente .col-costo { display: none; }
 
 .factura-acciones { display: flex; gap: 10px; margin-bottom: 20px; }
 .factura-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }

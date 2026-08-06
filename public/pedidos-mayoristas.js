@@ -83,7 +83,7 @@ async function checkAuth() {
 
 // ---------- Navegación entre vistas ----------
 
-const VISTAS = ["inicio", "elegir-modo", "hoja", "factura"];
+const VISTAS = ["inicio", "hoja", "factura"];
 
 function mostrarVista(nombre) {
   VISTAS.forEach(v => {
@@ -93,7 +93,6 @@ function mostrarVista(nombre) {
 
 // ---------- Estado del pedido en armado ----------
 
-let modoActual = "cliente"; // "cliente" | "empresa"
 let itemsPedido = []; // { producto, costo, cantidad, precioVenta }
 let productosDisponibles = []; // { producto, costo }, sin combos
 
@@ -116,13 +115,8 @@ function resetPedido() {
   renderItemsTable();
 }
 
-function setModo(modo) {
-  modoActual = modo;
-  document.getElementById("vista-hoja").classList.toggle("modo-cliente", modo === "cliente");
-  document.querySelectorAll(".modo-tab").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.modo === modo);
-  });
-}
+// Momento (hora Argentina, autoritativa del servidor) en que se abrió el pedido actual.
+let pedidoFechaHora = null;
 
 document.getElementById("nuevo-pedido-btn").addEventListener("click", async () => {
   try {
@@ -132,33 +126,17 @@ document.getElementById("nuevo-pedido-btn").addEventListener("click", async () =
     alert("No se pudo cargar la lista de productos con costo.");
     return;
   }
-  mostrarVista("elegir-modo");
-});
-
-document.getElementById("cancelar-modo-btn").addEventListener("click", () => mostrarVista("inicio"));
-
-// Momento (hora Argentina, autoritativa del servidor) en que se abrió el pedido actual.
-let pedidoFechaHora = null;
-
-document.querySelectorAll(".modo-opcion-btn").forEach(btn => {
-  btn.addEventListener("click", async () => {
-    resetPedido();
-    setModo(btn.dataset.modo);
-    try {
-      pedidoFechaHora = await api("/api/hora");
-    } catch (err) {
-      console.error(err);
-      pedidoFechaHora = null;
-    }
-    document.getElementById("pedido-fecha").textContent = pedidoFechaHora ? formatFechaCorta(pedidoFechaHora.fecha) : "—";
-    document.getElementById("pedido-hora").textContent = pedidoFechaHora ? pedidoFechaHora.horaLabel : "—";
-    mostrarVista("hoja");
-    document.getElementById("pedido-cliente").focus();
-  });
-});
-
-document.querySelectorAll(".modo-tab").forEach(btn => {
-  btn.addEventListener("click", () => setModo(btn.dataset.modo));
+  resetPedido();
+  try {
+    pedidoFechaHora = await api("/api/hora");
+  } catch (err) {
+    console.error(err);
+    pedidoFechaHora = null;
+  }
+  document.getElementById("pedido-fecha").textContent = pedidoFechaHora ? formatFechaCorta(pedidoFechaHora.fecha) : "—";
+  document.getElementById("pedido-hora").textContent = pedidoFechaHora ? pedidoFechaHora.horaLabel : "—";
+  mostrarVista("hoja");
+  document.getElementById("pedido-cliente").focus();
 });
 
 document.getElementById("pedido-cancelar-btn").addEventListener("click", () => {
@@ -270,8 +248,7 @@ function renderItemsTable() {
   body.innerHTML = "";
 
   if (itemsPedido.length === 0) {
-    const colspan = modoActual === "cliente" ? 5 : 9;
-    body.innerHTML = `<tr class="empty-row"><td colspan="${colspan}">Todavía no agregaste productos.</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">Todavía no agregaste productos.</td></tr>`;
     recomputeTotales();
     return;
   }
@@ -400,13 +377,28 @@ document.getElementById("pedido-solo-presupuesto-btn").addEventListener("click",
 
 // ---------- Vista de factura / presupuesto ----------
 
+// "empresa" = versión completa (con costo y ganancia, uso interno).
+// "cliente" = solo Producto, Cantidad, Precio venta y Subtotal, para archivarle/imprimirle al cliente.
+let facturaVistaModo = "empresa";
+
 function mostrarFactura({ titulo, cliente }) {
   document.getElementById("factura-titulo").textContent = titulo;
   document.getElementById("factura-fecha").textContent = pedidoFechaHora ? formatFechaCorta(pedidoFechaHora.fecha) : "—";
   document.getElementById("factura-hora").textContent = pedidoFechaHora ? pedidoFechaHora.horaLabel : "—";
   document.getElementById("factura-cliente").textContent = cliente;
 
-  const esCliente = modoActual === "cliente";
+  facturaVistaModo = "empresa";
+  document.querySelectorAll(".factura-vista-tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.vista === facturaVistaModo);
+  });
+
+  renderFacturaContenido();
+  mostrarVista("factura");
+}
+
+function renderFacturaContenido() {
+  const esCliente = facturaVistaModo === "cliente";
+
   const theadRow = document.getElementById("factura-thead-row");
   theadRow.innerHTML = esCliente
     ? "<th>Producto</th><th>Cantidad</th><th>Precio venta</th><th>Subtotal</th>"
@@ -452,9 +444,15 @@ function mostrarFactura({ titulo, cliente }) {
       <span class="factura-total-final">Total venta: ${money(totalVenta)}</span>
     `;
   }
-
-  mostrarVista("factura");
 }
+
+document.querySelectorAll(".factura-vista-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    facturaVistaModo = btn.dataset.vista;
+    document.querySelectorAll(".factura-vista-tab").forEach(b => b.classList.toggle("active", b === btn));
+    renderFacturaContenido();
+  });
+});
 
 document.getElementById("factura-imprimir-btn").addEventListener("click", () => window.print());
 document.getElementById("factura-volver-btn").addEventListener("click", () => mostrarVista("inicio"));
@@ -509,7 +507,8 @@ document.getElementById("factura-guardar-btn").addEventListener("click", () => {
   const titulo = document.getElementById("factura-titulo").textContent.toLowerCase();
   const cliente = document.getElementById("factura-cliente").textContent;
   const fecha = pedidoFechaHora ? pedidoFechaHora.fecha : "sin-fecha";
-  const nombreArchivo = `${titulo}_${cliente}_${fecha}`.replace(/[^a-zA-Z0-9-_]+/g, "_") + ".html";
+  const sufijoVista = facturaVistaModo === "cliente" ? "cliente" : "completa";
+  const nombreArchivo = `${titulo}_${sufijoVista}_${cliente}_${fecha}`.replace(/[^a-zA-Z0-9-_]+/g, "_") + ".html";
 
   const a = document.createElement("a");
   a.href = url;

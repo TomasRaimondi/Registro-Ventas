@@ -43,34 +43,12 @@
         <h2>Crear pedido mayorista</h2>
         <button type="button" id="nuevo-pedido-btn" class="submit-btn pedido-agregar-btn">+</button>
       </div>
-      <p class="hint" style="text-align:left;">Armá un pedido mayorista seleccionando productos con costo cargado, y generá un presupuesto o una factura para el cliente.</p>
-    </section>
-
-    <!-- Elegir para quién es el pedido -->
-    <section class="card" id="vista-elegir-modo" style="display:none;">
-      <h2>¿Para quién es este pedido?</h2>
-      <div class="modo-opciones">
-        <button type="button" class="modo-opcion-btn" data-modo="cliente">
-          <span class="modo-opcion-titulo">Para cliente</span>
-          <span class="modo-opcion-desc">Sin precios de costo. Para entregarle al cliente e imprimir.</span>
-        </button>
-        <button type="button" class="modo-opcion-btn" data-modo="empresa">
-          <span class="modo-opcion-titulo">Para empresa</span>
-          <span class="modo-opcion-desc">Con costo y ganancia. Uso interno.</span>
-        </button>
-      </div>
-      <button type="button" id="cancelar-modo-btn" class="clear-btn" style="margin-top:16px;">Cancelar</button>
+      <p class="hint" style="text-align:left;">Armá un pedido mayorista seleccionando productos con costo cargado. Al imprimir o archivar vas a poder elegir si es la versión completa (con costos) o la versión para el cliente.</p>
     </section>
 
     <!-- Hoja de armado del pedido -->
     <section class="card" id="vista-hoja" style="display:none;">
-      <div class="history-header">
-        <h2>Nuevo pedido mayorista</h2>
-        <div class="periodo-tabs" style="width:auto;">
-          <button type="button" class="periodo-tab modo-tab" data-modo="cliente">Para cliente</button>
-          <button type="button" class="periodo-tab modo-tab" data-modo="empresa">Para empresa</button>
-        </div>
-      </div>
+      <h2>Nuevo pedido mayorista</h2>
 
       <div class="pedido-meta">
         <span><strong>Fecha:</strong> <span id="pedido-fecha">—</span></span>
@@ -138,6 +116,10 @@
 
     <!-- Vista de factura/presupuesto lista para imprimir -->
     <section class="card" id="vista-factura" style="display:none;">
+      <div class="periodo-tabs no-print" style="margin-bottom:16px;">
+        <button type="button" class="periodo-tab factura-vista-tab active" data-vista="empresa">Vista completa</button>
+        <button type="button" class="periodo-tab factura-vista-tab" data-vista="cliente">Archivar para cliente</button>
+      </div>
       <div class="factura-acciones no-print">
         <button type="button" id="factura-imprimir-btn" class="submit-btn">Imprimir</button>
         <button type="button" id="factura-guardar-btn" class="secondary-btn" style="width:auto; padding:0 22px;">Guardar archivo</button>
