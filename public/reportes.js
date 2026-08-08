@@ -400,14 +400,23 @@ function renderPeriodo(tipo) {
 
   // Tarjetas de arriba: reflejan el rango visible (semana elegida / mes elegido / mes actual)
   const brutaActual = actual.gananciaBruta + actual.gananciaBrutaMayorista;
+  const volumenTotalActual = actual.volumen + actual.volumenMayorista;
   const netaActual = brutaActual - actual.gasto;
   const ticketActual = actual.cantVentas ? actual.volumen / actual.cantVentas : 0;
+
+  const fmtPct = (ganancia, venta) => (venta > 0 ? (ganancia / venta) * 100 : null);
+  const pctRetornoGeneral = fmtPct(brutaActual, volumenTotalActual);
+  const pctRetornoMinorista = fmtPct(actual.gananciaBruta, actual.volumen);
+  const pctRetornoMayorista = fmtPct(actual.gananciaBrutaMayorista, actual.volumenMayorista);
 
   document.getElementById("label-volumen").textContent = actual.label;
   document.getElementById("label-volumen-mayorista").textContent = actual.label;
   document.getElementById("label-ganancia-bruta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-pct-retorno-general").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-bruta-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-pct-retorno-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-bruta-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-pct-retorno-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-neta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -419,11 +428,20 @@ function renderPeriodo(tipo) {
   statGananciaBruta.textContent = money(brutaActual);
   statGananciaBruta.classList.toggle("value-positive", brutaActual > 0);
   statGananciaBruta.classList.toggle("value-negative", brutaActual < 0);
+  const statPctRetornoGeneral = document.getElementById("stat-pct-retorno-general");
+  statPctRetornoGeneral.textContent = pctRetornoGeneral !== null ? pctRetornoGeneral.toFixed(1) + "%" : "—";
+  statPctRetornoGeneral.classList.toggle("value-positive", pctRetornoGeneral !== null && pctRetornoGeneral > 0);
+  statPctRetornoGeneral.classList.toggle("value-negative", pctRetornoGeneral !== null && pctRetornoGeneral < 0);
   const statGananciaBrutaMinorista = document.getElementById("stat-ganancia-bruta-minorista");
   statGananciaBrutaMinorista.textContent = money(actual.gananciaBruta);
   statGananciaBrutaMinorista.classList.toggle("value-positive", actual.gananciaBruta > 0);
   statGananciaBrutaMinorista.classList.toggle("value-negative", actual.gananciaBruta < 0);
+  const statPctRetornoMinorista = document.getElementById("stat-pct-retorno-minorista");
+  statPctRetornoMinorista.textContent = pctRetornoMinorista !== null ? pctRetornoMinorista.toFixed(1) + "%" : "—";
+  statPctRetornoMinorista.classList.toggle("value-positive", pctRetornoMinorista !== null && pctRetornoMinorista > 0);
+  statPctRetornoMinorista.classList.toggle("value-negative", pctRetornoMinorista !== null && pctRetornoMinorista < 0);
   document.getElementById("stat-ganancia-bruta-mayorista").textContent = money(actual.gananciaBrutaMayorista);
+  document.getElementById("stat-pct-retorno-mayorista").textContent = pctRetornoMayorista !== null ? pctRetornoMayorista.toFixed(1) + "%" : "—";
   const statGananciaNeta = document.getElementById("stat-ganancia-neta");
   statGananciaNeta.textContent = money(netaActual);
   statGananciaNeta.classList.toggle("value-positive", netaActual > 0);
