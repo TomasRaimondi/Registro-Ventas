@@ -287,6 +287,111 @@ function renderComposicion() {
   });
 }
 
+// ---------- Calculadora de rentabilidad ----------
+
+const calcProductoInput = document.getElementById("calc-producto-input");
+const calcProductoSuggestions = document.getElementById("calc-producto-suggestions");
+const calcPrecioCosto = document.getElementById("calc-precio-costo");
+const calcPrecioVenta = document.getElementById("calc-precio-venta");
+let comparacionRentabilidad = [];
+
+function calcRenderSuggestions(matches) {
+  if (!matches.length) {
+    calcProductoSuggestions.innerHTML = "";
+    calcProductoSuggestions.classList.remove("open");
+    return;
+  }
+  calcProductoSuggestions.innerHTML = matches.map(p => `<div class="suggestion-item">${escapeHtml(p)}</div>`).join("");
+  calcProductoSuggestions.classList.add("open");
+}
+
+function calcCargarCostoDe(nombre) {
+  const fila = costosGlobal.find(c => normalizeNombre(c.producto) === normalizeNombre(nombre));
+  if (fila) calcPrecioCosto.value = fila.costo || 0;
+}
+
+calcProductoInput.addEventListener("input", () => {
+  const q = normalizeNombre(calcProductoInput.value);
+  if (!q) { calcRenderSuggestions([]); return; }
+  const matches = costosGlobal.map(c => c.producto).filter(p => p.toLowerCase().includes(q)).slice(0, 8);
+  calcRenderSuggestions(matches);
+  calcCargarCostoDe(calcProductoInput.value);
+});
+calcProductoInput.addEventListener("blur", () => setTimeout(() => calcRenderSuggestions([]), 150));
+calcProductoSuggestions.addEventListener("mousedown", (e) => {
+  const item = e.target.closest(".suggestion-item");
+  if (!item) return;
+  calcProductoInput.value = item.textContent;
+  calcRenderSuggestions([]);
+  calcCargarCostoDe(item.textContent);
+  calcPrecioVenta.focus();
+});
+
+function calcActualizarResultado() {
+  const costo = parseFloat(calcPrecioCosto.value);
+  const venta = parseFloat(calcPrecioVenta.value);
+  const gananciaEl = document.getElementById("calc-ganancia");
+  const pctEl = document.getElementById("calc-pct");
+
+  if (!Number.isFinite(venta) || venta <= 0) {
+    gananciaEl.textContent = "$0";
+    pctEl.textContent = "—";
+    return null;
+  }
+  const costoUsado = Number.isFinite(costo) ? costo : 0;
+  const ganancia = venta - costoUsado;
+  const pct = (ganancia / venta) * 100;
+  gananciaEl.textContent = money(ganancia);
+  gananciaEl.style.color = ganancia < 0 ? "var(--red)" : "";
+  pctEl.textContent = pct.toFixed(1) + "%";
+  pctEl.style.color = ganancia < 0 ? "var(--red)" : "";
+  return { costo: costoUsado, venta, ganancia, pct };
+}
+
+[calcPrecioCosto, calcPrecioVenta].forEach(input => {
+  input.addEventListener("input", calcActualizarResultado);
+});
+
+function calcRenderComparacion() {
+  const body = document.getElementById("calc-comparacion-body");
+  if (comparacionRentabilidad.length === 0) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">Probá un precio de venta y agregalo acá para comparar.</td></tr>`;
+    return;
+  }
+  body.innerHTML = comparacionRentabilidad.map((f, idx) => `
+    <tr>
+      <td>${f.producto ? escapeHtml(f.producto) : "—"}</td>
+      <td>${money(f.costo)}</td>
+      <td>${money(f.venta)}</td>
+      <td style="${f.ganancia < 0 ? 'color:var(--red);' : ''}">${money(f.ganancia)}</td>
+      <td style="${f.ganancia < 0 ? 'color:var(--red);' : ''}">${f.pct.toFixed(1)}%</td>
+      <td><button class="del-btn" title="Quitar" data-idx="${idx}">✕</button></td>
+    </tr>
+  `).join("");
+  body.querySelectorAll(".del-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      comparacionRentabilidad.splice(Number(btn.dataset.idx), 1);
+      calcRenderComparacion();
+    });
+  });
+}
+
+document.getElementById("calc-agregar-btn").addEventListener("click", () => {
+  const resultado = calcActualizarResultado();
+  if (!resultado) {
+    alert("Ingresá un precio de venta para poder agregarlo a la comparación.");
+    return;
+  }
+  comparacionRentabilidad.push({ producto: calcProductoInput.value.trim(), ...resultado });
+  calcRenderComparacion();
+});
+
+document.getElementById("calc-limpiar-btn").addEventListener("click", () => {
+  if (comparacionRentabilidad.length > 0 && !confirm("¿Limpiar toda la comparación?")) return;
+  comparacionRentabilidad = [];
+  calcRenderComparacion();
+});
+
 // ---------- Crecimiento por producto ----------
 
 document.getElementById("producto-crecimiento-select").addEventListener("change", (e) => {

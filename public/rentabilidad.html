@@ -39,6 +39,59 @@
   <div id="app-content" style="display:none;">
 
     <section class="card">
+      <h2>Calculadora de rentabilidad</h2>
+      <p class="hint" style="text-align:left;">Elegí un producto para cargar su costo actual, probá distintos precios de venta y compará el % de rentabilidad de cada uno.</p>
+
+      <div class="field autocomplete-field">
+        <label for="calc-producto-input">Producto</label>
+        <input type="text" id="calc-producto-input" placeholder="Buscar producto..." autocomplete="off">
+        <div class="suggestions" id="calc-producto-suggestions"></div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="calc-precio-costo">Precio costo</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="calc-precio-costo" min="0" step="0.01" placeholder="0">
+          </div>
+        </div>
+        <div class="field">
+          <label for="calc-precio-venta">Precio venta a probar</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="calc-precio-venta" min="0" step="0.01" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="pedido-totales" style="margin:6px 0 18px;">
+        <div class="pedido-totales-item">
+          <span class="label">Ganancia</span>
+          <span class="big-number" id="calc-ganancia">$0</span>
+        </div>
+        <div class="pedido-totales-item">
+          <span class="label">% Rentabilidad</span>
+          <span class="big-number" id="calc-pct">—</span>
+        </div>
+      </div>
+
+      <button type="button" id="calc-agregar-btn" class="add-item-btn">+ Agregar a la comparación</button>
+
+      <div class="table-wrap" style="margin-top:20px;">
+        <table>
+          <thead>
+            <tr><th>Producto</th><th>Precio costo</th><th>Precio venta</th><th>Ganancia</th><th>% Rentabilidad</th><th></th></tr>
+          </thead>
+          <tbody id="calc-comparacion-body">
+            <tr class="empty-row"><td colspan="6">Probá un precio de venta y agregalo acá para comparar.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button type="button" id="calc-limpiar-btn" class="clear-btn" style="margin-top:12px;">Limpiar comparación</button>
+    </section>
+
+    <section class="card">
       <h2>Composición de combos</h2>
       <p class="hint" style="text-align:left;">
         Los combos comparten stock con sus productos individuales. Definí acá de qué productos está hecho cada combo,
