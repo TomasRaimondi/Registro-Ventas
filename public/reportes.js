@@ -406,6 +406,8 @@ function renderPeriodo(tipo) {
   document.getElementById("label-volumen").textContent = actual.label;
   document.getElementById("label-volumen-mayorista").textContent = actual.label;
   document.getElementById("label-ganancia-bruta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ganancia-bruta-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ganancia-bruta-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-neta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -417,6 +419,11 @@ function renderPeriodo(tipo) {
   statGananciaBruta.textContent = money(brutaActual);
   statGananciaBruta.classList.toggle("value-positive", brutaActual > 0);
   statGananciaBruta.classList.toggle("value-negative", brutaActual < 0);
+  const statGananciaBrutaMinorista = document.getElementById("stat-ganancia-bruta-minorista");
+  statGananciaBrutaMinorista.textContent = money(actual.gananciaBruta);
+  statGananciaBrutaMinorista.classList.toggle("value-positive", actual.gananciaBruta > 0);
+  statGananciaBrutaMinorista.classList.toggle("value-negative", actual.gananciaBruta < 0);
+  document.getElementById("stat-ganancia-bruta-mayorista").textContent = money(actual.gananciaBrutaMayorista);
   const statGananciaNeta = document.getElementById("stat-ganancia-neta");
   statGananciaNeta.textContent = money(netaActual);
   statGananciaNeta.classList.toggle("value-positive", netaActual > 0);
