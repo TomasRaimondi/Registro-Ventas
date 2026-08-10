@@ -23,6 +23,12 @@ const SCHEMA = `
     horaLabel TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS gastos_fijos (
+    id TEXT PRIMARY KEY,
+    concepto TEXT NOT NULL,
+    monto REAL NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS salario (
     id TEXT PRIMARY KEY,
     fecha TEXT NOT NULL,
@@ -225,6 +231,20 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM gastos WHERE id = ?", args: [id] });
     },
 
+    async getAllGastosFijos() {
+      const res = await client.execute("SELECT * FROM gastos_fijos ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async insertGastoFijo(row) {
+      await client.execute({
+        sql: `INSERT INTO gastos_fijos (id, concepto, monto, creadoEn) VALUES (?, ?, ?, ?)`,
+        args: [row.id, row.concepto, row.monto, row.creadoEn],
+      });
+    },
+    async deleteGastoFijo(id) {
+      await client.execute({ sql: "DELETE FROM gastos_fijos WHERE id = ?", args: [id] });
+    },
+
     async getAllSalario() {
       const res = await client.execute("SELECT * FROM salario ORDER BY fecha ASC, creadoEn ASC");
       return res.rows;
@@ -412,6 +432,18 @@ if (USE_TURSO) {
     },
     async deleteGasto(id) {
       db.prepare("DELETE FROM gastos WHERE id = ?").run(id);
+    },
+
+    async getAllGastosFijos() {
+      return db.prepare("SELECT * FROM gastos_fijos ORDER BY creadoEn ASC").all();
+    },
+    async insertGastoFijo(row) {
+      db.prepare(
+        `INSERT INTO gastos_fijos (id, concepto, monto, creadoEn) VALUES (?, ?, ?, ?)`
+      ).run(row.id, row.concepto, row.monto, row.creadoEn);
+    },
+    async deleteGastoFijo(id) {
+      db.prepare("DELETE FROM gastos_fijos WHERE id = ?").run(id);
     },
 
     async getAllSalario() {

@@ -44,25 +44,60 @@
     </section>
 
     <section class="card">
-      <h2>Gastos que más se repiten</h2>
-      <p class="hint" style="text-align:left;">Agrupados por concepto y ordenados por lo que más se gastó en total. Sirve para detectar gastos fijos, repetidos o innecesarios que convenga revisar.</p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Concepto</th><th>Veces</th><th>Total gastado</th><th>Promedio</th></tr>
-          </thead>
-          <tbody id="repetidos-body">
-            <tr class="empty-row"><td colspan="4">Todavía no hay gastos cargados.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="card">
       <h2>Desglose mensual</h2>
       <p class="hint" style="text-align:left;">Hacé clic en un mes para ver el detalle día por día.</p>
       <div id="meses-container">
         <p class="hint" id="meses-empty" style="display:none;">Todavía no hay gastos cargados.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Gastos fijos mensuales (estimados)</h2>
+      <p class="hint" style="text-align:left;">
+        Anotá acá los gastos fijos que estimás tener cada mes (alquiler, sueldos, servicios, etc.) para poder predecir
+        cuánto vas a gastar a fin de mes. Usá "Gastos que más se repiten" de abajo como referencia: tocá "+ Fijo" en
+        cualquier fila para cargarlo acá con su monto promedio.
+      </p>
+      <form id="gasto-fijo-form" class="inline-form">
+        <input type="text" id="gasto-fijo-concepto" placeholder="Concepto (ej: Alquiler)" required>
+        <div class="input-prefix">
+          <span>$</span>
+          <input type="number" id="gasto-fijo-monto" placeholder="Monto estimado" min="0" step="0.01" required>
+        </div>
+        <button type="submit" class="submit-btn">Agregar gasto fijo</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Concepto</th><th>Monto estimado</th><th></th></tr>
+          </thead>
+          <tbody id="gastos-fijos-body">
+            <tr class="empty-row"><td colspan="3">Todavía no anotaste ningún gasto fijo.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pedido-totales-item" style="margin-top:16px; max-width:280px;">
+        <span class="label">Total fijo estimado por mes</span>
+        <span class="big-number" id="gastos-fijos-total">$0</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Gastos que más se repiten</h2>
+      <p class="hint" style="text-align:left;">
+        Se agrupan automáticamente aunque los hayas anotado con nombres parecidos (ej: "Bono Chino" y "Bonificación Chino"
+        cuentan como el mismo). Ordenado por lo que más se gastó en total. La tendencia compara el primer y el último
+        monto cargado de cada uno.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Concepto</th><th>Veces</th><th>Total gastado</th><th>Promedio</th><th>Tendencia</th><th>Última vez</th><th></th></tr>
+          </thead>
+          <tbody id="repetidos-body">
+            <tr class="empty-row"><td colspan="7">Todavía no hay gastos cargados.</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 

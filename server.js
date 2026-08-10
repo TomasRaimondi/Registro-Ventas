@@ -750,6 +750,39 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Gastos fijos mensuales (estimados a mano, no son gastos reales cargados) ----------
+
+    if (pathname === "/api/gastos-fijos" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllGastosFijos();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/gastos-fijos" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const concepto = String(body.concepto || "").trim();
+      const monto = Number(body.monto);
+      if (!concepto) return sendJson(res, 400, { error: "Falta el concepto" });
+      if (!Number.isFinite(monto) || monto <= 0) return sendJson(res, 400, { error: "Monto inválido" });
+
+      const row = {
+        id: crypto.randomUUID(),
+        concepto,
+        monto,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertGastoFijo(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/gastos-fijos/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/gastos-fijos/".length));
+      await db.deleteGastoFijo(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Salario del empleado ----------
     // Lectura pública (el empleado la ve sin contraseña), escritura solo del dueño.
 
