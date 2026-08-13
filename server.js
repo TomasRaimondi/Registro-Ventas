@@ -23,20 +23,24 @@ function resolverProductoExistente(costosActuales, productoIngresado) {
   return match ? match.producto : productoIngresado;
 }
 
-// ---------- Contraseña del panel de ganancias ----------
+// ---------- Contraseñas del panel (dueño y empleado) ----------
 
 let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+let EMPLOYEE_PASSWORD = process.env.EMPLOYEE_PASSWORD || null;
 try {
   const localConfigPath = path.join(__dirname, "admin-config.json");
   if (fs.existsSync(localConfigPath)) {
     const cfg = JSON.parse(fs.readFileSync(localConfigPath, "utf8"));
     if (cfg.adminPassword) ADMIN_PASSWORD = cfg.adminPassword;
+    if (cfg.employeePassword) EMPLOYEE_PASSWORD = cfg.employeePassword;
   }
 } catch (e) {
   console.error("No se pudo leer admin-config.json:", e.message);
 }
 
-const sessions = new Set();
+// token -> "owner" | "empleado". El empleado solo puede usar los endpoints que
+// explícitamente chequean isAuthenticated (no isOwner) más abajo.
+const sessions = new Map();
 
 function parseCookies(req) {
   const header = req.headers.cookie;
@@ -50,9 +54,20 @@ function parseCookies(req) {
   return cookies;
 }
 
-function isAuthenticated(req) {
+function getRole(req) {
   const cookies = parseCookies(req);
-  return !!(cookies.session && sessions.has(cookies.session));
+  return (cookies.session && sessions.get(cookies.session)) || null;
+}
+
+// Cualquier sesión válida (dueño o empleado).
+function isAuthenticated(req) {
+  return !!getRole(req);
+}
+
+// Solo el dueño. Todo lo sensible (costos, ganancias, gastos, compras, salario,
+// balance, reportes) tiene que usar esto, no isAuthenticated.
+function isOwner(req) {
+  return getRole(req) === "owner";
 }
 
 // ---------- Hora oficial (Argentina), calculada en el servidor ----------
@@ -250,10 +265,11 @@ const server = http.createServer(async (req, res) => {
         .map(([producto, cantidad]) => (cantidad > 1 ? `${producto} x${cantidad}` : producto))
         .join(", ");
 
-      // Solo el dueño (con sesión) puede elegir una fecha pasada, para cargar ventas
-      // que no se registraron en el momento (ej: las que ya tenía anotadas en un Excel).
+      // Solo el dueño puede elegir una fecha pasada, para cargar ventas que no se
+      // registraron en el momento (ej: las que ya tenía anotadas en un Excel). El
+      // empleado (Pedidos Mayoristas) siempre registra con la fecha/hora de ahora.
       let fecha, hora, horaLabel;
-      if (isAuthenticated(req) && body.fecha) {
+      if (isOwner(req) && body.fecha) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(body.fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
         fecha = body.fecha;
         hora = Number.isInteger(body.hora) && body.hora >= 0 && body.hora <= 23 ? body.hora : 12;
@@ -332,7 +348,7 @@ const server = http.createServer(async (req, res) => {
       // Protegido: detalle por producto (precio, no el costo) para calcular ganancia en el panel.
       // Las ventas viejas (de antes del carrito) no tienen items propios: se reconstruye
       // un item único a partir de la venta original para que sigan apareciendo acá.
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
       const [ventasDelDia, items] = await Promise.all([db.getByFecha(fecha), db.getItemsByFecha(fecha)]);
 
@@ -360,7 +376,7 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === "/api/reportes" && req.method === "GET") {
       // Protegido: historial completo (todos los días) para el panel de reportes.
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const [ventas, items, gastos] = await Promise.all([
         db.getAllVentas(),
         db.getAllItems(),
@@ -396,17 +412,22 @@ const server = http.createServer(async (req, res) => {
       if (!ADMIN_PASSWORD) {
         return sendJson(res, 500, { error: "No hay contraseña configurada en el servidor" });
       }
-      if (password !== ADMIN_PASSWORD) {
+
+      let role = null;
+      if (password === ADMIN_PASSWORD) role = "owner";
+      else if (EMPLOYEE_PASSWORD && password === EMPLOYEE_PASSWORD) role = "empleado";
+
+      if (!role) {
         return sendJson(res, 401, { error: "Contraseña incorrecta" });
       }
 
       const token = crypto.randomUUID();
-      sessions.add(token);
+      sessions.set(token, role);
       res.setHeader(
         "Set-Cookie",
         `session=${token}; HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax`
       );
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true, role });
     }
 
     if (pathname === "/api/logout" && req.method === "POST") {
@@ -417,19 +438,19 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/auth-check" && req.method === "GET") {
-      return sendJson(res, 200, { authenticated: isAuthenticated(req) });
+      return sendJson(res, 200, { authenticated: isAuthenticated(req), role: getRole(req) });
     }
 
     // ---------- Costos y gastos (protegidos, requieren sesión) ----------
 
     if (pathname === "/api/costos" && req.method === "GET") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getCostos();
       return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/costos" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const productoIngresado = String(body.producto || "").trim();
       const costo = Number(body.costo);
@@ -443,14 +464,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/costos/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const producto = decodeURIComponent(pathname.slice("/api/costos/".length));
       await db.deleteCosto(producto);
       return sendJson(res, 200, { ok: true });
     }
 
     if (pathname === "/api/costos/stock" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const productoIngresado = String(body.producto || "").trim();
       const stock = Number(body.stock);
@@ -494,13 +515,15 @@ const server = http.createServer(async (req, res) => {
     // ---------- Composición de combos (para no duplicar stock entre combo y componentes) ----------
 
     if (pathname === "/api/composicion" && req.method === "GET") {
+      // El empleado también puede leer esto (sin ver costos): lo necesita para saber
+      // qué productos son combos y excluirlos del selector de Pedidos Mayoristas.
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getComposicion();
       return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/composicion" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const costosActuales = await db.getCostos();
       const comboProducto = resolverProductoExistente(costosActuales, String(body.comboProducto || "").trim());
@@ -517,7 +540,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/composicion/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/composicion/".length));
       await db.deleteComponente(id);
       return sendJson(res, 200, { ok: true });
@@ -526,14 +549,14 @@ const server = http.createServer(async (req, res) => {
     // ---------- Compras de stock (entradas de mercadería) y ajustes manuales ----------
 
     if (pathname === "/api/compras" && req.method === "GET") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const producto = query.get("producto");
       const rows = producto ? await db.getComprasByProducto(producto) : await db.getAllCompras();
       return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/compras" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const tipo = body.tipo === "ajuste" ? "ajuste" : "compra";
       const fecha = typeof body.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha)
@@ -639,7 +662,7 @@ const server = http.createServer(async (req, res) => {
     // stock hecho fuera de esta pantalla), para que "Situacion Financiera" pueda
     // reconstruir el stock de fechas pasadas correctamente.
     if (pathname === "/api/compras/registro-historico" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const itemsInput = Array.isArray(body.items) ? body.items : [];
       if (!itemsInput.length) return sendJson(res, 400, { error: "No hay items" });
@@ -676,7 +699,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/compras/lote/") && pathname.endsWith("/fecha") && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const loteId = decodeURIComponent(pathname.slice("/api/compras/lote/".length, -"/fecha".length));
       const body = await readJsonBody(req);
       const fecha = String(body.fecha || "");
@@ -686,7 +709,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/compras/lote/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const loteId = decodeURIComponent(pathname.slice("/api/compras/lote/".length));
       const filas = (await db.getAllCompras()).filter((c) => c.loteId === loteId);
       for (const compra of filas) {
@@ -696,7 +719,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/compras/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/compras/".length));
       const compra = await db.getCompraById(id);
       if (compra) await revertirCompra(compra);
@@ -704,14 +727,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/gastos" && req.method === "GET") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
       const rows = await db.getGastosByFecha(fecha);
       return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/gastos" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const concepto = String(body.concepto || "").trim();
       const monto = Number(body.monto);
@@ -744,7 +767,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/gastos/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/gastos/".length));
       await db.deleteGasto(id);
       return sendJson(res, 200, { ok: true });
@@ -753,13 +776,13 @@ const server = http.createServer(async (req, res) => {
     // ---------- Gastos fijos mensuales (estimados a mano, no son gastos reales cargados) ----------
 
     if (pathname === "/api/gastos-fijos" && req.method === "GET") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getAllGastosFijos();
       return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/gastos-fijos" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const concepto = String(body.concepto || "").trim();
       const monto = Number(body.monto);
@@ -777,7 +800,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/gastos-fijos/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/gastos-fijos/".length));
       await db.deleteGastoFijo(id);
       return sendJson(res, 200, { ok: true });
@@ -792,7 +815,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/salario" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const fecha = String(body.fecha || "").trim() || getArgentinaNow().fecha;
       const sueldo = Number(body.sueldo || 0);
@@ -817,7 +840,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/salario/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/salario/".length));
       await db.deleteSalario(id);
       return sendJson(res, 200, { ok: true });
@@ -826,13 +849,13 @@ const server = http.createServer(async (req, res) => {
     // ---------- Situación financiera (capital manual: transferencias, efectivo, deudas, etc.) ----------
 
     if (pathname === "/api/balance" && req.method === "GET") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getAllBalanceManual();
       return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/balance" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const fecha = String(body.fecha || "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
@@ -856,7 +879,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith("/api/balance/") && req.method === "DELETE") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = decodeURIComponent(pathname.slice("/api/balance/".length));
       await db.deleteBalanceManual(fecha);
       return sendJson(res, 200, { ok: true });

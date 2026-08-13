@@ -36,15 +36,22 @@ const loginCard = document.getElementById("login-card");
 const appContent = document.getElementById("app-content");
 const logoutBtn = document.getElementById("logout-btn");
 
+// "owner" ve todo. "empleado" solo puede crear pedidos, nunca ve costos/ganancias
+// ni la lista de pedidos de otros clientes (ver body.modo-empleado en style.css).
+let sesionRol = null;
+
 function showApp() {
   loginCard.style.display = "none";
   appContent.style.display = "block";
   logoutBtn.style.display = "inline-block";
+  document.body.classList.toggle("modo-empleado", sesionRol === "empleado");
   mostrarVista("inicio");
-  cargarRecientes();
+  if (sesionRol === "owner") cargarRecientes();
 }
 
 function showLogin() {
+  sesionRol = null;
+  document.body.classList.remove("modo-empleado");
   loginCard.style.display = "block";
   appContent.style.display = "none";
   logoutBtn.style.display = "none";
@@ -57,11 +64,12 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   errorHint.style.display = "none";
 
   try {
-    await api("/api/login", {
+    const resultado = await api("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
     });
+    sesionRol = resultado.role;
     document.getElementById("password").value = "";
     showApp();
   } catch (err) {
@@ -76,7 +84,8 @@ logoutBtn.addEventListener("click", async () => {
 });
 
 async function checkAuth() {
-  const { authenticated } = await api("/api/auth-check");
+  const { authenticated, role } = await api("/api/auth-check");
+  sesionRol = role;
   if (authenticated) showApp();
   else showLogin();
 }
@@ -97,12 +106,23 @@ let itemsPedido = []; // { producto, costo, cantidad, precioVenta }
 let productosDisponibles = []; // { producto, costo }, sin combos
 
 async function cargarProductosDisponibles() {
-  const [costos, composicion] = await Promise.all([
-    api("/api/costos"),
-    api("/api/composicion"),
-  ]);
-  const combosSet = new Set(composicion.map(c => c.comboProducto));
-  productosDisponibles = costos.filter(c => !combosSet.has(c.producto));
+  if (sesionRol === "owner") {
+    const [costos, composicion] = await Promise.all([
+      api("/api/costos"),
+      api("/api/composicion"),
+    ]);
+    const combosSet = new Set(composicion.map(c => c.comboProducto));
+    productosDisponibles = costos.filter(c => !combosSet.has(c.producto));
+  } else {
+    // El empleado no puede leer /api/costos (nunca ve el costo real): arma la misma
+    // lista de nombres a partir de /api/productos, que es público y no expone montos.
+    const [nombres, composicion] = await Promise.all([
+      api("/api/productos"),
+      api("/api/composicion"),
+    ]);
+    const combosSet = new Set(composicion.map(c => c.comboProducto));
+    productosDisponibles = nombres.filter(p => !combosSet.has(p)).map(p => ({ producto: p, costo: null }));
+  }
 }
 
 const CAMPOS_DATOS_CLIENTE = [
@@ -305,13 +325,16 @@ function agregarProductoAlPedido(nombre) {
 
 // ---------- Tabla de productos del pedido ----------
 
+// it.costo puede ser null: el empleado nunca recibe costos del servidor (ver
+// cargarProductosDisponibles), así que para su sesión esto queda siempre en "—".
 function calcularFila(it) {
   const cantidad = it.cantidad;
-  const subtotalCosto = it.costo * cantidad;
+  const tieneCosto = it.costo !== null && it.costo !== undefined;
+  const subtotalCosto = tieneCosto ? it.costo * cantidad : null;
   const precioVentaNum = Number(it.precioVenta) || 0;
   const subtotalVenta = precioVentaNum * cantidad;
-  const ganancia = subtotalVenta - subtotalCosto;
-  const pctRetorno = subtotalVenta > 0 ? (ganancia / subtotalVenta) * 100 : null;
+  const ganancia = tieneCosto ? subtotalVenta - subtotalCosto : null;
+  const pctRetorno = tieneCosto && subtotalVenta > 0 ? (ganancia / subtotalVenta) * 100 : null;
   return { subtotalCosto, subtotalVenta, ganancia, pctRetorno };
 }
 
@@ -319,9 +342,9 @@ function calcularFila(it) {
 // perderles el foco mientras el usuario está escribiendo cantidad o precio).
 function actualizarCalculosFila(tr, it) {
   const { subtotalCosto, subtotalVenta, ganancia, pctRetorno } = calcularFila(it);
-  tr.querySelector(".subtotal-costo").textContent = money(subtotalCosto);
+  tr.querySelector(".subtotal-costo").textContent = subtotalCosto !== null ? money(subtotalCosto) : "—";
   tr.querySelector(".subtotal-venta").textContent = money(subtotalVenta);
-  tr.querySelector(".ganancia-fila").textContent = money(ganancia);
+  tr.querySelector(".ganancia-fila").textContent = ganancia !== null ? money(ganancia) : "—";
   tr.querySelector(".pct-retorno-fila").textContent = pctRetorno !== null ? pctRetorno.toFixed(1) + "%" : "—";
 }
 
@@ -342,11 +365,11 @@ function renderItemsTable() {
     tr.innerHTML = `
       <td>${escapeHtml(it.producto)}</td>
       <td><input type="number" class="input-cantidad" min="1" step="1" value="${it.cantidad}" style="width:80px;"></td>
-      <td class="col-costo">${money(it.costo)}</td>
+      <td class="col-costo">${it.costo !== null && it.costo !== undefined ? money(it.costo) : "—"}</td>
       <td><input type="number" class="input-precio-venta" min="0" step="0.01" placeholder="0" value="${it.precioVenta}" style="width:100px;"></td>
-      <td class="col-costo subtotal-costo">${money(subtotalCosto)}</td>
+      <td class="col-costo subtotal-costo">${subtotalCosto !== null ? money(subtotalCosto) : "—"}</td>
       <td class="subtotal-venta">${money(subtotalVenta)}</td>
-      <td class="col-costo ganancia-fila">${money(ganancia)}</td>
+      <td class="col-costo ganancia-fila">${ganancia !== null ? money(ganancia) : "—"}</td>
       <td class="col-costo pct-retorno-fila">${pctRetorno !== null ? pctRetorno.toFixed(1) + "%" : "—"}</td>
       <td><button type="button" class="del-btn" title="Quitar">✕</button></td>
     `;
@@ -381,11 +404,12 @@ function renderItemsTable() {
 }
 
 function recomputeTotales() {
-  const totalCosto = itemsPedido.reduce((acc, it) => acc + it.costo * it.cantidad, 0);
+  const hayCostoDesconocido = itemsPedido.some(it => it.costo === null || it.costo === undefined);
+  const totalCosto = itemsPedido.reduce((acc, it) => acc + (it.costo || 0) * it.cantidad, 0);
   const totalVenta = itemsPedido.reduce((acc, it) => acc + (Number(it.precioVenta) || 0) * it.cantidad, 0);
-  document.getElementById("pedido-total-costo").textContent = money(totalCosto);
+  document.getElementById("pedido-total-costo").textContent = hayCostoDesconocido ? "—" : money(totalCosto);
   document.getElementById("pedido-total-venta").textContent = money(totalVenta);
-  document.getElementById("pedido-total-ganancia").textContent = money(totalVenta - totalCosto);
+  document.getElementById("pedido-total-ganancia").textContent = hayCostoDesconocido ? "—" : money(totalVenta - totalCosto);
 }
 
 // ---------- Validación común ----------
@@ -523,7 +547,7 @@ function mostrarFactura({ titulo, datosCliente }) {
   document.getElementById("factura-numero").textContent = facturaNumeroActual;
   renderDatosClienteBox();
 
-  facturaVistaModo = "empresa";
+  facturaVistaModo = sesionRol === "empleado" ? "cliente" : "empresa";
   document.querySelectorAll(".factura-vista-tab").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.vista === facturaVistaModo);
   });

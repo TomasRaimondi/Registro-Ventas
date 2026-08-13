@@ -14,7 +14,7 @@
     <h1>Pedidos Mayoristas</h1>
   </div>
   <div class="topbar-actions">
-    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <a href="/ganancias.html" class="link-btn" id="link-panel-ganancias">← Panel de Ganancias</a>
     <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
   </div>
 </header>
@@ -159,7 +159,7 @@
 
     <!-- Vista de factura/presupuesto lista para imprimir -->
     <section class="card" id="vista-factura" style="display:none;">
-      <div class="periodo-tabs no-print" style="margin-bottom:16px;">
+      <div class="periodo-tabs no-print" id="factura-vista-tabs" style="margin-bottom:16px;">
         <button type="button" class="periodo-tab factura-vista-tab active" data-vista="empresa">Vista completa</button>
         <button type="button" class="periodo-tab factura-vista-tab" data-vista="cliente">Archivar para cliente</button>
       </div>
@@ -199,8 +199,8 @@
       </div>
     </section>
 
-    <!-- Pedidos mayoristas recientes -->
-    <section class="card">
+    <!-- Pedidos mayoristas recientes: solo el dueño -->
+    <section class="card" id="vista-recientes">
       <h2>Pedidos mayoristas recientes</h2>
       <p class="hint" style="text-align:left;">Solo se muestran los pedidos guardados como venta (con stock descontado). Los presupuestos que no se guardaron no quedan registrados acá.</p>
       <div class="table-wrap">

@@ -537,6 +537,14 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ---------- Pedidos mayoristas ---------- */
 
+/* Sesión de empleado: nunca ve costos/ganancias ni la lista de pedidos de otros clientes. */
+body.modo-empleado .col-costo,
+body.modo-empleado #vista-recientes,
+body.modo-empleado #factura-vista-tabs,
+body.modo-empleado #link-panel-ganancias {
+  display: none !important;
+}
+
 .pedido-agregar-btn { width: auto; padding: 0 22px; flex-shrink: 0; margin-top: 0; }
 
 .pedido-meta { display: flex; gap: 24px; margin-bottom: 18px; font-size: 14px; color: var(--text-dim); }
