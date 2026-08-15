@@ -5,6 +5,7 @@ const PAYMENT_LABELS = {
   credito: "Crédito",
   cuentadni: "Cuenta DNI",
   mayorista: "Mayorista",
+  web: "Web",
 };
 
 function money(n) {

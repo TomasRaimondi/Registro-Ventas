@@ -7,6 +7,7 @@ const PAYMENT_LABELS = {
   credito: "Crédito",
   cuentadni: "Cuenta DNI",
   mayorista: "Mayorista",
+  web: "Web",
 };
 
 function money(n) {
@@ -307,7 +308,7 @@ function renderMetrics(sales) {
     ventasMayorista.length === 1 ? "1 venta" : `${ventasMayorista.length} ventas`;
 
   // Totales por método de pago
-  const totalsByMethod = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, cuentadni: 0, mayorista: 0 };
+  const totalsByMethod = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, cuentadni: 0, mayorista: 0, web: 0 };
   sales.forEach(s => { totalsByMethod[s.metodo] = (totalsByMethod[s.metodo] || 0) + s.precio; });
   document.getElementById("total-efectivo").textContent = money(totalsByMethod.efectivo);
   document.getElementById("total-transferencia").textContent = money(totalsByMethod.transferencia);
@@ -315,6 +316,7 @@ function renderMetrics(sales) {
   document.getElementById("total-credito").textContent = money(totalsByMethod.credito);
   document.getElementById("total-cuentadni").textContent = money(totalsByMethod.cuentadni);
   document.getElementById("total-mayorista").textContent = money(totalsByMethod.mayorista);
+  document.getElementById("total-web").textContent = money(totalsByMethod.web);
 
   // Volumen de ventas por hora (0 a 23)
   const byHour = Array(24).fill(0);

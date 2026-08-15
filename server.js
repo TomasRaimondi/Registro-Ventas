@@ -8,7 +8,7 @@ const db = require("./db");
 const PORT = process.env.PORT || 3000;
 const TIMEZONE = "America/Argentina/Buenos_Aires";
 const PUBLIC_DIR = path.join(__dirname, "public");
-const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito", "cuentadni", "mayorista"]);
+const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito", "cuentadni", "mayorista", "web"]);
 const CUENTA_DNI_COMISION = 0.006;
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
 

@@ -211,7 +211,7 @@ let mesSeleccionado = null; // YYYY-MM, usada por la pestaña "Semana"
 
 const METODO_LABELS = {
   efectivo: "Efectivo", transferencia: "Transferencia", debito: "Débito",
-  credito: "Crédito", cuentadni: "Cuenta DNI", mayorista: "Mayorista",
+  credito: "Crédito", cuentadni: "Cuenta DNI", mayorista: "Mayorista", web: "Web",
 };
 
 // ---------- Carga de datos ----------

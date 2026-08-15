@@ -11,6 +11,7 @@ const PAYMENT_LABELS = {
   credito: "Crédito",
   cuentadni: "Cuenta DNI",
   mayorista: "Mayorista",
+  web: "Web",
 };
 
 async function api(url, options) {
