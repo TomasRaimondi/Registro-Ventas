@@ -483,7 +483,10 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
       editandoVentaId = null;
     }
 
-    mostrarFactura({ titulo: "FACTURA", datosCliente });
+    // Siempre dice "PRESUPUESTO", se haya guardado como venta o no: sin CAE ni
+    // registro en AFIP esto no es legalmente una factura, aunque el pedido sí haya
+    // quedado guardado como venta real (con stock descontado) en el sistema.
+    mostrarFactura({ titulo: "PRESUPUESTO", datosCliente });
     cargarRecientes();
   } catch (err) {
     const errorEl = document.getElementById("pedido-error");
