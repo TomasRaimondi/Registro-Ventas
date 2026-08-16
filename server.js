@@ -806,6 +806,52 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Anuncios (Meta): medir si una campaña fue rentable ----------
+
+    if (pathname === "/api/anuncios" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllAnuncios();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/anuncios" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const nombre = String(body.nombre || "").trim();
+      const producto = body.producto ? String(body.producto).trim() : null;
+      const fechaInicio = String(body.fechaInicio || "");
+      const fechaFin = String(body.fechaFin || "");
+      const montoInvertido = Number(body.montoInvertido);
+      const notas = body.notas ? String(body.notas).trim() : null;
+
+      if (!nombre) return sendJson(res, 400, { error: "Falta el nombre del anuncio" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+        return sendJson(res, 400, { error: "Fechas inválidas" });
+      }
+      if (fechaFin < fechaInicio) return sendJson(res, 400, { error: "La fecha de fin no puede ser anterior a la de inicio" });
+      if (!Number.isFinite(montoInvertido) || montoInvertido < 0) return sendJson(res, 400, { error: "Monto invertido inválido" });
+
+      const row = {
+        id: crypto.randomUUID(),
+        nombre,
+        producto,
+        fechaInicio,
+        fechaFin,
+        montoInvertido,
+        notas,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertAnuncio(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/anuncios/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/anuncios/".length));
+      await db.deleteAnuncio(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Salario del empleado ----------
     // Lectura pública (el empleado la ve sin contraseña), escritura solo del dueño.
 

@@ -29,6 +29,16 @@ const SCHEMA = `
     monto REAL NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS anuncios (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    producto TEXT,
+    fechaInicio TEXT NOT NULL,
+    fechaFin TEXT NOT NULL,
+    montoInvertido REAL NOT NULL,
+    notas TEXT,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS salario (
     id TEXT PRIMARY KEY,
     fecha TEXT NOT NULL,
@@ -245,6 +255,21 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM gastos_fijos WHERE id = ?", args: [id] });
     },
 
+    async getAllAnuncios() {
+      const res = await client.execute("SELECT * FROM anuncios ORDER BY fechaInicio DESC, creadoEn DESC");
+      return res.rows;
+    },
+    async insertAnuncio(row) {
+      await client.execute({
+        sql: `INSERT INTO anuncios (id, nombre, producto, fechaInicio, fechaFin, montoInvertido, notas, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.nombre, row.producto, row.fechaInicio, row.fechaFin, row.montoInvertido, row.notas, row.creadoEn],
+      });
+    },
+    async deleteAnuncio(id) {
+      await client.execute({ sql: "DELETE FROM anuncios WHERE id = ?", args: [id] });
+    },
+
     async getAllSalario() {
       const res = await client.execute("SELECT * FROM salario ORDER BY fecha ASC, creadoEn ASC");
       return res.rows;
@@ -444,6 +469,19 @@ if (USE_TURSO) {
     },
     async deleteGastoFijo(id) {
       db.prepare("DELETE FROM gastos_fijos WHERE id = ?").run(id);
+    },
+
+    async getAllAnuncios() {
+      return db.prepare("SELECT * FROM anuncios ORDER BY fechaInicio DESC, creadoEn DESC").all();
+    },
+    async insertAnuncio(row) {
+      db.prepare(
+        `INSERT INTO anuncios (id, nombre, producto, fechaInicio, fechaFin, montoInvertido, notas, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.nombre, row.producto, row.fechaInicio, row.fechaFin, row.montoInvertido, row.notas, row.creadoEn);
+    },
+    async deleteAnuncio(id) {
+      db.prepare("DELETE FROM anuncios WHERE id = ?").run(id);
     },
 
     async getAllSalario() {
