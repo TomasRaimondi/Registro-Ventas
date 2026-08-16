@@ -114,27 +114,35 @@ async function checkAuth() {
 
 // ---------- Gráfico de barras (reutilizado, una sola serie) ----------
 
-function renderBarChart(container, entries) {
+function renderBarChart(container, entries, { formatValue = (v) => String(v), unitLabel = "unidades" } = {}) {
   container.innerHTML = "";
   if (entries.length === 0) {
     container.innerHTML = `<span class="hint">Elegí un producto para ver su evolución.</span>`;
     return;
   }
-  const maxVal = Math.max(...entries.map(e => e.value), 1);
-  entries.forEach(({ label, value }) => {
+  // Math.abs porque la ganancia puede dar negativa (se vendió bajo costo).
+  const maxVal = Math.max(...entries.map(e => Math.abs(e.value)), 1);
+  entries.forEach(({ label, value, subLabel }) => {
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
     const valLabel = document.createElement("span");
     valLabel.className = "chart-bar-value";
-    valLabel.textContent = value > 0 ? String(value) : "";
+    valLabel.textContent = value !== 0 ? formatValue(value) : "";
     const bar = document.createElement("div");
     bar.className = "chart-bar";
-    bar.style.height = Math.max((value / maxVal) * 100, value > 0 ? 4 : 2) + "%";
-    bar.title = `${label}: ${value} unidades`;
+    bar.style.height = Math.max((Math.abs(value) / maxVal) * 100, value !== 0 ? 4 : 2) + "%";
+    if (value < 0) bar.style.background = "linear-gradient(180deg, #e15b5b, #b83f3f)";
+    bar.title = `${label}: ${formatValue(value)} ${unitLabel}`;
     const hLabel = document.createElement("span");
     hLabel.className = "chart-bar-label";
     hLabel.textContent = label;
     wrap.appendChild(valLabel);
+    if (subLabel) {
+      const subEl = document.createElement("span");
+      subEl.className = "chart-bar-sub-label";
+      subEl.textContent = subLabel;
+      wrap.appendChild(subEl);
+    }
     wrap.appendChild(bar);
     wrap.appendChild(hLabel);
     container.appendChild(wrap);
@@ -436,19 +444,75 @@ function unidadesConsumidasPorPeriodo(productoObjetivo, composicion, periodo) {
   return porPeriodo;
 }
 
+// A diferencia de unidadesConsumidasPorPeriodo, esto NO reparte ingresos/ganancia entre
+// los componentes de un combo (no hay forma de saber qué parte del precio del combo le
+// corresponde a cada componente): solo cuenta las ventas donde el producto elegido se
+// vendió directamente con su propio precio registrado.
+function metricasPorPeriodo(productoObjetivo, periodo) {
+  const costoRow = costosGlobal.find(c => normalizeNombre(c.producto) === normalizeNombre(productoObjetivo));
+  const costo = costoRow ? costoRow.costo : null;
+
+  const porPeriodo = {};
+  function entradaDe(fecha) {
+    const key = periodo === "semana" ? getWeekStart(fecha) : getMonthKey(fecha);
+    if (!porPeriodo[key]) porPeriodo[key] = { unidades: 0, ingresos: 0, ganancia: 0 };
+    return porPeriodo[key];
+  }
+
+  itemsGlobal.forEach(it => {
+    if (it.producto !== productoObjetivo) return;
+    const entrada = entradaDe(it.fecha);
+    entrada.unidades += 1;
+    entrada.ingresos += it.precio;
+    if (costo !== null) entrada.ganancia += it.precio - costo;
+  });
+
+  return { porPeriodo, tieneCosto: costo !== null };
+}
+
 function renderCrecimiento() {
-  const container = document.getElementById("chart-crecimiento");
-  if (!productoCrecimientoSeleccionado) { renderBarChart(container, []); return; }
+  const containerUnidades = document.getElementById("chart-crecimiento");
+  const containerIngresos = document.getElementById("chart-crecimiento-ingresos");
+  const containerGanancia = document.getElementById("chart-crecimiento-ganancia");
 
-  const porPeriodo = unidadesConsumidasPorPeriodo(productoCrecimientoSeleccionado, composicionGlobal, periodoCrecimiento);
+  if (!productoCrecimientoSeleccionado) {
+    renderBarChart(containerUnidades, []);
+    renderBarChart(containerIngresos, []);
+    renderBarChart(containerGanancia, []);
+    return;
+  }
 
-  const claves = Object.keys(porPeriodo).sort().slice(-24);
-  const entries = claves.map(key => ({
+  const porPeriodoUnidades = unidadesConsumidasPorPeriodo(productoCrecimientoSeleccionado, composicionGlobal, periodoCrecimiento);
+  const clavesUnidades = Object.keys(porPeriodoUnidades).sort().slice(-24);
+  const entriesUnidades = clavesUnidades.map(key => ({
     label: periodoCrecimiento === "semana" ? formatFecha(key) : getMonthLabel(key).slice(0, 3),
-    value: porPeriodo[key],
+    value: porPeriodoUnidades[key],
   }));
+  renderBarChart(containerUnidades, entriesUnidades);
 
-  renderBarChart(container, entries);
+  const { porPeriodo: porPeriodoMetricas, tieneCosto } = metricasPorPeriodo(productoCrecimientoSeleccionado, periodoCrecimiento);
+  const clavesMetricas = Object.keys(porPeriodoMetricas).sort().slice(-24);
+
+  const entriesIngresos = clavesMetricas.map(key => {
+    const m = porPeriodoMetricas[key];
+    const precioProm = m.unidades > 0 ? m.ingresos / m.unidades : 0;
+    return {
+      label: periodoCrecimiento === "semana" ? formatFecha(key) : getMonthLabel(key).slice(0, 3),
+      value: m.ingresos,
+      subLabel: m.unidades > 0 ? `Prom: ${money(precioProm)}` : "",
+    };
+  });
+  renderBarChart(containerIngresos, entriesIngresos, { formatValue: money, unitLabel: "de ingresos" });
+
+  if (!tieneCosto) {
+    containerGanancia.innerHTML = `<span class="hint">Este producto no tiene costo cargado, así que no se puede calcular la ganancia.</span>`;
+  } else {
+    const entriesGanancia = clavesMetricas.map(key => ({
+      label: periodoCrecimiento === "semana" ? formatFecha(key) : getMonthLabel(key).slice(0, 3),
+      value: porPeriodoMetricas[key].ganancia,
+    }));
+    renderBarChart(containerGanancia, entriesGanancia, { formatValue: money, unitLabel: "de ganancia" });
+  }
 }
 
 checkAuth();
