@@ -392,6 +392,7 @@ function renderPeriodo(tipo) {
   const nombrePeriodo = { dia: "día", semana: "semana", mes: "mes" }[tipo];
   const nombrePeriodoDel = { dia: "de la semana", semana: "del mes", mes: "del mes" }[tipo];
   document.getElementById("titulo-chart-volumen").textContent = `Volumen vendido por ${nombrePeriodo}`;
+  document.getElementById("titulo-chart-ganancia-bruta").textContent = `Ganancia bruta por ${nombrePeriodo}`;
   document.getElementById("titulo-chart-ganancia").textContent = `Ganancia neta por ${nombrePeriodo}`;
   document.getElementById("titulo-resumen").textContent = `Resumen por ${nombrePeriodo}`;
   document.getElementById("titulo-top-productos").textContent = `Top productos (${rangoLabel})`;
@@ -455,6 +456,16 @@ function renderPeriodo(tipo) {
     document.getElementById("chart-volumen-dia"),
     grupos.map(g => ({ label: g.label, valueA: g.volumen, valueB: g.volumenMayorista, valueC: g.gasto })),
     { showGasto: true }
+  );
+  renderDualBarChart(
+    document.getElementById("chart-ganancia-bruta-dia"),
+    grupos.map(g => ({
+      label: g.label,
+      valueA: g.gananciaBruta,
+      valueB: g.gananciaBrutaMayorista,
+      total: g.gananciaBruta + g.gananciaBrutaMayorista,
+    })),
+    { colorBySignA: true, labelA: "Minorista", labelB: "Mayorista" }
   );
   renderDualBarChart(
     document.getElementById("chart-ganancia-dia"),
