@@ -85,6 +85,24 @@ const SCHEMA = `
     nota TEXT,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS tablero_tareas (
+    id TEXT PRIMARY KEY,
+    texto TEXT NOT NULL,
+    hecho INTEGER NOT NULL DEFAULT 0,
+    fecha TEXT,
+    hora TEXT,
+    notas TEXT,
+    duracionMin INTEGER,
+    boardX REAL,
+    boardY REAL,
+    creadoEn TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS tablero_conexiones (
+    id TEXT PRIMARY KEY,
+    desdeId TEXT NOT NULL,
+    haciaId TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -283,6 +301,50 @@ if (USE_TURSO) {
     },
     async deleteSalario(id) {
       await client.execute({ sql: "DELETE FROM salario WHERE id = ?", args: [id] });
+    },
+
+    async getAllTableroTareas() {
+      const res = await client.execute("SELECT * FROM tablero_tareas ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async insertTableroTarea(row) {
+      await client.execute({
+        sql: `INSERT INTO tablero_tareas (id, texto, hecho, fecha, hora, notas, duracionMin, boardX, boardY, creadoEn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.texto, row.hecho ? 1 : 0, row.fecha || null, row.hora || null, row.notas || null, row.duracionMin || null, row.boardX ?? null, row.boardY ?? null, row.creadoEn],
+      });
+    },
+    async updateTableroTarea(id, fields) {
+      const sets = [];
+      const args = [];
+      if (fields.texto !== undefined) { sets.push("texto = ?"); args.push(fields.texto); }
+      if (fields.hecho !== undefined) { sets.push("hecho = ?"); args.push(fields.hecho ? 1 : 0); }
+      if (fields.fecha !== undefined) { sets.push("fecha = ?"); args.push(fields.fecha); }
+      if (fields.hora !== undefined) { sets.push("hora = ?"); args.push(fields.hora); }
+      if (fields.notas !== undefined) { sets.push("notas = ?"); args.push(fields.notas); }
+      if (fields.duracionMin !== undefined) { sets.push("duracionMin = ?"); args.push(fields.duracionMin); }
+      if (fields.boardX !== undefined) { sets.push("boardX = ?"); args.push(fields.boardX); }
+      if (fields.boardY !== undefined) { sets.push("boardY = ?"); args.push(fields.boardY); }
+      if (!sets.length) return;
+      args.push(id);
+      await client.execute({ sql: `UPDATE tablero_tareas SET ${sets.join(", ")} WHERE id = ?`, args });
+    },
+    async deleteTableroTarea(id) {
+      await client.execute({ sql: "DELETE FROM tablero_tareas WHERE id = ?", args: [id] });
+      await client.execute({ sql: "DELETE FROM tablero_conexiones WHERE desdeId = ? OR haciaId = ?", args: [id, id] });
+    },
+
+    async getAllTableroConexiones() {
+      const res = await client.execute("SELECT * FROM tablero_conexiones ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async insertTableroConexion(row) {
+      await client.execute({
+        sql: `INSERT INTO tablero_conexiones (id, desdeId, haciaId, creadoEn) VALUES (?, ?, ?, ?)`,
+        args: [row.id, row.desdeId, row.haciaId, row.creadoEn],
+      });
+    },
+    async deleteTableroConexion(id) {
+      await client.execute({ sql: "DELETE FROM tablero_conexiones WHERE id = ?", args: [id] });
     },
 
     async getAllBalanceManual() {
@@ -495,6 +557,44 @@ if (USE_TURSO) {
     },
     async deleteSalario(id) {
       db.prepare("DELETE FROM salario WHERE id = ?").run(id);
+    },
+
+    async getAllTableroTareas() {
+      return db.prepare("SELECT * FROM tablero_tareas ORDER BY creadoEn ASC").all();
+    },
+    async insertTableroTarea(row) {
+      db.prepare(`INSERT INTO tablero_tareas (id, texto, hecho, fecha, hora, notas, duracionMin, boardX, boardY, creadoEn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(row.id, row.texto, row.hecho ? 1 : 0, row.fecha || null, row.hora || null, row.notas || null, row.duracionMin || null, row.boardX ?? null, row.boardY ?? null, row.creadoEn);
+    },
+    async updateTableroTarea(id, fields) {
+      const sets = [];
+      const args = [];
+      if (fields.texto !== undefined) { sets.push("texto = ?"); args.push(fields.texto); }
+      if (fields.hecho !== undefined) { sets.push("hecho = ?"); args.push(fields.hecho ? 1 : 0); }
+      if (fields.fecha !== undefined) { sets.push("fecha = ?"); args.push(fields.fecha); }
+      if (fields.hora !== undefined) { sets.push("hora = ?"); args.push(fields.hora); }
+      if (fields.notas !== undefined) { sets.push("notas = ?"); args.push(fields.notas); }
+      if (fields.duracionMin !== undefined) { sets.push("duracionMin = ?"); args.push(fields.duracionMin); }
+      if (fields.boardX !== undefined) { sets.push("boardX = ?"); args.push(fields.boardX); }
+      if (fields.boardY !== undefined) { sets.push("boardY = ?"); args.push(fields.boardY); }
+      if (!sets.length) return;
+      args.push(id);
+      db.prepare(`UPDATE tablero_tareas SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+    },
+    async deleteTableroTarea(id) {
+      db.prepare("DELETE FROM tablero_tareas WHERE id = ?").run(id);
+      db.prepare("DELETE FROM tablero_conexiones WHERE desdeId = ? OR haciaId = ?").run(id, id);
+    },
+
+    async getAllTableroConexiones() {
+      return db.prepare("SELECT * FROM tablero_conexiones ORDER BY creadoEn ASC").all();
+    },
+    async insertTableroConexion(row) {
+      db.prepare(`INSERT INTO tablero_conexiones (id, desdeId, haciaId, creadoEn) VALUES (?, ?, ?, ?)`)
+        .run(row.id, row.desdeId, row.haciaId, row.creadoEn);
+    },
+    async deleteTableroConexion(id) {
+      db.prepare("DELETE FROM tablero_conexiones WHERE id = ?").run(id);
     },
 
     async getAllBalanceManual() {

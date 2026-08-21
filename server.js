@@ -892,6 +892,76 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Tablero de tareas ----------
+    // Sin contraseña, igual que /api/ventas y la lectura de /api/salario: es un
+    // pizarrón compartido en el local, lo usa tanto el dueño como el empleado.
+
+    if (pathname === "/api/tablero-tareas" && req.method === "GET") {
+      return sendJson(res, 200, await db.getAllTableroTareas());
+    }
+
+    if (pathname === "/api/tablero-tareas" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const texto = String(body.texto || "").trim();
+      if (!texto) return sendJson(res, 400, { error: "Falta el texto de la tarea" });
+      const row = {
+        id: crypto.randomUUID(),
+        texto,
+        hecho: false,
+        fecha: body.fecha || null,
+        hora: body.fecha ? (body.hora || null) : null,
+        notas: body.notas || null,
+        duracionMin: body.hora ? (Number.isFinite(Number(body.duracionMin)) ? Number(body.duracionMin) : null) : null,
+        boardX: Number.isFinite(Number(body.boardX)) ? Number(body.boardX) : null,
+        boardY: Number.isFinite(Number(body.boardY)) ? Number(body.boardY) : null,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertTableroTarea(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/tablero-tareas/") && req.method === "PATCH") {
+      const id = decodeURIComponent(pathname.slice("/api/tablero-tareas/".length));
+      const body = await readJsonBody(req);
+      const fields = {};
+      if (body.texto !== undefined) fields.texto = String(body.texto);
+      if (body.hecho !== undefined) fields.hecho = !!body.hecho;
+      if (body.fecha !== undefined) fields.fecha = body.fecha;
+      if (body.hora !== undefined) fields.hora = body.hora;
+      if (body.notas !== undefined) fields.notas = body.notas;
+      if (body.duracionMin !== undefined) fields.duracionMin = body.duracionMin === null ? null : Number(body.duracionMin);
+      if (body.boardX !== undefined) fields.boardX = Number(body.boardX);
+      if (body.boardY !== undefined) fields.boardY = Number(body.boardY);
+      await db.updateTableroTarea(id, fields);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname.startsWith("/api/tablero-tareas/") && req.method === "DELETE") {
+      const id = decodeURIComponent(pathname.slice("/api/tablero-tareas/".length));
+      await db.deleteTableroTarea(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/tablero-conexiones" && req.method === "GET") {
+      return sendJson(res, 200, await db.getAllTableroConexiones());
+    }
+
+    if (pathname === "/api/tablero-conexiones" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const desdeId = String(body.desdeId || "").trim();
+      const haciaId = String(body.haciaId || "").trim();
+      if (!desdeId || !haciaId || desdeId === haciaId) return sendJson(res, 400, { error: "Conexión inválida" });
+      const row = { id: crypto.randomUUID(), desdeId, haciaId, creadoEn: new Date().toISOString() };
+      await db.insertTableroConexion(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/tablero-conexiones/") && req.method === "DELETE") {
+      const id = decodeURIComponent(pathname.slice("/api/tablero-conexiones/".length));
+      await db.deleteTableroConexion(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Situación financiera (capital manual: transferencias, efectivo, deudas, etc.) ----------
 
     if (pathname === "/api/balance" && req.method === "GET") {

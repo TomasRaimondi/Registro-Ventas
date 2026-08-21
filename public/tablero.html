@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Tablero</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">← Registro de Ventas</a>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <section class="card">
+    <div class="board-fullscreen-wrap" id="board-fullscreen-wrap">
+      <div class="board-toolbar">
+        <div>
+          <h2 style="margin:0;">Tablero</h2>
+          <p class="hint board-hint-text" style="text-align:left; margin:4px 0 0;">Arrastrá las tareas donde quieras. El puntito celeste del borde las conecta con otra tarea (si tiene horario, arma una secuencia). Soltalas cerca de una hora para agendarlas, y estirá la barrita de duración para alargarlas o acortarlas.</p>
+        </div>
+        <div class="board-toolbar-actions">
+          <button type="button" class="board-tool-btn" id="board-fullscreen-toggle" title="Pantalla completa">⛶ Pantalla completa</button>
+          <div class="cal-nav">
+            <button type="button" id="board-prev" aria-label="Día anterior">‹</button>
+            <span class="cal-mes-label" id="board-dia-label"></span>
+            <button type="button" id="board-next" aria-label="Día siguiente">›</button>
+          </div>
+        </div>
+      </div>
+
+      <span class="board-rotate-hint">🔄 Girá el teléfono para ver el tablero completo</span>
+
+      <div class="board-viewport" id="board-viewport">
+        <div class="board-canvas" id="board-canvas">
+          <div class="board-hour-strip" id="board-hour-strip"></div>
+          <svg class="board-lines" id="board-lines"></svg>
+          <div id="board-nodes"></div>
+        </div>
+      </div>
+
+      <!-- El botón "+" y el modal viven ADENTRO del wrapper de pantalla completa:
+           la API de Fullscreen del navegador solo muestra lo que está dentro del
+           elemento fullscreen, así que si quedaran afuera desaparecerían al usarla. -->
+      <button type="button" class="fab" id="fab-nueva-tarea" aria-label="Agregar tarea">+</button>
+
+      <div class="modal-overlay" id="tarea-modal-overlay" style="display:none;">
+        <div class="card modal-card" id="tarea-modal" role="dialog" aria-modal="true" aria-labelledby="tarea-modal-title" style="max-width:480px;">
+          <h2 id="tarea-modal-title">Nueva tarea</h2>
+          <form id="tarea-form">
+            <div class="field">
+              <label for="tarea-texto">¿Qué hay que hacer?</label>
+              <input type="text" id="tarea-texto" placeholder="Ej: Reponer stock de proteína" maxlength="300" required>
+            </div>
+
+            <button type="button" class="modal-toggle" id="toggle-notas">+ Agregar pasos o sugerencias</button>
+            <div class="field" id="campo-notas" style="display:none;">
+              <label for="tarea-notas">Pasos o sugerencias (opcional)</label>
+              <textarea id="tarea-notas" rows="3" placeholder="Ej: 1) Contar lo que queda 2) Avisar al proveedor..." style="width:100%; font:inherit; font-size:15px; color:var(--text); background:var(--bg); border:1px solid var(--card-border); border-radius:10px; padding:12px 14px; resize:vertical;"></textarea>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="tarea-fecha">Fecha</label>
+                <input type="date" id="tarea-fecha">
+              </div>
+              <div class="field">
+                <label for="tarea-hora">Hora (opcional)</label>
+                <input type="time" id="tarea-hora">
+              </div>
+              <div class="field field-cantidad">
+                <label for="tarea-duracion">Duración</label>
+                <select id="tarea-duracion" style="width:100%; font:inherit; font-size:15px; color:var(--text); background:var(--bg); border:1px solid var(--card-border); border-radius:10px; padding:12px 10px;">
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="60" selected>1 hora</option>
+                  <option value="90">1h 30</option>
+                  <option value="120">2 horas</option>
+                  <option value="180">3 horas</option>
+                </select>
+              </div>
+            </div>
+
+            <p class="hint error-hint" id="tarea-modal-error" style="display:none;"></p>
+
+            <div class="modal-actions">
+              <button type="button" class="cancel-btn" id="tarea-modal-borrar" style="display:none; color:var(--red); border-color:var(--red);">Borrar tarea</button>
+              <span style="flex:1;"></span>
+              <button type="button" class="cancel-btn" id="tarea-modal-cancelar">Cancelar</button>
+              <button type="submit" class="submit-btn" id="tarea-modal-submit">Crear tarea</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="tablero.js"></script>
+</body>
+</html>
