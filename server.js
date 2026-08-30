@@ -23,6 +23,40 @@ function resolverProductoExistente(costosActuales, productoIngresado) {
   return match ? match.producto : productoIngresado;
 }
 
+// El costo de un combo se recalcula solo, sumando (costo x cantidad) de cada componente:
+// si cambia el precio de un producto que integra un combo, el costo del combo se actualiza
+// con él. Se llama después de cualquier cambio en costos o en la composición de combos.
+// Si algún componente todavía no tiene costo cargado, ese combo se deja como está (no se
+// pisa con un número incompleto). Corre varias pasadas para que un combo que a su vez es
+// componente de otro combo más grande también se actualice en cadena.
+async function recalcularCostosCombos() {
+  const [costos, composicion] = await Promise.all([db.getCostos(), db.getComposicion()]);
+  const costoPorProducto = {};
+  costos.forEach((c) => { costoPorProducto[c.producto] = c.costo; });
+
+  const componentesPorCombo = {};
+  composicion.forEach((c) => {
+    if (!componentesPorCombo[c.comboProducto]) componentesPorCombo[c.comboProducto] = [];
+    componentesPorCombo[c.comboProducto].push({ componente: c.componenteProducto, cantidad: c.cantidad });
+  });
+
+  for (let pasada = 0; pasada < 5; pasada++) {
+    for (const [comboProducto, componentes] of Object.entries(componentesPorCombo)) {
+      let total = 0;
+      let completo = true;
+      for (const { componente, cantidad } of componentes) {
+        const costoComponente = costoPorProducto[componente];
+        if (costoComponente === undefined || costoComponente === null) { completo = false; break; }
+        total += costoComponente * cantidad;
+      }
+      if (completo && costoPorProducto[comboProducto] !== total) {
+        costoPorProducto[comboProducto] = total;
+        await db.upsertCosto(comboProducto, total);
+      }
+    }
+  }
+}
+
 // ---------- Contraseñas del panel (dueño y empleado) ----------
 
 let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
@@ -460,6 +494,7 @@ const server = http.createServer(async (req, res) => {
 
       const producto = resolverProductoExistente(await db.getCostos(), productoIngresado);
       await db.upsertCosto(producto, costo);
+      await recalcularCostosCombos();
       return sendJson(res, 200, { ok: true, producto, costo });
     }
 
@@ -467,6 +502,7 @@ const server = http.createServer(async (req, res) => {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const producto = decodeURIComponent(pathname.slice("/api/costos/".length));
       await db.deleteCosto(producto);
+      await recalcularCostosCombos();
       return sendJson(res, 200, { ok: true });
     }
 
@@ -536,6 +572,7 @@ const server = http.createServer(async (req, res) => {
 
       const row = { id: crypto.randomUUID(), comboProducto, componenteProducto, cantidad };
       await db.insertComponente(row);
+      await recalcularCostosCombos();
       return sendJson(res, 201, row);
     }
 
@@ -543,6 +580,7 @@ const server = http.createServer(async (req, res) => {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/composicion/".length));
       await db.deleteComponente(id);
+      await recalcularCostosCombos();
       return sendJson(res, 200, { ok: true });
     }
 

@@ -228,16 +228,17 @@ function escapeHtml(str) {
 }
 
 async function renderAll() {
-  let items, costos, gastos, salarios;
+  let items, costos, gastos, salarios, composicion;
   try {
     const hora = await api("/api/hora");
     hoyFechaCache = hora.fecha;
     const fechaActiva = fechaSeleccionada || hoyFechaCache;
-    [items, costos, gastos, salarios] = await Promise.all([
+    [items, costos, gastos, salarios, composicion] = await Promise.all([
       api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
       api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/salario"),
+      api("/api/composicion"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -291,15 +292,17 @@ async function renderAll() {
   }
 
   // Tabla de costos
+  const combosConComponentes = new Set(composicion.map(c => c.comboProducto));
   const costosBody = document.getElementById("costos-body");
   costosBody.innerHTML = "";
   if (costos.length === 0) {
     costosBody.innerHTML = `<tr class="empty-row"><td colspan="3">Todavía no cargaste ningún costo.</td></tr>`;
   } else {
     costos.forEach(c => {
+      const esCombo = combosConComponentes.has(c.producto);
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHtml(c.producto)}</td>
+        <td>${escapeHtml(c.producto)}${esCombo ? ' <span class="hint" style="font-size:11px;">(calculado según sus componentes)</span>' : ""}</td>
         <td>${money(c.costo)}</td>
         <td><button class="del-btn" title="Eliminar" data-producto="${escapeHtml(c.producto)}">✕</button></td>
       `;
