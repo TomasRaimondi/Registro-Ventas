@@ -250,7 +250,7 @@ document.getElementById("composicion-form").addEventListener("submit", async (e)
     renderVerComboSelect();
     document.getElementById("ver-combo-select").value = comboProducto;
     renderComposicion();
-    renderRentabilidad();
+    renderCrecimiento();
   } catch (err) {
     alert("No se pudo vincular el combo.\n" + err.message);
   }
@@ -262,7 +262,7 @@ async function deleteComponente(id) {
     composicionGlobal = await api("/api/composicion");
     renderVerComboSelect();
     renderComposicion();
-    renderRentabilidad();
+    renderCrecimiento();
   } catch (err) {
     alert("No se pudo desvincular.\n" + err.message);
   }
@@ -294,6 +294,84 @@ function renderComposicion() {
     btn.addEventListener("click", () => deleteComponente(btn.dataset.id));
   });
 }
+
+// ---------- Editar costo de un producto ----------
+
+const editarCostoInput = document.getElementById("editar-costo-producto-input");
+const editarCostoSuggestions = document.getElementById("editar-costo-producto-suggestions");
+const editarCostoValor = document.getElementById("editar-costo-valor");
+const editarCostoGuardarBtn = document.getElementById("editar-costo-guardar-btn");
+const editarCostoComboHint = document.getElementById("editar-costo-combo-hint");
+const editarCostoGuardadoMsg = document.getElementById("editar-costo-guardado");
+let editarCostoProductoSeleccionado = null;
+
+function editarCostoRenderSuggestions(matches) {
+  if (!matches.length) {
+    editarCostoSuggestions.innerHTML = "";
+    editarCostoSuggestions.classList.remove("open");
+    return;
+  }
+  editarCostoSuggestions.innerHTML = matches.map(p => `<div class="suggestion-item">${escapeHtml(p)}</div>`).join("");
+  editarCostoSuggestions.classList.add("open");
+}
+
+function editarCostoSeleccionarProducto(nombre) {
+  const fila = costosGlobal.find(c => c.producto === nombre);
+  if (!fila) return;
+  editarCostoProductoSeleccionado = fila.producto;
+  editarCostoInput.value = fila.producto;
+  editarCostoValor.value = fila.costo ?? 0;
+  editarCostoValor.disabled = false;
+  editarCostoGuardarBtn.disabled = false;
+  editarCostoGuardadoMsg.style.display = "none";
+  const esCombo = composicionGlobal.some(c => c.comboProducto === fila.producto);
+  editarCostoComboHint.style.display = esCombo ? "block" : "none";
+}
+
+editarCostoInput.addEventListener("input", () => {
+  editarCostoProductoSeleccionado = null;
+  editarCostoValor.disabled = true;
+  editarCostoGuardarBtn.disabled = true;
+  editarCostoComboHint.style.display = "none";
+  const q = normalizeNombre(editarCostoInput.value);
+  if (!q) { editarCostoRenderSuggestions([]); return; }
+  const matches = costosGlobal.map(c => c.producto).filter(p => p.toLowerCase().includes(q)).slice(0, 8);
+  editarCostoRenderSuggestions(matches);
+});
+editarCostoInput.addEventListener("blur", () => setTimeout(() => editarCostoRenderSuggestions([]), 150));
+editarCostoSuggestions.addEventListener("mousedown", (e) => {
+  const item = e.target.closest(".suggestion-item");
+  if (!item) return;
+  editarCostoSeleccionarProducto(item.textContent);
+  editarCostoRenderSuggestions([]);
+  editarCostoValor.focus();
+});
+
+editarCostoGuardarBtn.addEventListener("click", async () => {
+  if (!editarCostoProductoSeleccionado) return;
+  const costo = parseFloat(editarCostoValor.value);
+  if (!Number.isFinite(costo) || costo < 0) return;
+
+  editarCostoGuardarBtn.disabled = true;
+  try {
+    await api("/api/costos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ producto: editarCostoProductoSeleccionado, costo }),
+    });
+    [costosGlobal, composicionGlobal] = await Promise.all([api("/api/costos"), api("/api/composicion")]);
+    // Si es un combo con componentes completos, el servidor puede haber recalculado el
+    // costo justo despues de guardarlo: se vuelve a leer para mostrar el valor real.
+    const filaActual = costosGlobal.find(c => c.producto === editarCostoProductoSeleccionado);
+    if (filaActual) editarCostoValor.value = filaActual.costo;
+    editarCostoGuardadoMsg.style.display = "inline";
+    renderCrecimiento();
+  } catch (err) {
+    alert("No se pudo guardar el costo.\n" + err.message);
+  } finally {
+    editarCostoGuardarBtn.disabled = false;
+  }
+});
 
 // ---------- Calculadora de rentabilidad ----------
 

@@ -92,6 +92,34 @@
     </section>
 
     <section class="card">
+      <h2>Editar costo de un producto</h2>
+      <p class="hint" style="text-align:left;">Buscá cualquier producto o combo y cambiale el precio de costo directamente.</p>
+
+      <div class="field autocomplete-field">
+        <label for="editar-costo-producto-input">Producto</label>
+        <input type="text" id="editar-costo-producto-input" placeholder="Buscar producto..." autocomplete="off">
+        <div class="suggestions" id="editar-costo-producto-suggestions"></div>
+      </div>
+
+      <p class="hint error-hint" id="editar-costo-combo-hint" style="display:none; text-align:left;">
+        Este producto es un combo con componentes vinculados: su costo se recalcula solo cuando cambia el costo de alguno de sus componentes. Si lo editás acá a mano, se va a pisar la próxima vez que eso pase.
+      </p>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="editar-costo-valor">Precio costo</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="editar-costo-valor" min="0" step="0.01" placeholder="0" disabled>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="editar-costo-guardar-btn" class="submit-btn" style="width:auto; padding:12px 22px;" disabled>Guardar costo</button>
+      <span class="hint" id="editar-costo-guardado" style="display:none; margin-left:12px; color:var(--green);">Guardado ✓</span>
+    </section>
+
+    <section class="card">
       <h2>Composición de combos</h2>
       <p class="hint" style="text-align:left;">
         Los combos comparten stock con sus productos individuales. Definí acá de qué productos está hecho cada combo,
