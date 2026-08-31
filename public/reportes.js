@@ -368,9 +368,16 @@ function renderPeriodo(tipo) {
       });
       return g;
     });
-    fechasEnRango = semanas.flatMap(fechasDeSemana);
+    // Las tarjetas de arriba ("Del mes") tienen que coincidir con la pestaña "Mes": se
+    // calculan sobre los días exactos del mes elegido, no sobre semanas completas — la
+    // primera y la última semana del mes casi siempre incluyen días de otro mes (las
+    // semanas van de lunes a domingo), y antes esos días se colaban en el total.
+    fechasEnRango = Object.keys(porFechaGlobal).filter(fecha => getMonthKey(fecha) === mesSeleccionado);
     rangoLabel = getMonthLabel(mesSeleccionado);
-    actual = grupos.reduce(sumarEnGrupo, grupoVacio("actual", rangoLabel));
+    actual = fechasEnRango.reduce(
+      (acc, fecha) => sumarEnGrupo(acc, { ...porFechaGlobal[fecha], diasConDatos: 1 }),
+      grupoVacio("actual", rangoLabel)
+    );
     diasEnPeriodo = getDiasEnMes(mesSeleccionado);
   } else {
     // Mes: histórico completo, sin filtro (como estaba antes)
