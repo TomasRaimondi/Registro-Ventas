@@ -416,6 +416,7 @@ function renderPeriodo(tipo) {
   const pctRetornoGeneral = fmtPct(brutaActual, volumenTotalActual);
   const pctRetornoMinorista = fmtPct(actual.gananciaBruta, actual.volumen);
   const pctRetornoMayorista = fmtPct(actual.gananciaBrutaMayorista, actual.volumenMayorista);
+  const pctRetornoNeto = fmtPct(netaActual, volumenTotalActual);
 
   document.getElementById("label-volumen").textContent = actual.label;
   document.getElementById("label-volumen-mayorista").textContent = actual.label;
@@ -426,6 +427,7 @@ function renderPeriodo(tipo) {
   document.getElementById("label-ganancia-bruta-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-neta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-pct-retorno-neto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-dias").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -454,6 +456,10 @@ function renderPeriodo(tipo) {
   statGananciaNeta.textContent = money(netaActual);
   statGananciaNeta.classList.toggle("value-positive", netaActual > 0);
   statGananciaNeta.classList.toggle("value-negative", netaActual < 0);
+  const statPctRetornoNeto = document.getElementById("stat-pct-retorno-neto");
+  statPctRetornoNeto.textContent = pctRetornoNeto !== null ? pctRetornoNeto.toFixed(1) + "%" : "—";
+  statPctRetornoNeto.classList.toggle("value-positive", pctRetornoNeto !== null && pctRetornoNeto > 0);
+  statPctRetornoNeto.classList.toggle("value-negative", pctRetornoNeto !== null && pctRetornoNeto < 0);
   document.getElementById("stat-gasto").textContent = money(actual.gasto);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
