@@ -4,6 +4,7 @@ const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
 const db = require("./db");
+const tiendanube = require("./tiendanube");
 
 const PORT = process.env.PORT || 3000;
 const TIMEZONE = "America/Argentina/Buenos_Aires";
@@ -1037,6 +1038,38 @@ const server = http.createServer(async (req, res) => {
       const fecha = decodeURIComponent(pathname.slice("/api/balance/".length));
       await db.deleteBalanceManual(fecha);
       return sendJson(res, 200, { ok: true });
+    }
+
+    // ---------- Recompra de clientes (vive de la API de Tiendanube, no de la DB local) ----------
+
+    if (pathname === "/api/clientes-recompra" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!tiendanube.isConfigured()) {
+        return sendJson(res, 503, { error: "La tienda no está conectada (falta tiendanube-config.json)." });
+      }
+      try {
+        const forzar = query.get("forzar") === "1";
+        const resultado = await tiendanube.getClientesRecompra({ forzar });
+        return sendJson(res, 200, resultado);
+      } catch (e) {
+        console.error("Error consultando Tiendanube:", e);
+        return sendJson(res, 502, { error: "No se pudo consultar Tiendanube: " + e.message });
+      }
+    }
+
+    if (pathname === "/api/clientes-recompra/cupon" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!tiendanube.isConfigured()) {
+        return sendJson(res, 503, { error: "La tienda no está conectada (falta tiendanube-config.json)." });
+      }
+      try {
+        const body = await readJsonBody(req);
+        const cupon = await tiendanube.generarCupon({ porcentaje: body.porcentaje, nota: body.nota });
+        return sendJson(res, 201, cupon);
+      } catch (e) {
+        console.error("Error creando cupón en Tiendanube:", e);
+        return sendJson(res, 502, { error: "No se pudo crear el cupón: " + e.message });
+      }
     }
 
     if (req.method === "GET") {

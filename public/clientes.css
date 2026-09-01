@@ -1,0 +1,135 @@
+.clientes-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.clientes-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.clientes-controles input[type="text"] {
+  min-width: 220px;
+}
+
+.umbral-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.umbral-field input[type="number"] {
+  width: 64px;
+}
+
+.umbral-field select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--text);
+}
+
+.sync-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.cliente-nombre { font-weight: 700; }
+.cliente-email { display: block; font-size: 12px; color: var(--text-dim); }
+
+.wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 100px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.wa-btn:hover { filter: brightness(1.1); }
+.sin-telefono { color: var(--text-dim); font-size: 12px; }
+
+.badge-segmento {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-segmento.recompro { background: var(--green-soft); color: var(--green); }
+.badge-segmento.unico { background: var(--blue-soft); color: var(--blue); }
+.badge-segmento.inactivo { background: var(--red-soft); color: var(--red); }
+
+.productos-lista {
+  font-size: 12px;
+  color: var(--text-dim);
+  max-width: 260px;
+}
+.productos-lista .ver-mas { color: var(--accent); cursor: pointer; font-weight: 700; }
+
+.dias-sin-comprar { display: block; font-size: 11px; color: var(--text-dim); }
+
+.cupon-btn {
+  padding: 6px 12px;
+  border-radius: 100px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cupon-btn:hover { background: var(--accent-soft); }
+.cupon-btn:disabled { opacity: 0.5; cursor: default; }
+
+.cupon-generado {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.cupon-codigo {
+  font-weight: 800;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.fila-detalle { background: var(--bg-soft); }
+.fila-detalle td { padding: 14px 16px; }
+.detalle-pedido {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 12px;
+}
+.detalle-pedido:last-child { border-bottom: none; }
+.detalle-pedido-productos { color: var(--text-dim); }
+
+tr.fila-cliente { cursor: pointer; }
+tr.fila-cliente:hover { background: var(--accent-soft); }

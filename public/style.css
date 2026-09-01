@@ -841,6 +841,14 @@ body.modo-empleado #link-panel-ganancias {
 }
 .link-btn:hover { color: var(--accent); }
 
+.link-btn-destacado {
+  color: var(--accent) !important;
+  background: var(--accent-soft);
+  padding: 6px 14px;
+  border-radius: 100px;
+}
+.link-btn-destacado:hover { filter: brightness(1.15); }
+
 .layout-single {
   max-width: 800px;
   margin: 0 auto;
