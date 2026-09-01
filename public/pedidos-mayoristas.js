@@ -483,6 +483,17 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
       editandoVentaId = null;
     }
 
+    // Guarda (o actualiza) el teléfono del cliente en la libreta de mayoristas, para que
+    // "Recompra Mayoristas" tenga con quién contactarlo. No bloquea el guardado del pedido
+    // si esto falla: es un extra, no algo crítico.
+    if (datosCliente.telefono) {
+      api("/api/clientes-mayoristas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: datosCliente.nombre, telefono: datosCliente.telefono }),
+      }).catch((err) => console.error("No se pudo guardar el teléfono del cliente mayorista:", err));
+    }
+
     // Siempre dice "PRESUPUESTO", se haya guardado como venta o no: sin CAE ni
     // registro en AFIP esto no es legalmente una factura, aunque el pedido sí haya
     // quedado guardado como venta real (con stock descontado) en el sistema.

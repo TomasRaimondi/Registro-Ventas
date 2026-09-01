@@ -5,6 +5,7 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const db = require("./db");
 const tiendanube = require("./tiendanube");
+const mayoristas = require("./mayoristas");
 
 const PORT = process.env.PORT || 3000;
 const TIMEZONE = "America/Argentina/Buenos_Aires";
@@ -1070,6 +1071,50 @@ const server = http.createServer(async (req, res) => {
         console.error("Error creando cupón en Tiendanube:", e);
         return sendJson(res, 502, { error: "No se pudo crear el cupón: " + e.message });
       }
+    }
+
+    // ---------- Recompra de clientes mayoristas (se arma a partir de la base local) ----------
+
+    if (pathname === "/api/clientes-mayoristas" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllClientesMayoristas();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/clientes-mayoristas" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const nombre = String(body.nombre || "").trim();
+      if (!nombre) return sendJson(res, 400, { error: "Falta el nombre del cliente" });
+      const nombreNormalizado = normalizeNombre(nombre);
+      const ahora = new Date().toISOString();
+      await db.upsertClienteMayorista({
+        id: crypto.randomUUID(),
+        nombreNormalizado,
+        nombre,
+        telefono: body.telefono ? String(body.telefono).trim() : null,
+        notas: body.notas ? String(body.notas).trim() : null,
+        creadoEn: ahora,
+        actualizadoEn: ahora,
+      });
+      const row = await db.getClienteMayoristaPorNombre(nombreNormalizado);
+      return sendJson(res, 200, row);
+    }
+
+    if (pathname === "/api/recompra-mayoristas" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const [ventas, items, clientesGuardados] = await Promise.all([
+        db.getAllVentas(),
+        db.getAllItems(),
+        db.getAllClientesMayoristas(),
+      ]);
+      const clientes = mayoristas.agregarClientesMayoristas({
+        ventas,
+        items,
+        clientesGuardados,
+        hoyFecha: getArgentinaNow().fecha,
+      });
+      return sendJson(res, 200, { clientes });
     }
 
     if (req.method === "GET") {

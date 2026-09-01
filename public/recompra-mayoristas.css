@@ -1,0 +1,31 @@
+.badge-segmento.recurrente { background: var(--green-soft); color: var(--green); }
+
+.cadencia-info {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cadencia-info.atrasado { color: var(--red); font-weight: 700; }
+
+.tel-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tel-inline input[type="text"] {
+  padding: 6px 8px;
+  font-size: 12px;
+  width: 130px;
+}
+.tel-inline button {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tel-inline button:hover { background: var(--accent-soft); }

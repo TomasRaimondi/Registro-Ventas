@@ -550,6 +550,7 @@ tbody tr:last-child td { border-bottom: none; }
 body.modo-empleado .col-costo,
 body.modo-empleado #vista-recientes,
 body.modo-empleado #factura-vista-tabs,
+body.modo-empleado #link-recompra-mayoristas,
 body.modo-empleado #link-panel-ganancias {
   display: none !important;
 }

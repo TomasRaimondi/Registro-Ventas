@@ -103,6 +103,15 @@ const SCHEMA = `
     haciaId TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS clientes_mayoristas (
+    id TEXT PRIMARY KEY,
+    nombreNormalizado TEXT NOT NULL UNIQUE,
+    nombre TEXT NOT NULL,
+    telefono TEXT,
+    notas TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -345,6 +354,27 @@ if (USE_TURSO) {
     },
     async deleteTableroConexion(id) {
       await client.execute({ sql: "DELETE FROM tablero_conexiones WHERE id = ?", args: [id] });
+    },
+
+    async getAllClientesMayoristas() {
+      const res = await client.execute("SELECT * FROM clientes_mayoristas ORDER BY nombre ASC");
+      return res.rows;
+    },
+    async getClienteMayoristaPorNombre(nombreNormalizado) {
+      const res = await client.execute({ sql: "SELECT * FROM clientes_mayoristas WHERE nombreNormalizado = ?", args: [nombreNormalizado] });
+      return res.rows[0] || null;
+    },
+    async upsertClienteMayorista(row) {
+      await client.execute({
+        sql: `INSERT INTO clientes_mayoristas (id, nombreNormalizado, nombre, telefono, notas, creadoEn, actualizadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(nombreNormalizado) DO UPDATE SET
+                nombre = excluded.nombre,
+                telefono = COALESCE(NULLIF(excluded.telefono, ''), clientes_mayoristas.telefono),
+                notas = COALESCE(excluded.notas, clientes_mayoristas.notas),
+                actualizadoEn = excluded.actualizadoEn`,
+        args: [row.id, row.nombreNormalizado, row.nombre, row.telefono || null, row.notas || null, row.creadoEn, row.actualizadoEn],
+      });
     },
 
     async getAllBalanceManual() {
@@ -595,6 +625,24 @@ if (USE_TURSO) {
     },
     async deleteTableroConexion(id) {
       db.prepare("DELETE FROM tablero_conexiones WHERE id = ?").run(id);
+    },
+
+    async getAllClientesMayoristas() {
+      return db.prepare("SELECT * FROM clientes_mayoristas ORDER BY nombre ASC").all();
+    },
+    async getClienteMayoristaPorNombre(nombreNormalizado) {
+      return db.prepare("SELECT * FROM clientes_mayoristas WHERE nombreNormalizado = ?").get(nombreNormalizado) || null;
+    },
+    async upsertClienteMayorista(row) {
+      db.prepare(
+        `INSERT INTO clientes_mayoristas (id, nombreNormalizado, nombre, telefono, notas, creadoEn, actualizadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(nombreNormalizado) DO UPDATE SET
+           nombre = excluded.nombre,
+           telefono = COALESCE(NULLIF(excluded.telefono, ''), clientes_mayoristas.telefono),
+           notas = COALESCE(excluded.notas, clientes_mayoristas.notas),
+           actualizadoEn = excluded.actualizadoEn`
+      ).run(row.id, row.nombreNormalizado, row.nombre, row.telefono || null, row.notas || null, row.creadoEn, row.actualizadoEn);
     },
 
     async getAllBalanceManual() {

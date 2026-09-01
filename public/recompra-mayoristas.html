@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recompra Mayoristas</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="clientes.css">
+<link rel="stylesheet" href="recompra-mayoristas.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Recompra Mayoristas</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/pedidos-mayoristas.html" class="link-btn">Pedidos Mayoristas →</a>
+    <a href="/ganancias.html" class="link-btn">← Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <p class="hint" style="text-align:left; margin-bottom:4px;">
+      Se arma a partir de los pedidos guardados en "Pedidos Mayoristas". El teléfono se guarda solo
+      a partir de ahora (cuando lo cargás en un pedido, o lo agregás acá abajo a mano).
+    </p>
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:20px;">
+      <div class="card metric-card">
+        <span class="label">Clientes mayoristas</span>
+        <span class="big-number" id="stat-total">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Recurrentes (2+ pedidos)</span>
+        <span class="big-number" id="stat-recurrente" style="color:var(--green);">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Un solo pedido</span>
+        <span class="big-number" id="stat-unico" style="color:var(--blue);">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Atrasados (según umbral)</span>
+        <span class="big-number" id="stat-atrasado" style="color:var(--red);">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Volumen mensual total (prom. 3m)</span>
+        <span class="big-number" id="stat-volumen-mensual" style="color:var(--orange);">$0</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="clientes-toolbar">
+        <div class="periodo-tabs" id="segmento-tabs">
+          <button type="button" class="periodo-tab active" data-segmento="todos">Todos</button>
+          <button type="button" class="periodo-tab" data-segmento="recurrente">Recurrentes</button>
+          <button type="button" class="periodo-tab" data-segmento="unico">Un solo pedido</button>
+          <button type="button" class="periodo-tab" data-segmento="atrasado">Atrasados</button>
+        </div>
+
+        <div class="clientes-controles">
+          <input type="text" id="buscador" placeholder="Buscar cliente...">
+          <label class="umbral-field">
+            Atrasado desde
+            <input type="number" id="umbral-dias" min="1" step="1" value="30">
+            días sin comprar
+          </label>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>WhatsApp</th>
+              <th>Pedidos</th>
+              <th>Última compra</th>
+              <th>Volumen mensual (prom. 3m)</th>
+              <th>Volumen total</th>
+              <th>Qué más compra</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="clientes-body">
+            <tr class="empty-row"><td colspan="8">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="recompra-mayoristas.js"></script>
+</body>
+</html>
