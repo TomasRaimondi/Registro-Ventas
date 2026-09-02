@@ -155,125 +155,6 @@ vpForm.addEventListener("submit", (e) => {
 
 cargarContadorVentasPerdidas();
 
-// ---------- Comparador vs. semana pasada ----------
-
-function fechaHaceNDias(fechaStr, n) {
-  const [y, m, d] = fechaStr.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() - n);
-  return date.toISOString().slice(0, 10);
-}
-
-function horaActualArgentina() {
-  return Number(new Intl.DateTimeFormat("en-US", { timeZone: TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
-}
-
-// Se cachea porque la venta de "la semana pasada" no cambia durante el día: no hace
-// falta pedirla de nuevo cada vez que refresh() corre cada 5 segundos.
-let semanaPasadaCache = { fecha: null, ventas: null };
-
-async function actualizarComparador(todaySales) {
-  const hoyFecha = getHoyFechaArgentina();
-  const semanaPasadaFecha = fechaHaceNDias(hoyFecha, 7);
-
-  if (semanaPasadaCache.fecha !== semanaPasadaFecha) {
-    try {
-      semanaPasadaCache = { fecha: semanaPasadaFecha, ventas: await fetchSalesForDate(semanaPasadaFecha) };
-    } catch (e) {
-      return;
-    }
-  }
-
-  const horaActual = horaActualArgentina();
-  const totalHoy = todaySales.filter((v) => v.hora <= horaActual).reduce((a, v) => a + v.precio, 0);
-  const totalSemanaPasada = (semanaPasadaCache.ventas || [])
-    .filter((v) => v.hora <= horaActual)
-    .reduce((a, v) => a + v.precio, 0);
-
-  const diffEl = document.getElementById("comparador-diff");
-  if (totalSemanaPasada > 0) {
-    const pct = ((totalHoy - totalSemanaPasada) / totalSemanaPasada) * 100;
-    diffEl.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(0) + "%";
-    diffEl.classList.toggle("value-positive", pct >= 0);
-    diffEl.classList.toggle("value-negative", pct < 0);
-  } else if (totalHoy > 0) {
-    diffEl.textContent = "+100%";
-    diffEl.classList.add("value-positive");
-    diffEl.classList.remove("value-negative");
-  } else {
-    diffEl.textContent = "—";
-    diffEl.classList.remove("value-positive", "value-negative");
-  }
-  document.getElementById("comparador-detalle").textContent = `Hoy ${money(totalHoy)} · Semana pasada ${money(totalSemanaPasada)}`;
-}
-
-// ---------- Clientes para contactar hoy ----------
-// Solo se muestra si esta sesión del navegador está logueada como dueño (comparte
-// cookie con el resto del panel). Si no, la card se queda oculta: esta pantalla la
-// usa el empleado sin login, y esos datos hoy están protegidos con contraseña.
-
-let clientesContactarCargado = false;
-
-async function cargarClientesParaContactar() {
-  if (clientesContactarCargado) return;
-
-  try {
-    const { authenticated, role } = await api("/api/auth-check");
-    if (!authenticated || role !== "owner") return;
-
-    const [retailData, mayoristasData] = await Promise.all([
-      api("/api/clientes-recompra").catch(() => ({ clientes: [] })),
-      api("/api/recompra-mayoristas").catch(() => ({ clientes: [] })),
-    ]);
-
-    const UMBRAL_RETAIL = 45;
-    const UMBRAL_MAYORISTA = 30;
-
-    const mayoristasAtrasados = (mayoristasData.clientes || [])
-      .filter((c) => c.atrasadoSegunRitmo || (c.diasSinComprar != null && c.diasSinComprar >= UMBRAL_MAYORISTA))
-      .sort((a, b) => b.totalVolumen - a.totalVolumen)
-      .slice(0, 3)
-      .map((c) => ({
-        nombre: c.nombre,
-        whatsapp: c.whatsapp,
-        detalle: c.cadenciaDiasPromedio
-          ? `Mayorista · suele comprar cada ${c.cadenciaDiasPromedio} días, van ${c.diasSinComprar}`
-          : `Mayorista · hace ${c.diasSinComprar} días sin comprar`,
-      }));
-
-    const retailInactivos = (retailData.clientes || [])
-      .filter((c) => c.compras >= 1 && c.diasSinComprar != null && c.diasSinComprar >= UMBRAL_RETAIL)
-      .sort((a, b) => (b.diasSinComprar || 0) - (a.diasSinComprar || 0))
-      .slice(0, 3)
-      .map((c) => ({
-        nombre: c.nombre,
-        whatsapp: c.whatsapp,
-        detalle: `Web · hace ${c.diasSinComprar} días sin comprar`,
-      }));
-
-    const combinados = [...mayoristasAtrasados, ...retailInactivos].slice(0, 5);
-    if (!combinados.length) return;
-
-    const lista = document.getElementById("clientes-contactar-lista");
-    lista.innerHTML = combinados.map((c) => `
-      <div class="cc-item">
-        <div class="cc-info">
-          <strong>${escapeHtml(c.nombre)}</strong>
-          <small>${escapeHtml(c.detalle)}</small>
-        </div>
-        ${c.whatsapp ? `<a class="wa-btn" href="${c.whatsapp}" target="_blank" rel="noopener">💬</a>` : ""}
-      </div>
-    `).join("");
-
-    document.getElementById("clientes-contactar-card").style.display = "flex";
-    clientesContactarCargado = true;
-  } catch (e) {
-    // Silencioso: si algo falla acá, la card se queda oculta y no molesta al empleado.
-  }
-}
-
-cargarClientesParaContactar();
-
 // ---------- Autocompletado de producto ----------
 
 let listaProductos = [];
@@ -631,8 +512,6 @@ async function refresh() {
 
   renderMetrics(todaySales);
   renderHistory(historySales, fechaActiva, hoyFecha);
-
-  if (fechaActiva === hoyFecha) actualizarComparador(todaySales);
 }
 
 // ---------- Desglose por producto de una venta ----------

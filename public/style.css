@@ -463,39 +463,6 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .payment-item .pm-name { font-size: 12px; color: var(--text-dim); font-weight: 600; }
 .payment-item .pm-value { font-size: 18px; font-weight: 800; }
 
-.comparador-card { display: flex; flex-direction: column; justify-content: center; }
-.comparador-card .big-number { font-size: 32px; }
-.comparador-card .sub { color: var(--text-dim); font-size: 13px; }
-
-.clientes-contactar-card { display: flex; flex-direction: column; gap: 10px; }
-.cc-lista { display: flex; flex-direction: column; gap: 8px; }
-.cc-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--bg-soft);
-}
-.cc-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.cc-info strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cc-info small { font-size: 11px; color: var(--text-dim); }
-.cc-item .wa-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--green-soft);
-  color: var(--green);
-  text-decoration: none;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-.cc-item .wa-btn:hover { filter: brightness(1.1); }
-
 .chart-card { grid-column: 1 / -1; }
 .chart {
   display: flex;
