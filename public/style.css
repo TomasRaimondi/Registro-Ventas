@@ -833,22 +833,38 @@ body.modo-empleado #link-panel-ganancias {
 
 /* ---------- Panel de Ganancias ---------- */
 
-.topbar-actions { display: flex; align-items: center; gap: 16px; }
+.topbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .link-btn {
+  display: inline-flex;
+  align-items: center;
   color: var(--text-dim);
   text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  transition: border-color .15s ease, color .15s ease, background .15s ease, transform .1s ease;
 }
-.link-btn:hover { color: var(--accent); }
+.link-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+.link-btn:active { transform: translateY(0); }
 
 .link-btn-destacado {
   color: var(--accent) !important;
   background: var(--accent-soft);
-  padding: 6px 14px;
-  border-radius: 100px;
+  border-color: var(--accent);
 }
-.link-btn-destacado:hover { filter: brightness(1.15); }
+.link-btn-destacado:hover {
+  background: var(--accent);
+  color: var(--bg) !important;
+}
 
 .layout-single {
   max-width: 800px;
