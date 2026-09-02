@@ -17,7 +17,14 @@
     <a href="/salario.html" class="link-btn">Mi salario</a>
     <a href="/tablero.html" class="link-btn">Tablero</a>
     <a href="/clientes.html" class="link-btn link-btn-destacado">Recompra de Clientes</a>
+    <a href="/ventas-perdidas.html" class="link-btn">Ventas Perdidas</a>
     <a href="/ganancias.html" class="link-btn">Panel de ganancias</a>
+    <button type="button" id="venta-perdida-btn" class="venta-perdida-btn">
+      <span class="vp-btn-texto">
+        <strong>Venta perdida</strong>
+        <small>hoy: <span id="vp-contador-hoy">0</span></small>
+      </span>
+    </button>
     <div class="clock">
       <span id="clock-time">--:--:--</span>
       <span id="clock-date">--</span>
@@ -128,6 +135,17 @@
       </div>
     </div>
 
+    <div class="card comparador-card">
+      <span class="label">Vs. semana pasada (misma hora)</span>
+      <span class="big-number" id="comparador-diff">—</span>
+      <span class="sub" id="comparador-detalle">Hoy $0 · Semana pasada $0</span>
+    </div>
+
+    <div class="card clientes-contactar-card" id="clientes-contactar-card" style="display:none;">
+      <span class="label">Clientes para contactar hoy</span>
+      <div id="clientes-contactar-lista" class="cc-lista"></div>
+    </div>
+
     <div class="card chart-card">
       <span class="label">Volumen de ventas por hora</span>
       <div class="chart" id="hour-chart"></div>
@@ -163,6 +181,28 @@
   </section>
 
 </main>
+
+<div id="venta-perdida-modal" class="modal-overlay" style="display:none;">
+  <div class="card modal-card">
+    <button type="button" class="modal-cerrar" id="vp-cerrar-btn" aria-label="Cerrar">×</button>
+    <h2>¿Qué pasó?</h2>
+    <p class="hint" style="text-align:left;">Contanos rápido por qué no compró.</p>
+
+    <div class="vp-opciones-rapidas">
+      <button type="button" class="vp-opcion-btn" data-motivo="Estaba mirando precios">Estaba mirando precios</button>
+      <button type="button" class="vp-opcion-btn" data-motivo="Faltaba un producto">Faltaba un producto</button>
+      <button type="button" class="vp-opcion-btn" data-motivo="Faltaba un sabor">Faltaba un sabor</button>
+    </div>
+
+    <div class="vp-separador"><span>o escribí qué pasó</span></div>
+
+    <form id="vp-form" autocomplete="off">
+      <textarea id="vp-texto" rows="3" placeholder="Ej: buscaba una marca que no tenemos..."></textarea>
+      <button type="submit" class="submit-btn">Guardar</button>
+    </form>
+    <p class="hint error-hint" id="vp-error" style="display:none;"></p>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>

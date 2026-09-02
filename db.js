@@ -103,6 +103,13 @@ const SCHEMA = `
     haciaId TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS ventas_perdidas (
+    id TEXT PRIMARY KEY,
+    motivo TEXT NOT NULL,
+    fecha TEXT NOT NULL,
+    horaLabel TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS clientes_mayoristas (
     id TEXT PRIMARY KEY,
     nombreNormalizado TEXT NOT NULL UNIQUE,
@@ -354,6 +361,20 @@ if (USE_TURSO) {
     },
     async deleteTableroConexion(id) {
       await client.execute({ sql: "DELETE FROM tablero_conexiones WHERE id = ?", args: [id] });
+    },
+
+    async getVentasPerdidasByFecha(fecha) {
+      const res = await client.execute({ sql: "SELECT * FROM ventas_perdidas WHERE fecha = ? ORDER BY creadoEn ASC", args: [fecha] });
+      return res.rows;
+    },
+    async insertVentaPerdida(row) {
+      await client.execute({
+        sql: `INSERT INTO ventas_perdidas (id, motivo, fecha, horaLabel, creadoEn) VALUES (?, ?, ?, ?, ?)`,
+        args: [row.id, row.motivo, row.fecha, row.horaLabel, row.creadoEn],
+      });
+    },
+    async deleteVentaPerdida(id) {
+      await client.execute({ sql: "DELETE FROM ventas_perdidas WHERE id = ?", args: [id] });
     },
 
     async getAllClientesMayoristas() {
@@ -625,6 +646,18 @@ if (USE_TURSO) {
     },
     async deleteTableroConexion(id) {
       db.prepare("DELETE FROM tablero_conexiones WHERE id = ?").run(id);
+    },
+
+    async getVentasPerdidasByFecha(fecha) {
+      return db.prepare("SELECT * FROM ventas_perdidas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
+    },
+    async insertVentaPerdida(row) {
+      db.prepare(
+        `INSERT INTO ventas_perdidas (id, motivo, fecha, horaLabel, creadoEn) VALUES (?, ?, ?, ?, ?)`
+      ).run(row.id, row.motivo, row.fecha, row.horaLabel, row.creadoEn);
+    },
+    async deleteVentaPerdida(id) {
+      db.prepare("DELETE FROM ventas_perdidas WHERE id = ?").run(id);
     },
 
     async getAllClientesMayoristas() {

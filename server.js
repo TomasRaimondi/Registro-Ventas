@@ -370,6 +370,30 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (pathname === "/api/ventas-perdidas" && req.method === "GET") {
+      const fecha = query.get("fecha") || getArgentinaNow().fecha;
+      const rows = await db.getVentasPerdidasByFecha(fecha);
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/ventas-perdidas" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const motivo = String(body.motivo || "").trim().slice(0, 500);
+      if (!motivo) return sendJson(res, 400, { error: "Falta el motivo" });
+
+      const { fecha, horaLabel } = getArgentinaNow();
+      const row = { id: crypto.randomUUID(), motivo, fecha, horaLabel, creadoEn: new Date().toISOString() };
+      await db.insertVentaPerdida(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/ventas-perdidas/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/ventas-perdidas/".length));
+      await db.deleteVentaPerdida(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (pathname === "/api/hora" && req.method === "GET") {
       return sendJson(res, 200, getArgentinaNow());
     }

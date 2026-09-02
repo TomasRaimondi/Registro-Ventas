@@ -67,6 +67,213 @@ function formatFechaLarga(fechaStr) {
   return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(date);
 }
 
+// ---------- Venta perdida ----------
+
+const vpBtn = document.getElementById("venta-perdida-btn");
+const vpModal = document.getElementById("venta-perdida-modal");
+const vpForm = document.getElementById("vp-form");
+const vpTexto = document.getElementById("vp-texto");
+const vpError = document.getElementById("vp-error");
+const vpContador = document.getElementById("vp-contador-hoy");
+
+async function cargarContadorVentasPerdidas() {
+  try {
+    const rows = await api("/api/ventas-perdidas");
+    vpContador.textContent = rows.length;
+  } catch (e) {
+    // No es crítico para el flujo de venta: si falla, se queda con el número anterior.
+  }
+}
+
+function abrirModalVentaPerdida() {
+  vpTexto.value = "";
+  vpError.style.display = "none";
+  document.querySelectorAll(".vp-opcion-btn").forEach((b) => {
+    b.disabled = false;
+    b.textContent = b.dataset.motivo;
+  });
+  vpModal.style.display = "flex";
+  vpTexto.focus();
+}
+
+function cerrarModalVentaPerdida() {
+  vpModal.style.display = "none";
+}
+
+async function guardarVentaPerdida(motivo, botonQueDisparo) {
+  try {
+    await api("/api/ventas-perdidas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motivo }),
+    });
+    cerrarModalVentaPerdida();
+    await cargarContadorVentasPerdidas();
+    // El "pop" en el botón es el feedback de que quedó guardado. Se saca la clase
+    // apenas termina la animación para que el pulso de fondo (vp-glow) siga andando.
+    vpBtn.classList.remove("vp-pop");
+    void vpBtn.offsetWidth;
+    vpBtn.classList.add("vp-pop");
+    setTimeout(() => vpBtn.classList.remove("vp-pop"), 400);
+  } catch (err) {
+    if (botonQueDisparo) {
+      botonQueDisparo.disabled = false;
+      botonQueDisparo.textContent = botonQueDisparo.dataset.motivo;
+    }
+    vpError.textContent = err.message || "No se pudo guardar.";
+    vpError.style.display = "block";
+  }
+}
+
+vpBtn.addEventListener("click", abrirModalVentaPerdida);
+document.getElementById("vp-cerrar-btn").addEventListener("click", cerrarModalVentaPerdida);
+vpModal.addEventListener("click", (e) => {
+  if (e.target === vpModal) cerrarModalVentaPerdida();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && vpModal.style.display !== "none") cerrarModalVentaPerdida();
+});
+
+document.querySelectorAll(".vp-opcion-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    btn.disabled = true;
+    btn.textContent = "Guardando...";
+    guardarVentaPerdida(btn.dataset.motivo, btn);
+  });
+});
+
+vpForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const motivo = vpTexto.value.trim();
+  if (!motivo) {
+    vpError.textContent = "Escribí algo, aunque sea corto.";
+    vpError.style.display = "block";
+    return;
+  }
+  guardarVentaPerdida(motivo, null);
+});
+
+cargarContadorVentasPerdidas();
+
+// ---------- Comparador vs. semana pasada ----------
+
+function fechaHaceNDias(fechaStr, n) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() - n);
+  return date.toISOString().slice(0, 10);
+}
+
+function horaActualArgentina() {
+  return Number(new Intl.DateTimeFormat("en-US", { timeZone: TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+}
+
+// Se cachea porque la venta de "la semana pasada" no cambia durante el día: no hace
+// falta pedirla de nuevo cada vez que refresh() corre cada 5 segundos.
+let semanaPasadaCache = { fecha: null, ventas: null };
+
+async function actualizarComparador(todaySales) {
+  const hoyFecha = getHoyFechaArgentina();
+  const semanaPasadaFecha = fechaHaceNDias(hoyFecha, 7);
+
+  if (semanaPasadaCache.fecha !== semanaPasadaFecha) {
+    try {
+      semanaPasadaCache = { fecha: semanaPasadaFecha, ventas: await fetchSalesForDate(semanaPasadaFecha) };
+    } catch (e) {
+      return;
+    }
+  }
+
+  const horaActual = horaActualArgentina();
+  const totalHoy = todaySales.filter((v) => v.hora <= horaActual).reduce((a, v) => a + v.precio, 0);
+  const totalSemanaPasada = (semanaPasadaCache.ventas || [])
+    .filter((v) => v.hora <= horaActual)
+    .reduce((a, v) => a + v.precio, 0);
+
+  const diffEl = document.getElementById("comparador-diff");
+  if (totalSemanaPasada > 0) {
+    const pct = ((totalHoy - totalSemanaPasada) / totalSemanaPasada) * 100;
+    diffEl.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(0) + "%";
+    diffEl.classList.toggle("value-positive", pct >= 0);
+    diffEl.classList.toggle("value-negative", pct < 0);
+  } else if (totalHoy > 0) {
+    diffEl.textContent = "+100%";
+    diffEl.classList.add("value-positive");
+    diffEl.classList.remove("value-negative");
+  } else {
+    diffEl.textContent = "—";
+    diffEl.classList.remove("value-positive", "value-negative");
+  }
+  document.getElementById("comparador-detalle").textContent = `Hoy ${money(totalHoy)} · Semana pasada ${money(totalSemanaPasada)}`;
+}
+
+// ---------- Clientes para contactar hoy ----------
+// Solo se muestra si esta sesión del navegador está logueada como dueño (comparte
+// cookie con el resto del panel). Si no, la card se queda oculta: esta pantalla la
+// usa el empleado sin login, y esos datos hoy están protegidos con contraseña.
+
+let clientesContactarCargado = false;
+
+async function cargarClientesParaContactar() {
+  if (clientesContactarCargado) return;
+
+  try {
+    const { authenticated, role } = await api("/api/auth-check");
+    if (!authenticated || role !== "owner") return;
+
+    const [retailData, mayoristasData] = await Promise.all([
+      api("/api/clientes-recompra").catch(() => ({ clientes: [] })),
+      api("/api/recompra-mayoristas").catch(() => ({ clientes: [] })),
+    ]);
+
+    const UMBRAL_RETAIL = 45;
+    const UMBRAL_MAYORISTA = 30;
+
+    const mayoristasAtrasados = (mayoristasData.clientes || [])
+      .filter((c) => c.atrasadoSegunRitmo || (c.diasSinComprar != null && c.diasSinComprar >= UMBRAL_MAYORISTA))
+      .sort((a, b) => b.totalVolumen - a.totalVolumen)
+      .slice(0, 3)
+      .map((c) => ({
+        nombre: c.nombre,
+        whatsapp: c.whatsapp,
+        detalle: c.cadenciaDiasPromedio
+          ? `Mayorista · suele comprar cada ${c.cadenciaDiasPromedio} días, van ${c.diasSinComprar}`
+          : `Mayorista · hace ${c.diasSinComprar} días sin comprar`,
+      }));
+
+    const retailInactivos = (retailData.clientes || [])
+      .filter((c) => c.compras >= 1 && c.diasSinComprar != null && c.diasSinComprar >= UMBRAL_RETAIL)
+      .sort((a, b) => (b.diasSinComprar || 0) - (a.diasSinComprar || 0))
+      .slice(0, 3)
+      .map((c) => ({
+        nombre: c.nombre,
+        whatsapp: c.whatsapp,
+        detalle: `Web · hace ${c.diasSinComprar} días sin comprar`,
+      }));
+
+    const combinados = [...mayoristasAtrasados, ...retailInactivos].slice(0, 5);
+    if (!combinados.length) return;
+
+    const lista = document.getElementById("clientes-contactar-lista");
+    lista.innerHTML = combinados.map((c) => `
+      <div class="cc-item">
+        <div class="cc-info">
+          <strong>${escapeHtml(c.nombre)}</strong>
+          <small>${escapeHtml(c.detalle)}</small>
+        </div>
+        ${c.whatsapp ? `<a class="wa-btn" href="${c.whatsapp}" target="_blank" rel="noopener">💬</a>` : ""}
+      </div>
+    `).join("");
+
+    document.getElementById("clientes-contactar-card").style.display = "flex";
+    clientesContactarCargado = true;
+  } catch (e) {
+    // Silencioso: si algo falla acá, la card se queda oculta y no molesta al empleado.
+  }
+}
+
+cargarClientesParaContactar();
+
 // ---------- Autocompletado de producto ----------
 
 let listaProductos = [];
@@ -424,6 +631,8 @@ async function refresh() {
 
   renderMetrics(todaySales);
   renderHistory(historySales, fechaActiva, hoyFecha);
+
+  if (fechaActiva === hoyFecha) actualizarComparador(todaySales);
 }
 
 // ---------- Desglose por producto de una venta ----------

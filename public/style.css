@@ -250,6 +250,114 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
   margin: 4px 0 20px;
 }
 
+/* ---------- Venta perdida ---------- */
+
+.venta-perdida-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 7px 16px;
+  border-radius: 10px;
+  border: 2px solid var(--red);
+  background: var(--red);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  animation: vp-glow 2.2s ease-in-out infinite;
+  transition: transform .12s ease, filter .12s ease;
+}
+.venta-perdida-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.venta-perdida-btn:active { transform: translateY(0) scale(0.96); }
+
+@keyframes vp-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(225, 91, 91, 0.55); }
+  50% { box-shadow: 0 0 0 7px rgba(225, 91, 91, 0); }
+}
+
+@keyframes vp-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.12); }
+  65% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.venta-perdida-btn.vp-pop { animation: vp-pop .4s ease; }
+
+.vp-btn-texto { display: flex; flex-direction: column; align-items: center; }
+.vp-btn-texto strong { font-size: 13px; font-weight: 800; }
+.vp-btn-texto small { font-size: 11px; opacity: 0.9; }
+
+#venta-perdida-modal .modal-card { position: relative; }
+
+.modal-cerrar {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-soft);
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-cerrar:hover { color: var(--red); }
+
+.vp-opciones-rapidas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.vp-opcion-btn {
+  padding: 10px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease, color .12s ease, transform .1s ease;
+}
+.vp-opcion-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.vp-opcion-btn:active { transform: scale(0.96); }
+.vp-opcion-btn:disabled { opacity: .6; cursor: default; }
+
+.vp-separador {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.vp-separador::before, .vp-separador::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--card-border);
+}
+
+#vp-texto {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  margin-bottom: 12px;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -354,6 +462,39 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .payment-item .pm-icon { font-size: 18px; }
 .payment-item .pm-name { font-size: 12px; color: var(--text-dim); font-weight: 600; }
 .payment-item .pm-value { font-size: 18px; font-weight: 800; }
+
+.comparador-card { display: flex; flex-direction: column; justify-content: center; }
+.comparador-card .big-number { font-size: 32px; }
+.comparador-card .sub { color: var(--text-dim); font-size: 13px; }
+
+.clientes-contactar-card { display: flex; flex-direction: column; gap: 10px; }
+.cc-lista { display: flex; flex-direction: column; gap: 8px; }
+.cc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-soft);
+}
+.cc-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cc-info strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-info small { font-size: 11px; color: var(--text-dim); }
+.cc-item .wa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  text-decoration: none;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.cc-item .wa-btn:hover { filter: brightness(1.1); }
 
 .chart-card { grid-column: 1 / -1; }
 .chart {
