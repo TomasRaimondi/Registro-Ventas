@@ -208,24 +208,55 @@ function motivoMasComun(rows) {
   return top;
 }
 
-function renderResumen() {
-  const grupos = new Map(); // clave del período -> filas de ese período
+// Para "día" se arman los últimos 30 días de corrido (con 0 en los que no hubo
+// ninguna), a diferencia de semana/mes que solo muestran períodos con datos: en una
+// ventana tan corta, ver los días en cero también es información útil.
+function entradasPorDia() {
+  const porFecha = new Map();
   todasVentasPerdidas.forEach((r) => {
-    const key = resumenPeriodo === "semana" ? getWeekStart(r.fecha) : getMonthKey(r.fecha);
-    if (!grupos.has(key)) grupos.set(key, []);
-    grupos.get(key).push(r);
+    if (!porFecha.has(r.fecha)) porFecha.set(r.fecha, []);
+    porFecha.get(r.fecha).push(r);
   });
 
-  const entradas = [...grupos.keys()].sort().map((key) => {
-    const rows = grupos.get(key);
-    const label = resumenPeriodo === "semana"
-      ? `${formatFechaCorta(key)} al ${formatFechaCorta(getWeekEnd(key))}`
-      : getMonthLabel(key);
-    return { key, label, cantidad: rows.length, motivoTop: motivoMasComun(rows) };
-  });
+  const [y, m, d] = getHoyFechaArgentina().split("-").map(Number);
+  const dias = [];
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(Date.UTC(y, m - 1, d));
+    date.setUTCDate(date.getUTCDate() - i);
+    const fecha = date.toISOString().slice(0, 10);
+    const rows = porFecha.get(fecha) || [];
+    dias.push({ key: fecha, label: formatFechaLarga(fecha), cantidad: rows.length, motivoTop: motivoMasComun(rows) });
+  }
+  return dias;
+}
 
-  // Gráfico: las últimas 12 (semanas o meses), de más vieja a más nueva.
-  const ultimas = entradas.slice(-12);
+function renderResumen() {
+  let entradas, etiquetaCortaDe, cantidadEnGrafico;
+
+  if (resumenPeriodo === "dia") {
+    entradas = entradasPorDia();
+    etiquetaCortaDe = (e) => formatFechaCorta(e.key);
+    cantidadEnGrafico = 30;
+  } else {
+    const grupos = new Map(); // clave del período -> filas de ese período
+    todasVentasPerdidas.forEach((r) => {
+      const key = resumenPeriodo === "semana" ? getWeekStart(r.fecha) : getMonthKey(r.fecha);
+      if (!grupos.has(key)) grupos.set(key, []);
+      grupos.get(key).push(r);
+    });
+    entradas = [...grupos.keys()].sort().map((key) => {
+      const rows = grupos.get(key);
+      const label = resumenPeriodo === "semana"
+        ? `${formatFechaCorta(key)} al ${formatFechaCorta(getWeekEnd(key))}`
+        : getMonthLabel(key);
+      return { key, label, cantidad: rows.length, motivoTop: motivoMasComun(rows) };
+    });
+    etiquetaCortaDe = (e) => (resumenPeriodo === "semana" ? formatFechaCorta(e.key) : e.key.slice(5));
+    cantidadEnGrafico = 12;
+  }
+
+  // Gráfico: las últimas N, de más vieja a más nueva.
+  const ultimas = entradas.slice(-cantidadEnGrafico);
   const chart = document.getElementById("resumen-chart");
   chart.innerHTML = "";
   const maxVal = Math.max(...ultimas.map((e) => e.cantidad), 1);
@@ -233,11 +264,10 @@ function renderResumen() {
     const heightPct = e.cantidad > 0 ? Math.max((e.cantidad / maxVal) * 100, 4) : 2;
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
-    const etiquetaCorta = resumenPeriodo === "semana" ? formatFechaCorta(e.key) : e.key.slice(5);
     wrap.innerHTML = `
       <span class="chart-bar-value">${e.cantidad || ""}</span>
       <div class="chart-bar" style="height:${heightPct}%" title="${escapeHtml(e.label)}: ${e.cantidad}"></div>
-      <span class="chart-bar-label">${escapeHtml(etiquetaCorta)}</span>
+      <span class="chart-bar-label">${escapeHtml(etiquetaCortaDe(e))}</span>
     `;
     chart.appendChild(wrap);
   });
@@ -263,9 +293,14 @@ document.getElementById("resumen-periodo-tabs").addEventListener("click", (e) =>
   document.querySelectorAll("#resumen-periodo-tabs .periodo-tab").forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   resumenPeriodo = btn.dataset.periodo;
-  document.getElementById("resumen-titulo").textContent =
-    resumenPeriodo === "semana" ? "Ventas perdidas por semana" : "Ventas perdidas por mes";
-  document.getElementById("th-periodo").textContent = resumenPeriodo === "semana" ? "Semana" : "Mes";
+  const TITULOS = {
+    dia: "Ventas perdidas por día (últimos 30 días)",
+    semana: "Ventas perdidas por semana",
+    mes: "Ventas perdidas por mes",
+  };
+  const ENCABEZADOS = { dia: "Día", semana: "Semana", mes: "Mes" };
+  document.getElementById("resumen-titulo").textContent = TITULOS[resumenPeriodo];
+  document.getElementById("th-periodo").textContent = ENCABEZADOS[resumenPeriodo];
   renderResumen();
 });
 
