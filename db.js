@@ -388,6 +388,10 @@ if (USE_TURSO) {
       const res = await client.execute({ sql: "SELECT * FROM ventas_perdidas WHERE fecha = ? ORDER BY creadoEn ASC", args: [fecha] });
       return res.rows;
     },
+    async getAllVentasPerdidas() {
+      const res = await client.execute("SELECT * FROM ventas_perdidas ORDER BY fecha ASC, creadoEn ASC");
+      return res.rows;
+    },
     async insertVentaPerdida(row) {
       await client.execute({
         sql: `INSERT INTO ventas_perdidas (id, motivo, fecha, horaLabel, creadoEn) VALUES (?, ?, ?, ?, ?)`,
@@ -714,6 +718,9 @@ if (USE_TURSO) {
 
     async getVentasPerdidasByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas_perdidas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
+    },
+    async getAllVentasPerdidas() {
+      return db.prepare("SELECT * FROM ventas_perdidas ORDER BY fecha ASC, creadoEn ASC").all();
     },
     async insertVentaPerdida(row) {
       db.prepare(

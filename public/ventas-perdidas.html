@@ -46,6 +46,21 @@
     </section>
 
     <section class="card">
+      <div class="periodo-tabs" id="resumen-periodo-tabs">
+        <button type="button" class="periodo-tab active" data-periodo="semana">Semana</button>
+        <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
+      </div>
+      <h2 id="resumen-titulo">Ventas perdidas por semana</h2>
+      <div class="chart chart-tall" id="resumen-chart"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th id="th-periodo">Semana</th><th>Cantidad</th><th>Motivo más común</th></tr></thead>
+          <tbody id="resumen-body"><tr class="empty-row"><td colspan="3">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
       <div class="history-header">
         <h2>Ventas perdidas de <span id="fecha-label">hoy</span></h2>
         <div class="history-actions">

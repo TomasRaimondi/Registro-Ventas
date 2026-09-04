@@ -554,6 +554,7 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .chart-bar-pair .chart-bar { max-width: 12px; }
 .chart-bar-mayorista { background: linear-gradient(180deg, var(--orange), #c98a2e); }
 .chart-bar-gasto { background: linear-gradient(180deg, var(--red), #b83f3f); }
+#resumen-chart .chart-bar { background: linear-gradient(180deg, var(--red), #b83f3f); }
 .chart-bar-gasto-label {
   display: block;
   font-size: 9px;

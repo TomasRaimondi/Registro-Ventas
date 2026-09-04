@@ -556,6 +556,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, rows);
     }
 
+    // Historial completo, para el resumen por semana/mes. Protegido: es para el dueño,
+    // igual que el resto de la pestaña Ventas Perdidas.
+    if (pathname === "/api/ventas-perdidas-todas" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllVentasPerdidas();
+      return sendJson(res, 200, rows);
+    }
+
     if (pathname === "/api/ventas-perdidas" && req.method === "POST") {
       const body = await readJsonBody(req);
       const motivo = String(body.motivo || "").trim().slice(0, 500);
