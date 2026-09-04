@@ -341,6 +341,12 @@ const REDLINK_BARRIDO_MINUTOS = Number(process.env.REDLINK_BARRIDO_MINUTOS || 15
 
 const redlinkEstado = { ultimaSync: null, ultimoError: null, sincronizando: false };
 
+// Cooldown del botón "Actualizar" manual (compartido entre Pagos recibidos y Registro
+// de Ventas): evita golpear la API de Mercado Pago o el IMAP de Gmail si alguien lo
+// aprieta varias veces seguidas.
+const SYNC_MANUAL_COOLDOWN_MS = 4000;
+let ultimoSyncManual = 0;
+
 // "04/09/2026 - 09:51:57" (ya en hora Argentina, tal cual la manda Red Link) -> fecha +
 // horaLabel para la tabla, y un ISO con el offset -03:00 para poder ordenar junto a los
 // pagos de Mercado Pago.
@@ -1391,9 +1397,20 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // Fuerza una re-consulta contra la API y el correo (botón "Actualizar" del panel).
+    // Fuerza una re-consulta contra la API y el correo (botón "Actualizar"). Público a
+    // propósito: el de Registro de Ventas lo usa el empleado sin login, para no hacer
+    // esperar al cliente en el mostrador. No devuelve nada sensible, solo un resumen.
+    // El cooldown evita que alguien lo deje apretado y sature la API de Mercado Pago o
+    // el IMAP de Gmail.
     if (pathname === "/api/pagos/sincronizar" && req.method === "POST") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const ahora = Date.now();
+      if (ahora - ultimoSyncManual < SYNC_MANUAL_COOLDOWN_MS) {
+        return sendJson(res, 200, {
+          mp: { ok: true, cooldown: true },
+          cuentaDni: { ok: true, cooldown: true },
+        });
+      }
+      ultimoSyncManual = ahora;
       const [resultadoMp, resultadoRedlink] = await Promise.all([
         sincronizarPagosMP({ horasAtras: 24 }),
         sincronizarRedlink({ diasAtras: 2 }),

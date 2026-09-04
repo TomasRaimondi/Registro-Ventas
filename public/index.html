@@ -144,7 +144,10 @@
 
   <!-- Pagos recientes: tocar una fila carga el monto en el formulario de la izquierda -->
   <aside class="card pagos-recientes-card">
-    <span class="label">Transferencias recibidas hoy</span>
+    <div class="pagos-recientes-header">
+      <span class="label">Transferencias recibidas hoy</span>
+      <button type="button" id="pagos-actualizar-btn" class="clear-btn">Actualizar</button>
+    </div>
     <p class="hint" style="text-align:left; margin: 4px 0 12px;">Tocá una para cargar el monto en la venta.</p>
     <div id="pagos-recientes-lista" class="pagos-recientes-lista">
       <p class="hint">Cargando...</p>

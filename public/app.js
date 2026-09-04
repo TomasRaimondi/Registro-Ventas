@@ -160,7 +160,9 @@ cargarContadorVentasPerdidas();
 // la venta al toque tocando la fila (llena el precio y enfoca el producto).
 
 const pagosRecientesLista = document.getElementById("pagos-recientes-lista");
+const pagosActualizarBtn = document.getElementById("pagos-actualizar-btn");
 const pagosUsados = new Set(); // solo visual, se resetea al recargar la página
+let pagosConocidos = null; // null = todavía no cargó nunca (no resaltar nada la primera vez)
 
 function formatMonedaCorta(n) {
   return "$" + Math.round(n || 0).toLocaleString("es-AR");
@@ -169,21 +171,24 @@ function formatMonedaCorta(n) {
 async function cargarPagosRecientes() {
   try {
     const { pagos } = await api("/api/pagos-recientes");
+    const idsNuevos = pagosConocidos ? pagos.filter((p) => !pagosConocidos.has(p.id)).map((p) => p.id) : [];
+    pagosConocidos = new Set(pagos.map((p) => p.id));
+
     if (!pagos.length) {
       pagosRecientesLista.innerHTML = `<p class="hint">Todavía no entró ninguna transferencia hoy.</p>`;
       return;
     }
     pagosRecientesLista.innerHTML = "";
-    pagos.forEach((p) => pagosRecientesLista.appendChild(filaPagoReciente(p)));
+    pagos.forEach((p) => pagosRecientesLista.appendChild(filaPagoReciente(p, idsNuevos.includes(p.id))));
   } catch (e) {
     // Silencioso: si falla, la lista se queda como estaba, no interrumpe la carga de ventas.
   }
 }
 
-function filaPagoReciente(p) {
+function filaPagoReciente(p, esNuevo) {
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "pago-reciente-item" + (pagosUsados.has(p.id) ? " usado" : "");
+  btn.className = "pago-reciente-item" + (pagosUsados.has(p.id) ? " usado" : "") + (esNuevo ? " nuevo" : "");
   const origen = p.origen === "mercadopago" ? "Mercado Pago" : "Cuenta DNI";
   btn.innerHTML = `
     <span class="pago-reciente-info">
@@ -200,6 +205,23 @@ function filaPagoReciente(p) {
   });
   return btn;
 }
+
+// Fuerza una re-consulta contra Mercado Pago y el mail de Cuenta DNI en el momento, en
+// vez de esperar el polling automático — para cuando el cliente está ahí esperando.
+pagosActualizarBtn.addEventListener("click", async () => {
+  pagosActualizarBtn.disabled = true;
+  const textoOriginal = pagosActualizarBtn.textContent;
+  pagosActualizarBtn.textContent = "Buscando...";
+  try {
+    await api("/api/pagos/sincronizar", { method: "POST" });
+    await cargarPagosRecientes();
+  } catch (e) {
+    // Silencioso: si falla la sincronización forzada, el polling automático lo va a reintentar solo.
+  } finally {
+    pagosActualizarBtn.disabled = false;
+    pagosActualizarBtn.textContent = textoOriginal;
+  }
+});
 
 cargarPagosRecientes();
 setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);

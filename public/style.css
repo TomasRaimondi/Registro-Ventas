@@ -465,6 +465,14 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .payment-item .pm-value { font-size: 18px; font-weight: 800; }
 
 .pagos-recientes-card { display: flex; flex-direction: column; }
+.pagos-recientes-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pagos-recientes-header .label { margin: 0; }
+
+@keyframes pago-nuevo-flash {
+  0% { background: var(--green-soft); border-color: var(--green); transform: scale(1.02); }
+  100% { background: var(--bg); border-color: var(--card-border); transform: scale(1); }
+}
+.pago-reciente-item.nuevo { animation: pago-nuevo-flash 1.8s ease; }
 .pagos-recientes-lista {
   display: flex;
   flex-direction: column;
