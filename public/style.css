@@ -497,9 +497,9 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
   transition: border-color .12s ease, background .12s ease;
 }
 .pago-reciente-item:hover { border-color: var(--accent); background: var(--accent-soft); }
-.pago-reciente-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.pago-reciente-info strong { font-size: 15px; }
-.pago-reciente-info small { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+.pago-reciente-info { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex: 1; }
+.pago-reciente-info strong { font-size: 15px; white-space: nowrap; flex-shrink: 0; }
+.pago-reciente-info small { font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pago-reciente-hora { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .pago-reciente-item.usado { opacity: 0.45; }
 
