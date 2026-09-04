@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const db = require("./db");
 const tiendanube = require("./tiendanube");
 const mayoristas = require("./mayoristas");
+const mercadopago = require("./mercadopago");
 
 const PORT = process.env.PORT || 3000;
 const TIMEZONE = "America/Argentina/Buenos_Aires";
@@ -127,6 +128,25 @@ function getArgentinaNow() {
   };
 }
 
+// Lo mismo pero para un momento cualquiera (los pagos de Mercado Pago vienen con
+// timestamp en UTC/offset y hay que mostrarlos en hora de acá).
+function argentinaDesdeISO(iso) {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const map = {};
+  parts.forEach(p => (map[p.type] = p.value));
+  return {
+    fecha: `${map.year}-${map.month}-${map.day}`,
+    horaLabel: `${map.hour}:${map.minute}`,
+  };
+}
+
 // ---------- Utilidades HTTP ----------
 
 const MIME = {
@@ -237,6 +257,70 @@ async function revertirCompra(compra) {
       const totalCosto = historial.reduce((a, h) => a + h.cantidad * h.precioUnitario, 0);
       await db.upsertCosto(compra.producto, Math.round((totalCosto / totalUnidades) * 100) / 100);
     }
+  }
+}
+
+// ---------- Pagos recibidos (Mercado Pago) ----------
+
+// Cada cuánto se re-consultan los pagos por las dudas, y cuánto para atrás se mira.
+// La sincronización es la red de seguridad del webhook: si Render estaba dormido o
+// Mercado Pago no pudo avisar, el pago igual entra en la próxima pasada.
+const MP_SYNC_MINUTOS = Number(process.env.MP_SYNC_MINUTOS || 5);
+const MP_SYNC_HORAS_ATRAS = Number(process.env.MP_SYNC_HORAS_ATRAS || 48);
+
+const mpEstado = { ultimaSync: null, ultimoError: null, sincronizando: false };
+
+// Guarda un pago crudo de la API en pagos_recibidos. Es idempotente: el mismo pago
+// que llega por webhook y después por sincronización se pisa a sí mismo, no se duplica.
+async function guardarPagoMP(pagoCrudo) {
+  const norm = mercadopago.normalizarPago(pagoCrudo);
+  if (!norm.fechaISO) return null;
+  const local = argentinaDesdeISO(norm.fechaISO);
+  if (!local) return null;
+  const ahora = new Date().toISOString();
+
+  await db.upsertPago({
+    ...norm,
+    id: `mp-${norm.externoId}`,
+    fecha: local.fecha,
+    horaLabel: local.horaLabel,
+    creadoEn: ahora,
+    actualizadoEn: ahora,
+  });
+  return norm;
+}
+
+async function sincronizarPagosMP({ horasAtras = MP_SYNC_HORAS_ATRAS } = {}) {
+  if (!mercadopago.isConfigured()) {
+    return { ok: false, error: "Mercado Pago no está configurado" };
+  }
+  if (mpEstado.sincronizando) {
+    return { ok: false, error: "Ya hay una sincronización en curso" };
+  }
+
+  mpEstado.sincronizando = true;
+  try {
+    const hasta = new Date();
+    const desde = new Date(hasta.getTime() - horasAtras * 60 * 60 * 1000);
+    const pagos = await mercadopago.buscarPagos({
+      desdeISO: desde.toISOString(),
+      hastaISO: hasta.toISOString(),
+    });
+
+    let guardados = 0;
+    for (const pago of pagos) {
+      if (await guardarPagoMP(pago)) guardados++;
+    }
+
+    mpEstado.ultimaSync = new Date().toISOString();
+    mpEstado.ultimoError = null;
+    return { ok: true, encontrados: pagos.length, guardados, ultimaSync: mpEstado.ultimaSync };
+  } catch (e) {
+    mpEstado.ultimoError = e.message;
+    console.error("Error sincronizando pagos de Mercado Pago:", e.message);
+    return { ok: false, error: e.message };
+  } finally {
+    mpEstado.sincronizando = false;
   }
 }
 
@@ -1141,6 +1225,129 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { clientes });
     }
 
+    // ---------- Pagos recibidos ----------
+
+    // Webhook: lo llama Mercado Pago, no un navegador, así que no hay sesión ni cookie.
+    // Se valida con la firma HMAC (si configuraste MP_WEBHOOK_SECRET) y, sobre todo, el
+    // pago se vuelve a pedir a la API con nuestro token: el cuerpo del aviso nunca se usa
+    // como fuente del monto, así que un aviso falso no puede inventar un cobro.
+    if (pathname === "/api/mp/webhook" && req.method === "POST") {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const tipo = query.get("type") || query.get("topic") || body.type || body.topic || null;
+      const dataId = query.get("data.id") || query.get("id") || (body.data && body.data.id) || null;
+
+      const firma = mercadopago.validarFirma({
+        xSignature: req.headers["x-signature"],
+        xRequestId: req.headers["x-request-id"],
+        dataId,
+      });
+      if (!firma.valida) {
+        console.error("Webhook de Mercado Pago rechazado:", firma.motivo);
+        return sendJson(res, 401, { error: "Firma inválida" });
+      }
+
+      // Mercado Pago también manda avisos de merchant_order y pruebas: se contestan 200
+      // para que no queden reintentando, pero no se guarda nada.
+      if (tipo !== "payment" || !dataId || !mercadopago.isConfigured()) {
+        return sendJson(res, 200, { ok: true, ignorado: true });
+      }
+
+      // Si esto falla se devuelve 500 (lo maneja el catch de abajo) y Mercado Pago reintenta.
+      const pago = await mercadopago.getPago(dataId);
+      await guardarPagoMP(pago);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // Listado del día: lo puede ver el empleado (monto, hora, medio y estado). No expone
+    // costos ni ganancias, solo la plata que entró.
+    if (pathname === "/api/pagos" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const fecha = query.get("fecha") || getArgentinaNow().fecha;
+      const pagos = await db.getPagosByFecha(fecha);
+      return sendJson(res, 200, {
+        pagos,
+        rol: getRole(req),
+        mp: {
+          configurado: mercadopago.isConfigured(),
+          firmaActiva: mercadopago.tieneSecretoWebhook(),
+          ultimaSync: mpEstado.ultimaSync,
+          ultimoError: mpEstado.ultimoError,
+        },
+      });
+    }
+
+    // Fuerza una re-consulta contra la API (botón "Actualizar" del panel).
+    if (pathname === "/api/pagos/sincronizar" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const resultado = await sincronizarPagosMP({ horasAtras: 24 });
+      return sendJson(res, resultado.ok ? 200 : 400, resultado);
+    }
+
+    // Marca un pago como cotejado contra la venta (o lo desmarca).
+    if (pathname === "/api/pagos/verificar" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const id = String(body.id || "");
+      if (!id) return sendJson(res, 400, { error: "Falta el id del pago" });
+
+      const pago = await db.getPagoById(id);
+      if (!pago) return sendJson(res, 404, { error: "Ese pago no existe" });
+
+      const verificado = body.verificado === false ? 0 : 1;
+      // Si el pedido no trae nota, se conserva la que ya estaba (marcar el check no
+      // tiene por qué borrar lo que anotó el empleado al cargar el pago).
+      const nota = body.nota === undefined ? pago.nota : (String(body.nota).trim().slice(0, 300) || null);
+      await db.marcarPagoVerificado(id, verificado, verificado ? getRole(req) : null, nota, new Date().toISOString());
+      return sendJson(res, 200, await db.getPagoById(id));
+    }
+
+    // Carga manual: para Cuenta DNI, que no tiene API ni usuarios adicionales. Lo carga
+    // el empleado cuando el cliente dice que transfirió, queda como "a confirmar" y el
+    // dueño lo valida mirando la app del banco.
+    if (pathname === "/api/pagos/manual" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const monto = Number(body.monto);
+      if (!Number.isFinite(monto) || monto <= 0) {
+        return sendJson(res, 400, { error: "El monto tiene que ser un número mayor a cero" });
+      }
+
+      const ahoraArg = getArgentinaNow();
+      const ahora = new Date().toISOString();
+      const id = `manual-${crypto.randomUUID()}`;
+      await db.upsertPago({
+        id,
+        origen: "cuentadni",
+        externoId: null,
+        monto,
+        montoNeto: null,
+        estado: "a_confirmar",
+        metodo: "Cuenta DNI",
+        descripcion: body.descripcion ? String(body.descripcion).trim().slice(0, 200) : null,
+        pagador: body.pagador ? String(body.pagador).trim().slice(0, 120) : null,
+        referencia: null,
+        fecha: ahoraArg.fecha,
+        horaLabel: ahoraArg.horaLabel.slice(0, 5),
+        fechaISO: ahora,
+        verificado: 0,
+        verificadoPor: null,
+        nota: body.nota ? String(body.nota).trim().slice(0, 300) : null,
+        creadoEn: ahora,
+        actualizadoEn: ahora,
+      });
+      return sendJson(res, 200, await db.getPagoById(id));
+    }
+
+    // Borrar: solo el dueño. Un pago de Mercado Pago borrado vuelve a aparecer en la
+    // próxima sincronización (la fuente de verdad es la API, no esta tabla).
+    if (pathname === "/api/pagos" && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = query.get("id");
+      if (!id) return sendJson(res, 400, { error: "Falta el id del pago" });
+      const borrados = await db.deletePago(id);
+      return sendJson(res, 200, { ok: true, borrados });
+    }
+
     if (req.method === "GET") {
       return serveStatic(req, res);
     }
@@ -1176,5 +1383,18 @@ db.init().then(() => {
     }
     console.log("");
     console.log("Base de datos: " + (db.usingTurso ? "Turso (nube)" : "archivo local ventas.db"));
+
+    if (mercadopago.isConfigured()) {
+      console.log(
+        "Mercado Pago: conectado" +
+          (mercadopago.tieneSecretoWebhook() ? " (webhook firmado)" : " (webhook SIN firma: falta MP_WEBHOOK_SECRET)")
+      );
+      // Una pasada al arrancar (por si el servicio estuvo dormido) y después cada
+      // MP_SYNC_MINUTOS como red de seguridad del webhook.
+      sincronizarPagosMP();
+      setInterval(() => sincronizarPagosMP({ horasAtras: 6 }), MP_SYNC_MINUTOS * 60 * 1000).unref();
+    } else {
+      console.log("Mercado Pago: sin configurar (falta MP_ACCESS_TOKEN), la pestaña de Pagos va a estar vacía");
+    }
   });
 });

@@ -119,6 +119,27 @@ const SCHEMA = `
     creadoEn TEXT NOT NULL,
     actualizadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS pagos_recibidos (
+    id TEXT PRIMARY KEY,
+    origen TEXT NOT NULL,
+    externoId TEXT,
+    monto REAL NOT NULL,
+    montoNeto REAL,
+    estado TEXT NOT NULL,
+    metodo TEXT,
+    descripcion TEXT,
+    pagador TEXT,
+    referencia TEXT,
+    fecha TEXT NOT NULL,
+    horaLabel TEXT NOT NULL,
+    fechaISO TEXT NOT NULL,
+    verificado INTEGER NOT NULL DEFAULT 0,
+    verificadoPor TEXT,
+    nota TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos_recibidos (fecha);
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -479,6 +500,49 @@ if (USE_TURSO) {
       const res = await client.execute({ sql: "UPDATE compras_stock SET fecha = ? WHERE loteId = ?", args: [fecha, loteId] });
       return res.rowsAffected;
     },
+
+    // Pagos recibidos (Mercado Pago + carga manual de Cuenta DNI).
+    // El upsert pisa los datos que vienen de la API pero NO toca verificado/nota:
+    // eso lo carga una persona y no lo puede borrar una re-sincronización.
+    async upsertPago(row) {
+      await client.execute({
+        sql: `INSERT INTO pagos_recibidos
+                (id, origen, externoId, monto, montoNeto, estado, metodo, descripcion, pagador,
+                 referencia, fecha, horaLabel, fechaISO, verificado, verificadoPor, nota, creadoEn, actualizadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                monto = excluded.monto, montoNeto = excluded.montoNeto, estado = excluded.estado,
+                metodo = excluded.metodo, descripcion = excluded.descripcion, pagador = excluded.pagador,
+                referencia = excluded.referencia, fecha = excluded.fecha, horaLabel = excluded.horaLabel,
+                fechaISO = excluded.fechaISO, actualizadoEn = excluded.actualizadoEn`,
+        args: [row.id, row.origen, row.externoId || null, row.monto, row.montoNeto ?? null, row.estado,
+               row.metodo || null, row.descripcion || null, row.pagador || null, row.referencia || null,
+               row.fecha, row.horaLabel, row.fechaISO, row.verificado ? 1 : 0, row.verificadoPor || null,
+               row.nota || null, row.creadoEn, row.actualizadoEn],
+      });
+    },
+    async getPagosByFecha(fecha) {
+      const res = await client.execute({
+        sql: "SELECT * FROM pagos_recibidos WHERE fecha = ? ORDER BY fechaISO DESC",
+        args: [fecha],
+      });
+      return res.rows;
+    },
+    async getPagoById(id) {
+      const res = await client.execute({ sql: "SELECT * FROM pagos_recibidos WHERE id = ?", args: [id] });
+      return res.rows[0] || null;
+    },
+    async marcarPagoVerificado(id, verificado, verificadoPor, nota, actualizadoEn) {
+      const res = await client.execute({
+        sql: `UPDATE pagos_recibidos SET verificado = ?, verificadoPor = ?, nota = ?, actualizadoEn = ? WHERE id = ?`,
+        args: [verificado ? 1 : 0, verificadoPor || null, nota || null, actualizadoEn, id],
+      });
+      return res.rowsAffected;
+    },
+    async deletePago(id) {
+      const res = await client.execute({ sql: "DELETE FROM pagos_recibidos WHERE id = ?", args: [id] });
+      return res.rowsAffected;
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -743,6 +807,42 @@ if (USE_TURSO) {
     },
     async updateFechaLote(loteId, fecha) {
       const info = db.prepare("UPDATE compras_stock SET fecha = ? WHERE loteId = ?").run(fecha, loteId);
+      return info.changes;
+    },
+
+    // Pagos recibidos (Mercado Pago + carga manual de Cuenta DNI).
+    // El upsert pisa los datos que vienen de la API pero NO toca verificado/nota:
+    // eso lo carga una persona y no lo puede borrar una re-sincronización.
+    async upsertPago(row) {
+      db.prepare(
+        `INSERT INTO pagos_recibidos
+           (id, origen, externoId, monto, montoNeto, estado, metodo, descripcion, pagador,
+            referencia, fecha, horaLabel, fechaISO, verificado, verificadoPor, nota, creadoEn, actualizadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           monto = excluded.monto, montoNeto = excluded.montoNeto, estado = excluded.estado,
+           metodo = excluded.metodo, descripcion = excluded.descripcion, pagador = excluded.pagador,
+           referencia = excluded.referencia, fecha = excluded.fecha, horaLabel = excluded.horaLabel,
+           fechaISO = excluded.fechaISO, actualizadoEn = excluded.actualizadoEn`
+      ).run(row.id, row.origen, row.externoId || null, row.monto, row.montoNeto ?? null, row.estado,
+            row.metodo || null, row.descripcion || null, row.pagador || null, row.referencia || null,
+            row.fecha, row.horaLabel, row.fechaISO, row.verificado ? 1 : 0, row.verificadoPor || null,
+            row.nota || null, row.creadoEn, row.actualizadoEn);
+    },
+    async getPagosByFecha(fecha) {
+      return db.prepare("SELECT * FROM pagos_recibidos WHERE fecha = ? ORDER BY fechaISO DESC").all(fecha);
+    },
+    async getPagoById(id) {
+      return db.prepare("SELECT * FROM pagos_recibidos WHERE id = ?").get(id) || null;
+    },
+    async marcarPagoVerificado(id, verificado, verificadoPor, nota, actualizadoEn) {
+      const info = db.prepare(
+        "UPDATE pagos_recibidos SET verificado = ?, verificadoPor = ?, nota = ?, actualizadoEn = ? WHERE id = ?"
+      ).run(verificado ? 1 : 0, verificadoPor || null, nota || null, actualizadoEn, id);
+      return info.changes;
+    },
+    async deletePago(id) {
+      const info = db.prepare("DELETE FROM pagos_recibidos WHERE id = ?").run(id);
       return info.changes;
     },
   };

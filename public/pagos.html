@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pagos recibidos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Pagos recibidos</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">Registro de Ventas</a>
+    <a href="/ganancias.html" class="link-btn">Panel de Ganancias</a>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:20px;">
+      <div class="card metric-card">
+        <span class="label">Acreditado (Mercado Pago)</span>
+        <span class="big-number" id="stat-acreditado">$0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Pagos del día</span>
+        <span class="big-number" id="stat-cantidad">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Sin verificar</span>
+        <span class="big-number" id="stat-pendientes" style="color:var(--red);">0</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="history-header">
+        <h2>Pagos de <span id="fecha-label">hoy</span></h2>
+        <div class="history-actions">
+          <input type="date" id="fecha-input" title="Ver otro día">
+          <button type="button" id="hoy-btn" class="clear-btn" style="display:none;">Volver a hoy</button>
+          <button type="button" id="sync-btn" class="clear-btn">Actualizar</button>
+        </div>
+      </div>
+      <p class="hint" id="estado-mp">&nbsp;</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Origen</th>
+              <th>Monto</th>
+              <th>Medio</th>
+              <th>Estado</th>
+              <th>Pagador</th>
+              <th>Verificado</th>
+            </tr>
+          </thead>
+          <tbody id="lista-body">
+            <tr class="empty-row"><td colspan="7">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Cuenta DNI no tiene API ni usuarios adicionales: se carga a mano y queda
+         "a confirmar" hasta que el dueño lo mira en la app del banco. -->
+    <section class="card">
+      <h2>Cargar pago de Cuenta DNI</h2>
+      <p class="hint">
+        Cuenta DNI no permite dar acceso a otra persona, así que estos pagos se anotan a mano
+        y quedan <strong>a confirmar</strong> hasta que el dueño los verifique en la app del banco.
+        No alcanza con el comprobante que muestra el cliente.
+      </p>
+      <form id="manual-form" autocomplete="off">
+        <div class="field-row">
+          <div class="field">
+            <label for="manual-monto">Monto</label>
+            <input type="number" id="manual-monto" step="0.01" min="0" placeholder="0.00" required>
+          </div>
+          <div class="field">
+            <label for="manual-pagador">Quién pagó</label>
+            <input type="text" id="manual-pagador" placeholder="Nombre del cliente">
+          </div>
+        </div>
+        <div class="field">
+          <label for="manual-nota">Nota (opcional)</label>
+          <input type="text" id="manual-nota" placeholder="Ej: dice que transfirió a las 14:30">
+        </div>
+        <button type="submit" class="submit-btn">Anotar pago</button>
+        <p class="hint error-hint" id="manual-error" style="display:none;"></p>
+      </form>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="pagos.js"></script>
+</body>
+</html>
