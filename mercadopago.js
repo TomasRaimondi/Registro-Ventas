@@ -184,31 +184,6 @@ function normalizarPago(pago) {
   };
 }
 
-// ---------- Cobro con QR (Checkout Pro) ----------
-
-// Crea una preferencia de pago por el monto exacto y devuelve el link de Checkout Pro
-// (init_point). El QR que se le muestra al cliente es ese link convertido a imagen; al
-// escanearlo abre esa página de Mercado Pago para pagar. El pago que resulte de esto
-// entra por el mismo webhook/sincronización que cualquier otro cobro de la cuenta.
-async function crearPreferenciaCobro({ monto, descripcion }) {
-  const body = {
-    items: [
-      {
-        title: (descripcion || "Platense Fit").slice(0, 200),
-        quantity: 1,
-        unit_price: Math.round(Number(monto) * 100) / 100,
-        currency_id: "ARS",
-      },
-    ],
-    external_reference: crypto.randomUUID(),
-  };
-  const data = await mpFetch("/checkout/preferences", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return { id: data.id, initPoint: data.init_point };
-}
-
 // ---------- Firma del webhook ----------
 
 // Mercado Pago firma cada aviso con HMAC-SHA256 sobre el "manifest"
@@ -255,5 +230,4 @@ module.exports = {
   normalizarPago,
   etiquetaEstado,
   validarFirma,
-  crearPreferenciaCobro,
 };
