@@ -280,8 +280,15 @@ async function guardarPagoMP(pagoCrudo) {
   if (!local) return null;
   const ahora = new Date().toISOString();
 
+  // Mercado Pago manda la fecha con su propio offset (ej. "-04:00"), no en UTC. Si se
+  // guarda tal cual, ordenar por fechaISO como texto queda mal apenas se mezcla con los
+  // pagos de Cuenta DNI (que sí se normalizan a UTC antes de guardar). Se normaliza acá
+  // para que el ORDER BY fechaISO sea comparable entre los dos orígenes.
+  const fechaISO = new Date(norm.fechaISO).toISOString();
+
   await db.upsertPago({
     ...norm,
+    fechaISO,
     id: `mp-${norm.externoId}`,
     fecha: local.fecha,
     horaLabel: local.horaLabel,
