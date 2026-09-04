@@ -113,6 +113,17 @@ function parsearComprobante(html, asunto) {
 
 // ---------- IMAP ----------
 
+// ImapFlow deja el mensaje genérico en "Command failed" y el motivo real (el que manda
+// el servidor, ej. "Invalid credentials") en err.responseText. Sin esto, cualquier
+// fallo se ve igual de vago en el panel y no se puede saber qué corregir.
+function mensajeDeError(e) {
+  if (!e) return "Error desconocido";
+  const partes = [e.message || String(e)];
+  if (e.responseText) partes.push(e.responseText);
+  if (e.responseStatus) partes.push(`(${e.responseStatus})`);
+  return partes.join(" · ");
+}
+
 async function conectar() {
   if (!isConfigured()) throw new Error("Correo IMAP no configurado (falta EMAIL_IMAP_USER/EMAIL_IMAP_APP_PASSWORD)");
   const client = new ImapFlow({
@@ -122,7 +133,11 @@ async function conectar() {
     auth: { user: cfg.user, pass: cfg.pass },
     logger: false,
   });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (e) {
+    throw new Error(mensajeDeError(e));
+  }
   return client;
 }
 
@@ -137,18 +152,22 @@ async function buscarComprobantesNuevos({ diasAtras = 2 } = {}) {
     const lock = await client.getMailboxLock("INBOX");
     try {
       const desde = new Date(Date.now() - diasAtras * 86400000);
-      for await (const msg of client.fetch(
-        { from: REMITENTE_REDLINK, since: desde },
-        { source: true, envelope: true }
-      )) {
-        try {
-          const parsed = await simpleParser(msg.source);
-          const comprobante = parsearComprobante(parsed.html || "", parsed.subject || "");
-          if (comprobante) resultados.push(comprobante);
-          else console.error("No se pudo leer un mail de Red Link (formato inesperado), uid:", msg.uid);
-        } catch (e) {
-          console.error("Error parseando un mail de Red Link:", e.message);
+      try {
+        for await (const msg of client.fetch(
+          { from: REMITENTE_REDLINK, since: desde },
+          { source: true, envelope: true }
+        )) {
+          try {
+            const parsed = await simpleParser(msg.source);
+            const comprobante = parsearComprobante(parsed.html || "", parsed.subject || "");
+            if (comprobante) resultados.push(comprobante);
+            else console.error("No se pudo leer un mail de Red Link (formato inesperado), uid:", msg.uid);
+          } catch (e) {
+            console.error("Error parseando un mail de Red Link:", e.message);
+          }
         }
+      } catch (e) {
+        throw new Error(mensajeDeError(e));
       }
     } finally {
       lock.release();
