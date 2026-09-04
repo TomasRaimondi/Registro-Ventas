@@ -148,6 +148,12 @@ async function cargar() {
       .filter((p) => p.origen === "mercadopago" && p.estado === "approved")
       .reduce((a, p) => a + (p.monto || 0), 0);
     document.getElementById("stat-acreditado").textContent = formatMoneda(acreditado);
+
+    const acreditadoCuentaDni = pagos
+      .filter((p) => p.origen === "cuentadni" && p.estado === "approved")
+      .reduce((a, p) => a + (p.monto || 0), 0);
+    document.getElementById("stat-acreditado-cuentadni").textContent = formatMoneda(acreditadoCuentaDni);
+
     document.getElementById("stat-cantidad").textContent = pagos.length;
     document.getElementById("stat-pendientes").textContent = pagos.filter((p) => !p.verificado).length;
 
