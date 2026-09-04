@@ -7,6 +7,7 @@ const db = require("./db");
 const tiendanube = require("./tiendanube");
 const mayoristas = require("./mayoristas");
 const mercadopago = require("./mercadopago");
+const QRCode = require("qrcode");
 const redlinkEmail = require("./redlink-email");
 
 const PORT = process.env.PORT || 3000;
@@ -1481,6 +1482,28 @@ const server = http.createServer(async (req, res) => {
       if (!id) return sendJson(res, 400, { error: "Falta el id del pago" });
       const borrados = await db.deletePago(id);
       return sendJson(res, 200, { ok: true, borrados });
+    }
+
+    // Genera un QR de Mercado Pago por el monto exacto para mostrárselo al cliente.
+    // Público a propósito, como el resto de "Registro de Ventas": lo usa el empleado
+    // sin login. No mueve plata por sí solo, solo arma un link de cobro.
+    if (pathname === "/api/mercadopago/cobro-qr" && req.method === "POST") {
+      if (!mercadopago.isConfigured()) {
+        return sendJson(res, 503, { error: "Mercado Pago no está conectado en este panel." });
+      }
+      const body = await readJsonBody(req);
+      const monto = Number(body.monto);
+      if (!Number.isFinite(monto) || monto <= 0) {
+        return sendJson(res, 400, { error: "El monto tiene que ser un número mayor a cero" });
+      }
+      try {
+        const { id, initPoint } = await mercadopago.crearPreferenciaCobro({ monto, descripcion: body.descripcion });
+        const qrDataUrl = await QRCode.toDataURL(initPoint, { width: 480, margin: 1 });
+        return sendJson(res, 200, { id, initPoint, qrDataUrl });
+      } catch (e) {
+        console.error("Error creando cobro QR de Mercado Pago:", e.message);
+        return sendJson(res, 502, { error: "No se pudo generar el cobro: " + e.message });
+      }
     }
 
     if (req.method === "GET") {
