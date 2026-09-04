@@ -140,9 +140,9 @@ async function cargar() {
   tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Cargando...</td></tr>`;
 
   try {
-    const { pagos, mp, rol } = await api("/api/pagos?fecha=" + encodeURIComponent(fechaActiva));
+    const { pagos, mp, cuentaDni, rol } = await api("/api/pagos?fecha=" + encodeURIComponent(fechaActiva));
     rolActual = rol;
-    renderEstadoMP(mp);
+    renderEstadoMP(mp, cuentaDni);
 
     const acreditado = pagos
       .filter((p) => p.origen === "mercadopago" && p.estado === "approved")
@@ -163,21 +163,36 @@ async function cargar() {
   }
 }
 
-function renderEstadoMP(mp) {
+function renderEstadoMP(mp, cuentaDni) {
   const el = document.getElementById("estado-mp");
+  const lineas = [];
+
   if (!mp.configurado) {
-    el.innerHTML = `<strong>Mercado Pago no está conectado.</strong> Falta cargar MP_ACCESS_TOKEN en el servidor.`;
-    return;
+    lineas.push(`<strong>Mercado Pago no está conectado.</strong> Falta cargar MP_ACCESS_TOKEN en el servidor.`);
+  } else {
+    const partes = [`Mercado Pago conectado · última actualización ${escapeHtml(formatHoraRelativa(mp.ultimaSync))}`];
+    if (!mp.firmaActiva) partes.push("aviso sin firma (falta MP_WEBHOOK_SECRET)");
+    if (mp.ultimoError) {
+      const corto = mp.ultimoError.length > 90 ? mp.ultimoError.slice(0, 90) + "…" : mp.ultimoError;
+      partes.push(`<span title="${escapeHtml(mp.ultimoError)}" style="color:var(--red);">último error: ${escapeHtml(corto)}</span>`);
+    }
+    lineas.push(partes.join(" · "));
   }
-  const partes = [`Mercado Pago conectado · última actualización ${escapeHtml(formatHoraRelativa(mp.ultimaSync))}`];
-  if (!mp.firmaActiva) partes.push("aviso sin firma (falta MP_WEBHOOK_SECRET)");
-  if (mp.ultimoError) {
-    // El error crudo de la API es un JSON largo: se muestra el principio y el resto
-    // queda en el título, para que la línea no tape el panel.
-    const corto = mp.ultimoError.length > 90 ? mp.ultimoError.slice(0, 90) + "…" : mp.ultimoError;
-    partes.push(`<span title="${escapeHtml(mp.ultimoError)}" style="color:var(--red);">último error: ${escapeHtml(corto)}</span>`);
+
+  if (cuentaDni) {
+    if (!cuentaDni.configurado) {
+      lineas.push(`<strong>Cuenta DNI (mail) no está conectado.</strong> Falta cargar EMAIL_IMAP_USER/EMAIL_IMAP_APP_PASSWORD en el servidor.`);
+    } else {
+      const partes = [`Cuenta DNI (mail) conectado · última revisión ${escapeHtml(formatHoraRelativa(cuentaDni.ultimaSync))}`];
+      if (cuentaDni.ultimoError) {
+        const corto = cuentaDni.ultimoError.length > 90 ? cuentaDni.ultimoError.slice(0, 90) + "…" : cuentaDni.ultimoError;
+        partes.push(`<span title="${escapeHtml(cuentaDni.ultimoError)}" style="color:var(--red);">último error: ${escapeHtml(corto)}</span>`);
+      }
+      lineas.push(partes.join(" · "));
+    }
   }
-  el.innerHTML = partes.join(" · ");
+
+  el.innerHTML = lineas.join("<br>");
 }
 
 function filaPago(p) {

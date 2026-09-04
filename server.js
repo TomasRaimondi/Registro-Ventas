@@ -7,6 +7,7 @@ const db = require("./db");
 const tiendanube = require("./tiendanube");
 const mayoristas = require("./mayoristas");
 const mercadopago = require("./mercadopago");
+const redlinkEmail = require("./redlink-email");
 
 const PORT = process.env.PORT || 3000;
 const TIMEZONE = "America/Argentina/Buenos_Aires";
@@ -321,6 +322,88 @@ async function sincronizarPagosMP({ horasAtras = MP_SYNC_HORAS_ATRAS } = {}) {
     return { ok: false, error: e.message };
   } finally {
     mpEstado.sincronizando = false;
+  }
+}
+
+// ---------- Pagos recibidos (Cuenta DNI, vía mail de Red Link) ----------
+
+// Igual que con Mercado Pago: se busca seguido con ventana corta (rápido, para que se
+// sienta "en el momento") y de vez en cuando con ventana ancha como red de seguridad.
+const REDLINK_POLL_SEGUNDOS = Number(process.env.REDLINK_POLL_SEGUNDOS || 25);
+const REDLINK_BARRIDO_MINUTOS = Number(process.env.REDLINK_BARRIDO_MINUTOS || 15);
+
+const redlinkEstado = { ultimaSync: null, ultimoError: null, sincronizando: false };
+
+// "04/09/2026 - 09:51:57" (ya en hora Argentina, tal cual la manda Red Link) -> fecha +
+// horaLabel para la tabla, y un ISO con el offset -03:00 para poder ordenar junto a los
+// pagos de Mercado Pago.
+function partirFechaHoraRedlink(fechaHora) {
+  const m = String(fechaHora || "").match(/(\d{2})\/(\d{2})\/(\d{4})\s*-\s*(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh, mi, ss] = m;
+  const fechaISO = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}-03:00`;
+  const fecha = `${yyyy}-${mm}-${dd}`;
+  return { fecha, horaLabel: `${hh}:${mi}`, fechaISO: new Date(fechaISO).toISOString() };
+}
+
+// Idempotente por N° de operación, igual que con Mercado Pago: un mail reprocesado (por
+// la ventana de respaldo) pisa el mismo registro en vez de duplicarlo.
+async function guardarComprobanteRedlink(c) {
+  const partido = partirFechaHoraRedlink(c.fechaHora);
+  if (!partido) return null;
+  const ahora = new Date().toISOString();
+
+  await db.upsertPago({
+    id: `cuentadni-${c.numeroOperacion}`,
+    origen: "cuentadni",
+    externoId: c.numeroOperacion,
+    monto: c.monto,
+    montoNeto: c.montoNeto,
+    estado: c.estado === "approved" ? "approved" : c.estado,
+    metodo: [c.tipoCobro, c.movimiento].filter(Boolean).join(" · ") || "Cuenta DNI",
+    descripcion: c.codigoAutorizacion ? `Cód. autorización ${c.codigoAutorizacion}` : null,
+    pagador: c.pagador,
+    referencia: c.numeroOperacion,
+    fecha: partido.fecha,
+    horaLabel: partido.horaLabel,
+    fechaISO: partido.fechaISO,
+    // El mail de Red Link ES la confirmación del banco: no necesita que nadie lo
+    // marque a mano, a diferencia de un pago cargado manual.
+    verificado: c.estado === "approved" ? 1 : 0,
+    verificadoPor: c.estado === "approved" ? "mail-redlink" : null,
+    nota: null,
+    creadoEn: ahora,
+    actualizadoEn: ahora,
+  });
+  return c;
+}
+
+async function sincronizarRedlink({ diasAtras = 2 } = {}) {
+  if (!redlinkEmail.isConfigured()) {
+    return { ok: false, error: "El correo de Cuenta DNI no está configurado" };
+  }
+  if (redlinkEstado.sincronizando) {
+    return { ok: false, error: "Ya hay una sincronización en curso" };
+  }
+
+  redlinkEstado.sincronizando = true;
+  try {
+    const comprobantes = await redlinkEmail.buscarComprobantesNuevos({ diasAtras });
+
+    let guardados = 0;
+    for (const c of comprobantes) {
+      if (await guardarComprobanteRedlink(c)) guardados++;
+    }
+
+    redlinkEstado.ultimaSync = new Date().toISOString();
+    redlinkEstado.ultimoError = null;
+    return { ok: true, encontrados: comprobantes.length, guardados, ultimaSync: redlinkEstado.ultimaSync };
+  } catch (e) {
+    redlinkEstado.ultimoError = e.message;
+    console.error("Error sincronizando correo de Cuenta DNI (Red Link):", e.message);
+    return { ok: false, error: e.message };
+  } finally {
+    redlinkEstado.sincronizando = false;
   }
 }
 
@@ -1273,14 +1356,22 @@ const server = http.createServer(async (req, res) => {
           ultimaSync: mpEstado.ultimaSync,
           ultimoError: mpEstado.ultimoError,
         },
+        cuentaDni: {
+          configurado: redlinkEmail.isConfigured(),
+          ultimaSync: redlinkEstado.ultimaSync,
+          ultimoError: redlinkEstado.ultimoError,
+        },
       });
     }
 
-    // Fuerza una re-consulta contra la API (botón "Actualizar" del panel).
+    // Fuerza una re-consulta contra la API y el correo (botón "Actualizar" del panel).
     if (pathname === "/api/pagos/sincronizar" && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
-      const resultado = await sincronizarPagosMP({ horasAtras: 24 });
-      return sendJson(res, resultado.ok ? 200 : 400, resultado);
+      const [resultadoMp, resultadoRedlink] = await Promise.all([
+        sincronizarPagosMP({ horasAtras: 24 }),
+        sincronizarRedlink({ diasAtras: 2 }),
+      ]);
+      return sendJson(res, 200, { mp: resultadoMp, cuentaDni: resultadoRedlink });
     }
 
     // Marca un pago como cotejado contra la venta (o lo desmarca).
@@ -1395,6 +1486,22 @@ db.init().then(() => {
       setInterval(() => sincronizarPagosMP({ horasAtras: 6 }), MP_SYNC_MINUTOS * 60 * 1000).unref();
     } else {
       console.log("Mercado Pago: sin configurar (falta MP_ACCESS_TOKEN), la pestaña de Pagos va a estar vacía");
+    }
+
+    if (redlinkEmail.isConfigured()) {
+      console.log("Cuenta DNI (mail de Red Link): conectado");
+      // Ventana ancha al arrancar (por si el servicio estuvo dormido) y después una
+      // ventana corta cada REDLINK_POLL_SEGUNDOS para que se sienta "en el momento",
+      // con un barrido más amplio cada tanto como red de seguridad.
+      sincronizarRedlink({ diasAtras: 2 });
+      let vueltas = 0;
+      setInterval(() => {
+        vueltas++;
+        const esBarrido = vueltas % Math.max(1, Math.round((REDLINK_BARRIDO_MINUTOS * 60) / REDLINK_POLL_SEGUNDOS)) === 0;
+        sincronizarRedlink({ diasAtras: esBarrido ? 2 : 0.05 });
+      }, REDLINK_POLL_SEGUNDOS * 1000).unref();
+    } else {
+      console.log("Cuenta DNI (mail de Red Link): sin configurar (falta EMAIL_IMAP_USER/EMAIL_IMAP_APP_PASSWORD), se sigue anotando a mano");
     }
   });
 });
