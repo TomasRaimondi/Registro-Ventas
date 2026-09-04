@@ -1341,6 +1341,26 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // Público a propósito: lo consume el panel lateral de Registro de Ventas (sin login,
+    // lo usa el empleado en el mostrador) para saber qué transferencias entraron y poder
+    // cargar la venta al toque. Manda solo lo necesario para eso, nunca el listado
+    // completo con verificado/nota/borrado, que sigue con contraseña en /api/pagos.
+    if (pathname === "/api/pagos-recientes" && req.method === "GET") {
+      const pagos = await db.getPagosByFecha(getArgentinaNow().fecha);
+      const recientes = pagos
+        .filter((p) => p.estado === "approved")
+        .sort((a, b) => (b.fechaISO || "").localeCompare(a.fechaISO || ""))
+        .slice(0, 30)
+        .map((p) => ({
+          id: p.id,
+          horaLabel: p.horaLabel,
+          monto: p.monto,
+          pagador: p.pagador,
+          origen: p.origen,
+        }));
+      return sendJson(res, 200, { pagos: recientes });
+    }
+
     // Listado del día: lo puede ver el empleado (monto, hora, medio y estado). No expone
     // costos ni ganancias, solo la plata que entró.
     if (pathname === "/api/pagos" && req.method === "GET") {

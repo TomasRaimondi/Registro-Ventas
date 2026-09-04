@@ -155,6 +155,55 @@ vpForm.addEventListener("submit", (e) => {
 
 cargarContadorVentasPerdidas();
 
+// ---------- Pagos recientes (transferencias) ----------
+// Público, sin login: es para que el empleado vea qué transferencias entraron y cargue
+// la venta al toque tocando la fila (llena el precio y enfoca el producto).
+
+const pagosRecientesLista = document.getElementById("pagos-recientes-lista");
+const pagosUsados = new Set(); // solo visual, se resetea al recargar la página
+
+function formatMonedaCorta(n) {
+  return "$" + Math.round(n || 0).toLocaleString("es-AR");
+}
+
+async function cargarPagosRecientes() {
+  try {
+    const { pagos } = await api("/api/pagos-recientes");
+    if (!pagos.length) {
+      pagosRecientesLista.innerHTML = `<p class="hint">Todavía no entró ninguna transferencia hoy.</p>`;
+      return;
+    }
+    pagosRecientesLista.innerHTML = "";
+    pagos.forEach((p) => pagosRecientesLista.appendChild(filaPagoReciente(p)));
+  } catch (e) {
+    // Silencioso: si falla, la lista se queda como estaba, no interrumpe la carga de ventas.
+  }
+}
+
+function filaPagoReciente(p) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pago-reciente-item" + (pagosUsados.has(p.id) ? " usado" : "");
+  const origen = p.origen === "mercadopago" ? "Mercado Pago" : "Cuenta DNI";
+  btn.innerHTML = `
+    <span class="pago-reciente-info">
+      <strong>${formatMonedaCorta(p.monto)}</strong>
+      <small>${escapeHtml(p.pagador || origen)}</small>
+    </span>
+    <span class="pago-reciente-hora">${escapeHtml((p.horaLabel || "").slice(0, 5))}</span>
+  `;
+  btn.addEventListener("click", () => {
+    document.getElementById("precio").value = p.monto;
+    document.getElementById("producto").focus();
+    pagosUsados.add(p.id);
+    btn.classList.add("usado");
+  });
+  return btn;
+}
+
+cargarPagosRecientes();
+setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);
+
 // ---------- Autocompletado de producto ----------
 
 let listaProductos = [];
