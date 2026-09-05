@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Registro de Ventas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0A101C">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ventas">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<style>
+  :root{
+    --bg:#0A101C;
+    --surface:#131D31;
+    --raised:#1C2942;
+    --line:#26344F;
+    --text:#E9EEF9;
+    --muted:#8496B8;
+    --accent:#7C8BFF;
+    --accent-deep:#5A68E8;
+    --mint:#3DDC97;
+    --coral:#FF6B6B;
+    --r:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font:400 16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    font-variant-numeric:tabular-nums;
+    padding-bottom:calc(96px + env(safe-area-inset-bottom));
+  }
+  button,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
+
+  /* ---------- barra superior ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:40;
+    display:flex;align-items:center;gap:12px;
+    height:58px;padding:0 8px 0 4px;
+    background:rgba(10,16,28,.86);
+    backdrop-filter:saturate(160%) blur(14px);
+    -webkit-backdrop-filter:saturate(160%) blur(14px);
+    border-bottom:1px solid var(--line);
+    padding-top:env(safe-area-inset-top);
+    height:calc(58px + env(safe-area-inset-top));
+  }
+  .icon-btn{
+    width:48px;height:48px;flex:0 0 48px;
+    display:grid;place-items:center;
+    background:none;border:0;border-radius:14px;
+  }
+  .icon-btn:active{background:var(--raised)}
+  .burger{width:22px;height:16px;position:relative}
+  .burger i{
+    position:absolute;left:0;right:0;height:2.5px;border-radius:2px;background:var(--text);
+    transition:transform .28s cubic-bezier(.2,.9,.25,1),opacity .18s;
+  }
+  .burger i:nth-child(1){top:0}
+  .burger i:nth-child(2){top:6.75px}
+  .burger i:nth-child(3){top:13.5px}
+  body.nav-open .burger i:nth-child(1){transform:translateY(6.75px) rotate(45deg)}
+  body.nav-open .burger i:nth-child(2){opacity:0}
+  body.nav-open .burger i:nth-child(3){transform:translateY(-6.75px) rotate(-45deg)}
+
+  .topbar h1{flex:1;margin:0;font-size:16px;font-weight:600;letter-spacing:-.2px}
+  .today-pill{
+    display:flex;flex-direction:column;align-items:flex-end;
+    padding:6px 12px;border-radius:12px;background:var(--raised);border:1px solid var(--line);
+  }
+  .today-pill b{font-size:15px;font-weight:700;letter-spacing:-.4px}
+  .today-pill small{font-size:10px;color:var(--muted)}
+  .today-pill.bump{animation:bump .5s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.14);background:#1d3a2f;border-color:var(--mint)}100%{transform:scale(1)}}
+
+  /* ---------- panel lateral ---------- */
+  .scrim{
+    position:fixed;inset:0;z-index:50;background:rgba(4,8,16,.6);
+    backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .25s;
+  }
+  body.nav-open .scrim{opacity:1;pointer-events:auto}
+  .drawer{
+    position:fixed;z-index:60;top:0;bottom:0;left:0;width:min(84vw,320px);
+    background:var(--surface);border-right:1px solid var(--line);
+    transform:translateX(-102%);transition:transform .32s cubic-bezier(.2,.9,.25,1);
+    display:flex;flex-direction:column;
+    padding:calc(20px + env(safe-area-inset-top)) 0 calc(16px + env(safe-area-inset-bottom));
+    overflow-y:auto;
+  }
+  body.nav-open .drawer{transform:none}
+  .drawer header{padding:0 20px 16px}
+  .drawer header p{margin:0;font-size:19px;font-weight:700;letter-spacing:-.4px}
+  .drawer header small{color:var(--muted);font-size:13px}
+  .nav-item{
+    position:relative;
+    display:flex;align-items:center;gap:14px;width:100%;
+    min-height:54px;padding:0 20px;border:0;background:none;text-align:left;text-decoration:none;
+    font-size:16px;font-weight:500;color:var(--text);
+  }
+  .nav-item .em{font-size:19px;width:26px;text-align:center}
+  .nav-item:active{background:var(--raised)}
+  .nav-item[aria-current="page"]{color:var(--accent);background:linear-gradient(90deg,rgba(124,139,255,.16),transparent)}
+  .nav-item[aria-current="page"]::before{content:"";position:absolute;left:0;width:3px;height:28px;border-radius:0 3px 3px 0;background:var(--accent)}
+  .nav-sep{border:0;border-top:1px solid var(--line);margin:10px 20px}
+  .badge{margin-left:auto;min-width:24px;height:24px;padding:0 7px;border-radius:12px;
+    display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--coral);color:#2a0a0a}
+
+  /* ---------- contenido ---------- */
+  main{padding:16px 14px 0;max-width:560px;margin:0 auto}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px 16px;margin-bottom:14px}
+  .lbl{display:block;font-size:13px;color:var(--muted);margin:0 0 8px 2px}
+
+  .autocomplete-wrap{position:relative}
+  .suggestions{
+    position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;display:none;
+    background:var(--raised);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    box-shadow:0 14px 30px -10px rgba(0,0,0,.55);
+  }
+  .suggestions.open{display:block}
+  .suggestion-item{padding:12px 16px;font-size:15px;border-top:1px solid var(--line)}
+  .suggestion-item:first-child{border-top:0}
+  .suggestion-item:active{background:var(--bg)}
+
+  input[type=text],input[type=tel]{
+    width:100%;height:56px;padding:0 16px;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:14px;
+    font-size:17px;font-weight:500;outline:none;
+    transition:border-color .15s,background .15s;
+  }
+  input:focus{border-color:var(--accent);background:#0d1526}
+  input::placeholder{color:#5b6b8c}
+  .row{display:flex;gap:10px}
+  .row .f-price{flex:1.6}
+  .row .f-qty{flex:1;min-width:96px}
+
+  .stepper{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--line);border-radius:14px;height:56px;overflow:hidden}
+  .stepper button{width:44px;height:100%;border:0;background:none;font-size:22px;font-weight:400;color:var(--accent)}
+  .stepper button:active{background:var(--raised)}
+  .stepper input{border:0;background:none;text-align:center;width:100%;height:100%;font-size:18px;font-weight:600;padding:0}
+
+  .ghost-btn{
+    width:100%;min-height:50px;margin-top:12px;
+    background:none;border:1.5px dashed var(--line);border-radius:14px;
+    color:var(--muted);font-size:15px;font-weight:500;
+  }
+  .ghost-btn:active{background:var(--raised);color:var(--text)}
+
+  .cart-list{margin-top:6px}
+  .cart-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .cart-item:first-child{border-top:0}
+  .cart-item-info{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .cart-item-nombre{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cart-item-precio{font-size:12px;color:var(--muted)}
+  .cart-item-remove{width:32px;height:32px;flex:0 0 32px;border:0;border-radius:10px;background:var(--bg);color:var(--coral);font-size:15px}
+  .cart-item-remove:active{background:rgba(255,107,107,.15)}
+  .cart-subtotal{display:flex;justify-content:space-between;padding-top:10px;margin-top:4px;border-top:1px dashed var(--line);font-size:13px;font-weight:700}
+
+  .pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pay{
+    min-height:58px;display:flex;align-items:center;gap:9px;padding:0 12px;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:14px;
+    font-size:15px;font-weight:500;
+    transition:transform .12s,border-color .15s,background .15s;
+  }
+  .pay .em{font-size:19px}
+  .pay:active{transform:scale(.96)}
+  .pay[aria-pressed="true"]{
+    background:linear-gradient(140deg,var(--accent),var(--accent-deep));
+    border-color:var(--accent);color:#fff;font-weight:600;
+    box-shadow:0 6px 18px -6px rgba(124,139,255,.6);
+  }
+  .pay.wide{grid-column:span 2}
+
+  .toggle{
+    display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:0 14px;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:14px;
+    font-size:15px;font-weight:500;text-align:left;
+  }
+  .toggle .em{font-size:20px}
+  .switch{margin-left:auto;width:52px;height:31px;border-radius:16px;background:var(--line);position:relative;transition:background .2s;flex:0 0 52px}
+  .switch::after{content:"";position:absolute;top:2.5px;left:2.5px;width:26px;height:26px;border-radius:50%;background:#fff;
+    transition:transform .24s cubic-bezier(.2,1.2,.3,1)}
+  .toggle[aria-pressed="true"]{border-color:#8b5cf6;background:rgba(139,92,246,.12)}
+  .toggle[aria-pressed="true"] .switch{background:#8b5cf6}
+  .toggle[aria-pressed="true"] .switch::after{transform:translateX(21px)}
+  .envio-costo-row{margin-top:10px}
+  .envio-costo-row input{border-color:#8b5cf6}
+
+  /* ---------- barra de acción fija ---------- */
+  .actionbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:35;
+    display:flex;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top,var(--bg) 62%,rgba(10,16,28,0));
+  }
+  .submit{
+    flex:1;min-height:58px;border:0;border-radius:16px;
+    background:linear-gradient(140deg,var(--accent),var(--accent-deep));
+    color:#fff;font-size:17px;font-weight:700;letter-spacing:-.2px;
+    box-shadow:0 10px 26px -10px rgba(124,139,255,.85);
+    transition:transform .12s;
+  }
+  .submit:active{transform:scale(.97)}
+  .submit.done{background:linear-gradient(140deg,#3DDC97,#17b877);box-shadow:0 10px 26px -10px rgba(61,220,151,.8)}
+  .lost{
+    width:66px;min-height:58px;border-radius:16px;border:1.5px solid rgba(255,107,107,.4);
+    background:rgba(255,107,107,.12);color:var(--coral);font-size:12px;font-weight:700;line-height:1.15;
+  }
+  .lost:active{transform:scale(.95)}
+  .lost b{display:block;font-size:17px}
+
+  /* ---------- resumen ---------- */
+  .total{font-size:40px;font-weight:800;letter-spacing:-1.6px;margin:2px 0 0}
+  .sub{color:var(--muted);font-size:14px;margin:2px 0 0}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+  .split div p{margin:0;font-size:13px;color:var(--muted)}
+  .split div b{font-size:20px;font-weight:700;letter-spacing:-.5px}
+  .mint{color:var(--mint)}
+  .methods{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+  .m{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .m span{font-size:12px;color:var(--muted);display:block}
+  .m b{font-size:15px;font-weight:600}
+  .m.zero{opacity:.42}
+
+  .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+  .mini-btn{padding:6px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font-size:12px;font-weight:600}
+  .mini-btn:active{background:var(--raised);color:var(--text)}
+  .mini-btn:disabled{opacity:.5}
+
+  .pagos-list button.pago-item{
+    display:flex;align-items:center;gap:10px;width:100%;padding:12px 0;border:0;border-top:1px solid var(--line);
+    background:none;text-align:left;font-size:15px;
+  }
+  .pago-item:first-child{border-top:0}
+  .pago-item:active{background:var(--raised)}
+  .pago-info{display:flex;flex-direction:column;flex:1;overflow:hidden}
+  .pago-info .monto{font-weight:700}
+  .pago-info .quien{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pago-item .hora{color:var(--muted);font-size:12px}
+  .pago-item.usado{opacity:.42}
+  .pago-item.nuevo{animation:slidein .4s cubic-bezier(.2,.9,.25,1)}
+
+  .feed{list-style:none;margin:12px 0 0;padding:0}
+  .feed li{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line);font-size:15px}
+  .feed li:first-child{border-top:0}
+  .feed .t{color:var(--muted);font-size:12px;width:40px;flex:0 0 40px}
+  .feed .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .feed .v{font-weight:700}
+  .feed-del{width:28px;height:28px;flex:0 0 28px;border:0;border-radius:8px;background:none;color:var(--muted);font-size:13px}
+  .feed-del:active{background:var(--raised);color:var(--coral)}
+  .fresh{animation:slidein .4s cubic-bezier(.2,.9,.25,1)}
+  @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+  .toast{
+    position:fixed;z-index:80;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));
+    transform:translate(-50%,20px);opacity:0;pointer-events:none;
+    display:flex;align-items:center;gap:9px;
+    padding:12px 18px;border-radius:999px;
+    background:var(--mint);color:#062a1c;font-weight:700;font-size:15px;
+    box-shadow:0 12px 30px -8px rgba(0,0,0,.6);
+    transition:opacity .22s,transform .28s cubic-bezier(.2,1.3,.4,1);
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.bad{background:var(--coral);color:#2a0a0a}
+  .empty{color:var(--muted);font-size:14px;padding:14px 0 2px;margin:0}
+
+  /* ---------- modal venta perdida ---------- */
+  .modal-scrim{position:fixed;inset:0;z-index:90;background:rgba(4,8,16,.7);backdrop-filter:blur(3px)}
+  .modal{
+    position:fixed;z-index:91;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(90vw,380px);max-height:85vh;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px 20px;
+  }
+  .modal h2{margin:0 0 4px;font-size:19px;font-weight:700}
+  .modal-close{position:absolute;top:14px;right:14px;width:32px;height:32px;border:0;border-radius:10px;background:var(--raised);color:var(--text);font-size:18px}
+  .vp-quick{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .vp-q{min-height:48px;padding:0 14px;text-align:left;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;font-size:14px;font-weight:500}
+  .vp-q:active{background:var(--raised)}
+  .vp-q:disabled{opacity:.5}
+  #vpTexto{width:100%;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:15px;resize:vertical;outline:none}
+  #vpTexto:focus{border-color:var(--accent)}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="icon-btn" id="open" aria-label="Abrir menú">
+    <span class="burger"><i></i><i></i><i></i></span>
+  </button>
+  <h1>Cargar venta</h1>
+  <div class="today-pill" id="pill"><b id="pillTotal">$0</b><small id="pillCount">0 ventas hoy</small></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer">
+  <header>
+    <p>Platense Fit</p>
+    <small>Registro de ventas</small>
+  </header>
+  <a class="nav-item" href="/movil.html" aria-current="page"><span class="em">🧾</span>Cargar venta</a>
+  <a class="nav-item" href="/tablero.html"><span class="em">📊</span>Tablero</a>
+  <a class="nav-item" href="/ganancias.html"><span class="em">💰</span>Panel de ganancias</a>
+  <a class="nav-item" href="/clientes.html"><span class="em">🔁</span>Recompra de clientes</a>
+  <a class="nav-item" href="/ventas-perdidas.html"><span class="em">📉</span>Ventas perdidas<span class="badge" id="badgePerdidas">0</span></a>
+  <a class="nav-item" href="/envios.html"><span class="em">🛵</span>Envíos Uber Moto</a>
+  <a class="nav-item" href="/pagos.html"><span class="em">💳</span>Pagos recibidos</a>
+  <a class="nav-item" href="/salario.html"><span class="em">💼</span>Mi salario</a>
+  <hr class="nav-sep">
+  <button type="button" class="nav-item" id="navDesktop"><span class="em">🖥️</span>Ver versión de escritorio</button>
+</nav>
+
+<main>
+  <div class="card">
+    <label class="lbl" for="prod">Producto</label>
+    <div class="autocomplete-wrap">
+      <input id="prod" type="text" placeholder="Ej: Whey Star Nutrition 1kg" autocomplete="off" enterkeyhint="next">
+      <div class="suggestions" id="prodSuggestions"></div>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="f-price">
+        <label class="lbl" for="price">Precio por unidad</label>
+        <input id="price" type="tel" inputmode="numeric" placeholder="$ 0" enterkeyhint="done">
+      </div>
+      <div class="f-qty">
+        <span class="lbl">Cantidad</span>
+        <div class="stepper">
+          <button type="button" id="minus" aria-label="Restar uno">−</button>
+          <input id="qty" type="tel" inputmode="numeric" value="1" aria-label="Cantidad">
+          <button type="button" id="plus" aria-label="Sumar uno">+</button>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="ghost-btn" id="addMore">+ Agregar otro producto a esta venta</button>
+    <div class="cart-list" id="cartList"></div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Método de pago</span>
+    <div class="pay-grid" id="pays">
+      <button type="button" class="pay" aria-pressed="false" data-m="efectivo"><span class="em">💵</span>Efectivo</button>
+      <button type="button" class="pay" aria-pressed="false" data-m="transferencia"><span class="em">🏦</span>Transferencia</button>
+      <button type="button" class="pay" aria-pressed="false" data-m="debito"><span class="em">💳</span>Débito</button>
+      <button type="button" class="pay" aria-pressed="false" data-m="credito"><span class="em">💳</span>Crédito</button>
+      <button type="button" class="pay" aria-pressed="false" data-m="cuentadni"><span class="em">📱</span>Cuenta DNI</button>
+      <button type="button" class="pay" aria-pressed="false" data-m="web"><span class="em">🌐</span>Web</button>
+      <button type="button" class="pay wide" aria-pressed="false" data-m="mayorista"><span class="em">🏷️</span>Mayorista</button>
+    </div>
+
+    <div style="margin-top:16px">
+      <button type="button" class="toggle" id="uber" aria-pressed="false">
+        <span class="em">🛵</span>Envío por Uber Moto
+        <span class="switch"></span>
+      </button>
+      <div class="envio-costo-row" id="envioCostoRow" style="display:none;">
+        <label class="lbl" for="envioCosto">Costo del viaje</label>
+        <input id="envioCosto" type="tel" inputmode="numeric" placeholder="$ 0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Vendido hoy</span>
+    <p class="total" id="total">$0</p>
+    <p class="sub" id="count">0 ventas</p>
+
+    <div class="split">
+      <div><p>Mayorista</p><b class="mint" id="mayo">$0</b></div>
+      <div><p>Envíos Uber</p><b id="ubers">0</b></div>
+    </div>
+
+    <div class="methods" id="methods"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="lbl" style="margin:0">Transferencias recibidas hoy</span>
+      <button type="button" class="mini-btn" id="pagosActualizar">Actualizar</button>
+    </div>
+    <p class="sub" style="margin:0 0 4px">Tocá una para cargar el monto.</p>
+    <div class="pagos-list" id="pagosFeed"></div>
+    <p class="empty" id="pagosEmpty">Todavía no entró ninguna transferencia hoy.</p>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Ventas de hoy</span>
+    <ul class="feed" id="feed"></ul>
+    <p class="empty" id="empty">Todavía no cargaste ninguna venta hoy.</p>
+  </div>
+</main>
+
+<div class="actionbar">
+  <button type="button" class="submit" id="save">Registrar venta</button>
+  <button type="button" class="lost" id="lostBtn"><b id="lostCount">0</b>perdida</button>
+</div>
+
+<div class="toast" id="toast"><span id="toastIcon">✓</span><span id="toastText">Venta registrada</span></div>
+
+<div class="modal-scrim" id="vpScrim" style="display:none;"></div>
+<div class="modal" id="vpModal" style="display:none;">
+  <button type="button" class="modal-close" id="vpClose" aria-label="Cerrar">×</button>
+  <h2>¿Qué pasó?</h2>
+  <p class="sub">Contanos rápido por qué no compró.</p>
+  <div class="vp-quick" id="vpQuick">
+    <button type="button" class="vp-q" data-motivo="Estaba mirando precios">Estaba mirando precios</button>
+    <button type="button" class="vp-q" data-motivo="Faltaba un producto">Faltaba un producto</button>
+    <button type="button" class="vp-q" data-motivo="Faltaba un sabor">Faltaba un sabor</button>
+  </div>
+  <p class="sub" style="margin:14px 0 8px">o escribí qué pasó</p>
+  <form id="vpForm">
+    <textarea id="vpTexto" rows="3" placeholder="Ej: buscaba una marca que no tenemos..."></textarea>
+    <button type="submit" class="submit" style="margin-top:10px;width:100%">Guardar</button>
+  </form>
+  <p class="sub" id="vpError" style="display:none;color:var(--coral)"></p>
+</div>
+
+<script src="movil.js"></script>
+</body>
+</html>
