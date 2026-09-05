@@ -1,11 +1,11 @@
 {
   "name": "Platense Fit",
   "short_name": "Platense Fit",
-  "start_url": "/",
+  "start_url": "/movil.html",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0f1420",
-  "theme_color": "#0f1420",
+  "background_color": "#0A101C",
+  "theme_color": "#0A101C",
   "lang": "es-AR",
   "icons": [
     { "src": "/logo-platense-fit.png", "sizes": "480x480", "type": "image/png" }
