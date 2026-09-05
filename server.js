@@ -160,6 +160,8 @@ const MIME = {
   ".svg": "image/svg+xml",
   ".gif": "image/gif",
   ".ico": "image/x-icon",
+  ".json": "application/manifest+json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 function sendJson(res, status, data) {
