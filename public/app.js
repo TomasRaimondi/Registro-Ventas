@@ -288,6 +288,34 @@ payButtons.forEach(btn => {
   });
 });
 
+// ---------- Envío por Uber Moto (opcional, además del método de pago) ----------
+
+const envioBtn = document.getElementById("envio-uber-btn");
+const envioCostoWrap = document.getElementById("envio-costo-wrap");
+const envioCostoInput = document.getElementById("envio-costo");
+let envioActivo = false;
+
+envioBtn.addEventListener("click", () => {
+  envioActivo = !envioActivo;
+  envioBtn.classList.toggle("active", envioActivo);
+  envioCostoWrap.style.display = envioActivo ? "block" : "none";
+  if (envioActivo) {
+    envioBtn.classList.remove("envio-pop");
+    void envioBtn.offsetWidth;
+    envioBtn.classList.add("envio-pop");
+    envioCostoInput.focus();
+  } else {
+    envioCostoInput.value = "";
+  }
+});
+
+function resetearEnvio() {
+  envioActivo = false;
+  envioBtn.classList.remove("active");
+  envioCostoWrap.style.display = "none";
+  envioCostoInput.value = "";
+}
+
 // ---------- Carrito de productos (una venta puede tener varios) ----------
 
 let carrito = [];
@@ -370,6 +398,11 @@ form.addEventListener("submit", async (e) => {
     alert("Elegí un método de pago.");
     return;
   }
+  const envioCosto = envioActivo ? parseFloat(envioCostoInput.value) : null;
+  if (envioActivo && (!Number.isFinite(envioCosto) || envioCosto <= 0)) {
+    alert("Ingresá el costo del envío por Uber Moto.");
+    return;
+  }
 
   submitBtn.disabled = true;
   submitBtn.textContent = "Registrando...";
@@ -382,7 +415,12 @@ form.addEventListener("submit", async (e) => {
     await api("/api/ventas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: itemsAEnviar, metodo: metodoSeleccionado }),
+      body: JSON.stringify({
+        items: itemsAEnviar,
+        metodo: metodoSeleccionado,
+        envioMetodo: envioActivo ? "uber_moto" : null,
+        envioCosto,
+      }),
     });
 
     carrito = [];
@@ -390,6 +428,7 @@ form.addEventListener("submit", async (e) => {
     form.reset();
     payButtons.forEach(b => b.classList.remove("active"));
     metodoSeleccionado = null;
+    resetearEnvio();
     document.getElementById("producto").focus();
 
     // Si estaba viendo el historial de otro día, la venta nueva se cargó hoy: volvemos a hoy para verla.
@@ -465,6 +504,12 @@ function renderMetrics(sales) {
   document.getElementById("total-dia-mayorista").textContent = money(totalMayorista);
   document.getElementById("cant-ventas-mayorista").textContent =
     ventasMayorista.length === 1 ? "1 venta" : `${ventasMayorista.length} ventas`;
+
+  // Envíos por Uber Moto del día: cuántos salieron y cuánto se gastó en viajes
+  const envios = sales.filter(s => s.envioMetodo === "uber_moto");
+  const costoEnvios = envios.reduce((acc, s) => acc + (s.envioCosto || 0), 0);
+  document.getElementById("cant-envios-hoy").textContent = envios.length;
+  document.getElementById("costo-envios-hoy").textContent = `${money(costoEnvios)} en viajes`;
 
   // Totales por método de pago
   const totalsByMethod = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, cuentadni: 0, mayorista: 0, web: 0 };

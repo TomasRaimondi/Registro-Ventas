@@ -470,7 +470,22 @@ const server = http.createServer(async (req, res) => {
         itemsProcessed.push({ producto, precio: precioNeto });
       }
 
-      const total = itemsProcessed.reduce((acc, it) => acc + it.precio, 0);
+      const totalBruto = itemsProcessed.reduce((acc, it) => acc + it.precio, 0);
+
+      // Envío por Uber Moto: se descuenta del total, igual que la comisión de Cuenta DNI,
+      // pero como un monto fijo (el costo real del viaje) en vez de un porcentaje.
+      let envioMetodo = null;
+      let envioCosto = null;
+      if (body.envioMetodo === "uber_moto") {
+        const costo = Number(body.envioCosto);
+        if (!Number.isFinite(costo) || costo <= 0) {
+          return sendJson(res, 400, { error: "Falta el costo del envío por Uber Moto" });
+        }
+        envioMetodo = "uber_moto";
+        envioCosto = Math.round(costo * 100) / 100;
+      }
+
+      const total = envioCosto ? totalBruto - envioCosto : totalBruto;
 
       // Agrupa productos repetidos en el resumen (ej: "Pancake x10" en vez de repetirlo 10 veces)
       const conteoPorProducto = new Map();
@@ -509,6 +524,8 @@ const server = http.createServer(async (req, res) => {
         horaLabel,
         creadoEn: new Date().toISOString(),
         cliente,
+        envioMetodo,
+        envioCosto,
       };
 
       await db.insert(row);

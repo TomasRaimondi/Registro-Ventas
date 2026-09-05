@@ -172,6 +172,22 @@ async function migrarCliente(execFn) {
   }
 }
 
+// Migración aditiva: agrega el envío (por ahora solo "uber_moto") y su costo a ventas,
+// para poder medir cuántos envíos a domicilio se hacen por día y descontar ese costo
+// del monto neto de la venta, igual que se hace con la comisión de Cuenta DNI.
+async function migrarEnvio(execFn) {
+  try {
+    await execFn("ALTER TABLE ventas ADD COLUMN envioMetodo TEXT");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+  try {
+    await execFn("ALTER TABLE ventas ADD COLUMN envioCosto REAL");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
 let impl;
@@ -192,6 +208,7 @@ if (USE_TURSO) {
       await migrarStock((sql) => client.execute(sql));
       await migrarLoteId((sql) => client.execute(sql));
       await migrarCliente((sql) => client.execute(sql));
+      await migrarEnvio((sql) => client.execute(sql));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -218,9 +235,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       await client.execute({
-        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null],
+        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null],
       });
     },
     async deleteById(id) {
@@ -560,6 +577,7 @@ if (USE_TURSO) {
       await migrarStock(async (sql) => db.exec(sql));
       await migrarLoteId(async (sql) => db.exec(sql));
       await migrarCliente(async (sql) => db.exec(sql));
+      await migrarEnvio(async (sql) => db.exec(sql));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -579,9 +597,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       db.prepare(
-        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null);
+        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null);
     },
     async deleteById(id) {
       db.prepare("DELETE FROM ventas WHERE id = ?").run(id);

@@ -76,6 +76,19 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Envío</label>
+        <div class="envio-toggle-row">
+          <button type="button" id="envio-uber-btn" class="envio-btn">🛵 Envío por Uber Moto</button>
+          <div class="envio-costo-wrap" id="envio-costo-wrap" style="display:none;">
+            <div class="input-prefix">
+              <span>$</span>
+              <input type="number" id="envio-costo" placeholder="Costo del viaje" min="0" step="0.01">
+            </div>
+          </div>
+        </div>
+      </div>
+
       <button type="submit" class="submit-btn">Registrar venta</button>
       <p class="hint">La hora se registra automáticamente (Argentina).</p>
     </form>
@@ -92,6 +105,12 @@
         <span class="label">Total Mayorista</span>
         <span class="mayorista-number" id="total-dia-mayorista">$0</span>
         <span class="sub" id="cant-ventas-mayorista">0 ventas</span>
+      </div>
+
+      <div class="mayorista-total envio-total">
+        <span class="label">🛵 Envíos Uber Moto hoy</span>
+        <span class="mayorista-number envio-number" id="cant-envios-hoy">0</span>
+        <span class="sub" id="costo-envios-hoy">$0 en viajes</span>
       </div>
     </div>
 

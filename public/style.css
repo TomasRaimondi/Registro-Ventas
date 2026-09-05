@@ -291,6 +291,40 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .vp-btn-texto strong { font-size: 13px; font-weight: 800; }
 .vp-btn-texto small { font-size: 11px; opacity: 0.9; }
 
+/* ---------- Envío por Uber Moto ---------- */
+
+.envio-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.envio-btn {
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 2px solid var(--purple);
+  background: var(--purple-soft);
+  color: var(--purple);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform .12s ease, background .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.envio-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.envio-btn:active { transform: translateY(0) scale(0.97); }
+.envio-btn.active {
+  background: var(--purple);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--purple-soft);
+}
+.envio-btn.envio-pop { animation: vp-pop .4s ease; }
+
+.envio-costo-wrap { flex: 1; min-width: 160px; }
+
+.envio-number { color: var(--purple); }
+
 #venta-perdida-modal .modal-card { position: relative; }
 
 .modal-cerrar {
