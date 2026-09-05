@@ -589,6 +589,7 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .chart-bar-mayorista { background: linear-gradient(180deg, var(--orange), #c98a2e); }
 .chart-bar-gasto { background: linear-gradient(180deg, var(--red), #b83f3f); }
 #resumen-chart .chart-bar { background: linear-gradient(180deg, var(--red), #b83f3f); }
+#envios-chart .chart-bar { background: linear-gradient(180deg, var(--purple), #7c5cd6); }
 .chart-bar-gasto-label {
   display: block;
   font-size: 9px;
