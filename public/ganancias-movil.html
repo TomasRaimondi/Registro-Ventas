@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Panel de Ganancias</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0A101C">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ganancias">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<link rel="stylesheet" href="movil-shared.css">
+<style>
+  .fecha-row{display:flex;align-items:center;gap:10px}
+  .fecha-row input{flex:1}
+  .lote-detail-item span:nth-child(2),
+  .lote-detail-item span:nth-child(3),
+  .lote-detail-item span:nth-child(4),
+  .lote-detail-item span:nth-child(5){color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="icon-btn" id="open" aria-label="Abrir menú">
+    <span class="burger"><i></i><i></i><i></i></span>
+  </button>
+  <h1>Panel de ganancias</h1>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer">
+  <header>
+    <p>Platense Fit</p>
+    <small>Panel de ganancias</small>
+  </header>
+  <a class="nav-item" href="/"><span class="em">🧾</span>Cargar venta</a>
+  <a class="nav-item" href="/tablero.html"><span class="em">📊</span>Tablero</a>
+  <a class="nav-item" href="/ganancias.html" aria-current="page"><span class="em">💰</span>Panel de ganancias</a>
+  <a class="nav-item" href="/clientes.html"><span class="em">🔁</span>Recompra de clientes</a>
+  <a class="nav-item" href="/ventas-perdidas.html"><span class="em">📉</span>Ventas perdidas</a>
+  <a class="nav-item" href="/envios.html"><span class="em">🛵</span>Envíos Uber Moto</a>
+  <a class="nav-item" href="/pagos.html"><span class="em">💳</span>Pagos recibidos</a>
+  <a class="nav-item" href="/salario.html"><span class="em">💼</span>Mi salario</a>
+  <hr class="nav-sep">
+  <button type="button" class="nav-item" id="navDesktop"><span class="em">🖥️</span>Ver versión de escritorio</button>
+  <button type="button" class="nav-item" id="logout-btn" style="display:none;"><span class="em">🚪</span>Cerrar sesión</button>
+</nav>
+
+<!-- Login -->
+<div class="login-wrap" id="login-card">
+  <div class="card login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <label class="lbl" for="password">Contraseña</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required>
+      <button type="submit" class="submit">Entrar</button>
+      <p class="error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </div>
+</div>
+
+<main id="app-content" style="display:none;">
+
+  <div class="card">
+    <div class="card-head">
+      <span class="lbl" style="margin:0">Viendo datos de <span class="fecha-dinamica">hoy</span></span>
+      <button type="button" class="mini-btn" id="fecha-selector-hoy-btn" style="display:none;">Volver a hoy</button>
+    </div>
+    <div class="fecha-row">
+      <input type="date" id="fecha-selector-input" title="Ver otro día">
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Ganancia neta <span class="fecha-dinamica">hoy</span></span>
+    <p class="total" id="ganancia-neta">$0</p>
+    <div class="split-line">
+      <span>Bruta: <b id="ganancia-bruta">$0</b></span>
+      <span>Gastos: <b id="gasto-total" class="coral">$0</b></span>
+    </div>
+    <p class="sub" id="ventas-consideradas">0 ventas con costo cargado</p>
+  </div>
+
+  <div class="card" id="sin-costo-card" style="display:none;">
+    <span class="lbl">⚠ Productos vendidos <span class="fecha-dinamica">hoy</span> sin costo cargado</span>
+    <p class="hint">Estas ventas no se incluyeron en la ganancia bruta:</p>
+    <ul class="list" id="sin-costo-list" style="list-style:none;padding:0;margin:6px 0 0;"></ul>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Rentabilidad por pedido</span>
+    <div class="split">
+      <div><p>Minorista</p><b id="rentabilidad-minorista">—</b></div>
+      <div><p>Mayorista</p><b id="rentabilidad-mayorista">—</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Ganancias por pedido</span>
+    <p class="hint" style="margin-bottom:4px;">Tocá un pedido para ver el desglose por producto.</p>
+    <div class="list" id="pedidos-list"></div>
+  </div>
+
+  <div class="card">
+    <button type="button" class="ghost-btn" id="detalle-ventas-toggle" style="margin-top:0;">Ver detalle de ventas por producto ▾</button>
+    <div class="list" id="detalle-ventas-list" style="display:none;"></div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Planilla de costos</span>
+    <form id="costo-form" autocomplete="off">
+      <input type="text" id="costo-producto" placeholder="Nombre del producto (igual al de la venta)" required style="margin-bottom:8px;">
+      <input type="number" id="costo-valor" placeholder="Costo" min="0" step="0.01" required>
+      <button type="submit" class="submit">Guardar costo</button>
+    </form>
+    <div class="list" id="costos-list"></div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Gastos de <span class="fecha-dinamica">hoy</span></span>
+    <form id="gasto-form" autocomplete="off">
+      <input type="text" id="gasto-concepto" placeholder="Concepto (ej: Sueldo, Alquiler)" required style="margin-bottom:8px;">
+      <input type="number" id="gasto-monto" placeholder="Monto" min="0" step="0.01" required>
+      <button type="submit" class="submit">Registrar gasto</button>
+    </form>
+    <div class="list" id="gastos-list"></div>
+  </div>
+
+  <div class="card">
+    <span class="lbl">Salario del empleado</span>
+    <form id="salario-form" autocomplete="off">
+      <input type="date" id="salario-fecha" required style="margin-bottom:8px;">
+      <input type="number" id="salario-sueldo" placeholder="Sueldo del día" min="0" step="0.01" style="margin-bottom:8px;">
+      <input type="number" id="salario-comision" placeholder="Comisión / bono" min="0" step="0.01" style="margin-bottom:8px;">
+      <input type="text" id="salario-nota" placeholder="Nota (opcional)">
+      <button type="submit" class="submit">Agregar día</button>
+    </form>
+    <div class="list" id="salario-list"></div>
+    <p class="hint"><a href="/salario.html" target="_blank">Ver reporte de salario del empleado →</a></p>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"><span id="toastIcon">✓</span><span id="toastText"></span></div>
+
+<script src="movil-shared.js"></script>
+<script src="ganancias-movil.js"></script>
+</body>
+</html>
