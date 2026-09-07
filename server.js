@@ -14,6 +14,7 @@ const TIMEZONE = "America/Argentina/Buenos_Aires";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito", "cuentadni", "mayorista", "web"]);
 const CUENTA_DNI_COMISION = 0.006;
+const WEB_COMISION = 0.01;
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
 
 function normalizeNombre(s) {
@@ -465,9 +466,8 @@ const server = http.createServer(async (req, res) => {
         if (!producto) return sendJson(res, 400, { error: "Falta el nombre de un producto" });
         if (!Number.isFinite(precio) || precio <= 0) return sendJson(res, 400, { error: `Precio inválido para "${producto}"` });
 
-        const precioNeto = metodo === "cuentadni"
-          ? Math.round(precio * (1 - CUENTA_DNI_COMISION) * 100) / 100
-          : precio;
+        const comision = metodo === "cuentadni" ? CUENTA_DNI_COMISION : metodo === "web" ? WEB_COMISION : 0;
+        const precioNeto = comision ? Math.round(precio * (1 - comision) * 100) / 100 : precio;
 
         itemsProcessed.push({ producto, precio: precioNeto });
       }
