@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Recompra de Clientes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0A101C">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clientes">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<link rel="stylesheet" href="movil-shared.css">
+<style>
+  .controles{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  .controles-row{display:flex;gap:8px}
+  .controles-row .campo{flex:1;display:flex;flex-direction:column;gap:4px}
+  .controles-row .campo .lbl{margin:0}
+  select{
+    width:100%;height:52px;padding:0 12px;background:var(--bg);border:1.5px solid var(--line);
+    border-radius:14px;font-size:15px;font-weight:500;outline:none;
+  }
+  .sync-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .detalle-pedido{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-top:1px dashed var(--line);font-size:12px}
+  .detalle-pedido:first-child{border-top:0}
+  .detalle-pedido b{font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="icon-btn" id="open" aria-label="Abrir menú">
+    <span class="burger"><i></i><i></i><i></i></span>
+  </button>
+  <h1>Recompra de clientes</h1>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer">
+  <header>
+    <p>Platense Fit</p>
+    <small>Recompra de clientes</small>
+  </header>
+  <a class="nav-item" href="/"><span class="em">🧾</span>Cargar venta</a>
+  <a class="nav-item" href="/tablero.html"><span class="em">📊</span>Tablero</a>
+  <a class="nav-item" href="/ganancias.html"><span class="em">💰</span>Panel de ganancias</a>
+  <a class="nav-item" href="/clientes.html" aria-current="page"><span class="em">🔁</span>Recompra de clientes</a>
+  <a class="nav-item" href="/ventas-perdidas.html"><span class="em">📉</span>Ventas perdidas</a>
+  <a class="nav-item" href="/envios.html"><span class="em">🛵</span>Envíos Uber Moto</a>
+  <a class="nav-item" href="/pagos.html"><span class="em">💳</span>Pagos recibidos</a>
+  <a class="nav-item" href="/salario.html"><span class="em">💼</span>Mi salario</a>
+  <hr class="nav-sep">
+  <button type="button" class="nav-item" id="navDesktop"><span class="em">🖥️</span>Ver versión de escritorio</button>
+  <button type="button" class="nav-item" id="logout-btn" style="display:none;"><span class="em">🚪</span>Cerrar sesión</button>
+</nav>
+
+<!-- Login -->
+<div class="login-wrap" id="login-card">
+  <div class="card login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <label class="lbl" for="password">Contraseña</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required>
+      <button type="submit" class="submit">Entrar</button>
+      <p class="error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </div>
+</div>
+
+<main id="app-content" style="display:none;">
+
+  <div class="card" id="sin-conexion" style="display:none;">
+    <p class="error-hint">La tienda de Tiendanube no está conectada en este panel.</p>
+  </div>
+
+  <div class="card">
+    <div class="stats-grid">
+      <div class="stat-tile">
+        <span class="lbl" style="margin:0">Clientes con compras</span>
+        <b id="stat-total">0</b>
+      </div>
+      <div class="stat-tile">
+        <span class="lbl" style="margin:0">Recompraron (2+)</span>
+        <b id="stat-recompro" class="mint">0</b>
+        <small id="stat-recompro-pct"></small>
+      </div>
+      <div class="stat-tile">
+        <span class="lbl" style="margin:0">Compraron 1 vez</span>
+        <b id="stat-unico">0</b>
+      </div>
+      <div class="stat-tile">
+        <span class="lbl" style="margin:0">Inactivos</span>
+        <b id="stat-inactivo" class="coral">0</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tabs" id="segmento-tabs">
+      <button type="button" class="tab active" data-segmento="todos">Todos</button>
+      <button type="button" class="tab" data-segmento="recompro">Recompraron</button>
+      <button type="button" class="tab" data-segmento="unico">Compra única</button>
+      <button type="button" class="tab" data-segmento="inactivo">Inactivos</button>
+    </div>
+
+    <div class="controles">
+      <input type="text" id="buscador" placeholder="Buscar por nombre, email o teléfono...">
+      <div class="controles-row">
+        <div class="campo">
+          <span class="lbl">Inactivo desde (días)</span>
+          <input type="number" id="umbral-dias" min="1" step="1" value="45">
+        </div>
+        <div class="campo">
+          <span class="lbl">Cupón</span>
+          <select id="porcentaje-cupon">
+            <option value="10" selected>10%</option>
+            <option value="15">15%</option>
+            <option value="20">20%</option>
+            <option value="25">25%</option>
+            <option value="30">30%</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="sync-bar">
+      <span class="hint" id="sync-label" style="margin:0">Sin sincronizar todavía.</span>
+      <button type="button" class="mini-btn" id="refrescar-btn">Actualizar</button>
+    </div>
+
+    <div class="list" id="clientes-list"></div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"><span id="toastIcon">✓</span><span id="toastText"></span></div>
+
+<script src="movil-shared.js"></script>
+<script src="clientes-movil.js"></script>
+</body>
+</html>

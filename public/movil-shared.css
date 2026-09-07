@@ -168,6 +168,32 @@ input::placeholder,textarea::placeholder{color:#5b6b8c}
 .acc-detail-item .n{color:var(--text)}
 .acc-detail-item .v{color:var(--muted);text-align:right}
 
+/* ---------- grilla de estadísticas ---------- */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat-tile{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat-tile b{display:block;font-size:24px;font-weight:800;letter-spacing:-.5px;margin-top:2px}
+.stat-tile small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ---------- pestañas horizontales ---------- */
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:9px 16px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--muted);font-size:14px;font-weight:600;white-space:nowrap}
+.tab.active{background:linear-gradient(140deg,var(--accent),var(--accent-deep));border-color:var(--accent);color:#fff}
+
+/* ---------- badges de segmento ---------- */
+.badge-seg{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge-seg.recompro{background:rgba(61,220,151,.15);color:var(--mint)}
+.badge-seg.inactivo{background:rgba(255,107,107,.15);color:var(--coral)}
+.badge-seg.unico{background:rgba(124,139,255,.15);color:var(--accent)}
+
+/* ---------- WhatsApp / cupón ---------- */
+.wa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;background:rgba(61,220,151,.15);color:var(--mint);font-size:13px;font-weight:700;text-decoration:none;border:0}
+.wa-btn:active{background:rgba(61,220,151,.28)}
+.cupon-btn{padding:8px 14px;border-radius:12px;border:1.5px solid var(--gold);background:rgba(245,185,66,.12);color:var(--gold);font-size:13px;font-weight:700}
+.cupon-btn:active{background:rgba(245,185,66,.25)}
+.cupon-btn:disabled{opacity:.5}
+.cupon-codigo{font-family:ui-monospace,monospace;font-weight:700;background:var(--raised);padding:4px 8px;border-radius:8px;font-size:13px}
+
 /* ---------- login ---------- */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .login-card{width:100%;max-width:340px}
