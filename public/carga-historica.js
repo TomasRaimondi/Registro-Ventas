@@ -137,7 +137,6 @@ productoSuggestions.addEventListener("mousedown", (e) => {
 
 // ---------- Selección de método de pago ----------
 
-const precioCantidadRow = document.getElementById("precio-cantidad-row");
 const webCalcWrap = document.getElementById("web-calc-wrap");
 
 let metodoSeleccionado = null;
@@ -150,36 +149,33 @@ payButtons.forEach(btn => {
 
     const esWeb = metodoSeleccionado === "web";
     webCalcWrap.style.display = esWeb ? "block" : "none";
-    precioCantidadRow.style.display = esWeb ? "none" : "flex";
-    if (esWeb) {
-      document.getElementById("precio").value = "";
-      document.getElementById("cantidad").value = "1";
-    } else {
-      resetWebCalc();
-    }
+    if (!esWeb) resetWebCalc();
   });
 });
 
-// ---------- Venta Web: calculadora de subtotal/envío/total neto ----------
-// El Subtotal solo se usa para calcular la comisión de Tiendanube (1%). El Total
-// Neto es lo que muestra Tiendanube como total cobrado (puede variar del subtotal +
-// envío por el recargo de las cuotas), y de ahí se descuenta el envío y esa comisión
-// para saber lo que efectivamente entra y hay que registrar como venta.
+// ---------- Venta Web: total de la orden en Tiendanube ----------
+// Los productos se cargan como cualquier venta (uno por uno, con su precio real),
+// y acá se anota el Total y el Envío que muestra la orden en Tiendanube. Si no se
+// pagó con Pago Nube (ej: efectivo, "Pagos Personalizados"), Tiendanube cobra 1%
+// de comisión sobre ese Total aparte, a fin de mes — por eso se descuenta acá.
+// Si se pagó con Pago Nube, ese 1% ya viene bonificado (ahí Pago Nube cobra su
+// propia comisión de procesamiento, que ya está reflejada en el Total que se anota).
+// Al registrar la venta, el resultado final se reparte proporcionalmente entre
+// los productos cargados, según el precio que se les puso a cada uno.
 
-const webSubtotalInput = document.getElementById("web-subtotal");
+const webTotalInput = document.getElementById("web-total");
 const webEnvioInput = document.getElementById("web-envio");
-const webTotalNetoInput = document.getElementById("web-total-neto");
+const webPagoNubeCheckbox = document.getElementById("web-pago-nube");
 const webComisionEl = document.getElementById("web-comision");
 const webEnvioLineaEl = document.getElementById("web-envio-linea");
 const webResultadoEl = document.getElementById("web-resultado");
 
 function calcularNetoWeb() {
-  const subtotal = parseFloat(webSubtotalInput.value) || 0;
+  const total = parseFloat(webTotalInput.value) || 0;
   const envio = parseFloat(webEnvioInput.value) || 0;
-  const totalNeto = parseFloat(webTotalNetoInput.value) || 0;
-  const comision = Math.round(subtotal * 0.01 * 100) / 100;
-  const resultado = Math.round((totalNeto - envio - comision) * 100) / 100;
-  return { subtotal, envio, totalNeto, comision, resultado };
+  const comision = webPagoNubeCheckbox.checked ? 0 : Math.round(total * 0.01 * 100) / 100;
+  const resultado = Math.round((total - envio - comision) * 100) / 100;
+  return { total, envio, comision, resultado };
 }
 
 function actualizarWebCalc() {
@@ -193,15 +189,15 @@ function actualizarWebCalc() {
 }
 
 function resetWebCalc() {
-  webSubtotalInput.value = "";
+  webTotalInput.value = "";
   webEnvioInput.value = "";
-  webTotalNetoInput.value = "";
+  webPagoNubeCheckbox.checked = false;
   actualizarWebCalc();
 }
 
-webSubtotalInput.addEventListener("input", actualizarWebCalc);
+webTotalInput.addEventListener("input", actualizarWebCalc);
 webEnvioInput.addEventListener("input", actualizarWebCalc);
-webTotalNetoInput.addEventListener("input", actualizarWebCalc);
+webPagoNubeCheckbox.addEventListener("change", actualizarWebCalc);
 
 // ---------- Carrito ----------
 
@@ -242,27 +238,16 @@ function renderCart() {
 
 function agregarItemDesdeInputs() {
   const producto = productoInput.value.trim();
-  let precio, cantidad;
-
-  if (metodoSeleccionado === "web") {
-    precio = calcularNetoWeb().resultado;
-    cantidad = 1;
-  } else {
-    precio = parseFloat(document.getElementById("precio").value);
-    const cantidadInput = parseInt(document.getElementById("cantidad").value, 10);
-    cantidad = Number.isInteger(cantidadInput) && cantidadInput > 0 ? cantidadInput : 1;
-  }
+  const precio = parseFloat(document.getElementById("precio").value);
+  const cantidadInput = parseInt(document.getElementById("cantidad").value, 10);
+  const cantidad = Number.isInteger(cantidadInput) && cantidadInput > 0 ? cantidadInput : 1;
 
   if (!producto || isNaN(precio) || precio <= 0) return false;
 
   carrito.push({ producto, precioUnitario: precio, cantidad });
   productoInput.value = "";
-  if (metodoSeleccionado === "web") {
-    resetWebCalc();
-  } else {
-    document.getElementById("precio").value = "";
-    document.getElementById("cantidad").value = "1";
-  }
+  document.getElementById("precio").value = "";
+  document.getElementById("cantidad").value = "1";
   renderSuggestions([]);
   renderCart();
   return true;
@@ -301,12 +286,37 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
+  // Venta web: el Total/Envío de la calculadora representan el pedido completo de
+  // Tiendanube. El resultado final se reparte proporcionalmente entre los productos
+  // cargados, según el precio que se le puso a cada uno.
+  let factorWeb = 1;
+  if (metodoSeleccionado === "web") {
+    const { total, resultado } = calcularNetoWeb();
+    if (!Number.isFinite(total) || total <= 0) {
+      alert("Ingresá el Total de la venta web.");
+      return;
+    }
+    const subtotalCrudo = carrito.reduce((acc, it) => acc + it.precioUnitario * it.cantidad, 0);
+    if (subtotalCrudo <= 0) {
+      alert("Cargá el precio de los productos de esta venta web.");
+      return;
+    }
+    if (resultado <= 0) {
+      alert("El valor a registrar dio $0 o menos. Revisá el Total y el Envío.");
+      return;
+    }
+    factorWeb = resultado / subtotalCrudo;
+  }
+
   submitBtn.disabled = true;
   submitBtn.textContent = "Registrando...";
 
   try {
     const itemsAEnviar = carrito.flatMap(it =>
-      Array.from({ length: it.cantidad }, () => ({ producto: it.producto, precio: it.precioUnitario }))
+      Array.from({ length: it.cantidad }, () => ({
+        producto: it.producto,
+        precio: metodoSeleccionado === "web" ? Math.round(it.precioUnitario * factorWeb * 100) / 100 : it.precioUnitario,
+      }))
     );
 
     await api("/api/ventas", {
@@ -320,7 +330,6 @@ form.addEventListener("submit", async (e) => {
     payButtons.forEach(b => b.classList.remove("active"));
     metodoSeleccionado = null;
     webCalcWrap.style.display = "none";
-    precioCantidadRow.style.display = "flex";
     resetWebCalc();
     productoInput.focus();
 

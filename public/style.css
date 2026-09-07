@@ -342,7 +342,18 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 }
 .web-calc-inputs { display: flex; gap: 10px; }
 .web-calc-inputs .input-prefix { flex: 1; }
-.web-calc-total-neto { margin-top: 10px; }
+
+.web-calc-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.web-calc-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--blue); cursor: pointer; }
 
 .web-calc-lineas { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; }
 .web-calc-linea { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-dim); }

@@ -92,24 +92,24 @@
         </div>
 
         <div class="field web-calc" id="web-calc-wrap" style="display:none;">
-          <label class="web-calc-label">🌐 Venta Web — calculá lo que te queda</label>
+          <label class="web-calc-label">🌐 Venta Web — total de la orden en Tiendanube</label>
           <div class="web-calc-inputs">
             <div class="input-prefix">
               <span>$</span>
-              <input type="number" id="web-subtotal" placeholder="Subtotal" min="0" step="0.01">
+              <input type="number" id="web-total" placeholder="Total" min="0" step="0.01">
             </div>
             <div class="input-prefix">
               <span>$</span>
               <input type="number" id="web-envio" placeholder="Envío" min="0" step="0.01">
             </div>
           </div>
-          <div class="input-prefix web-calc-total-neto">
-            <span>$</span>
-            <input type="number" id="web-total-neto" placeholder="Total Neto (el que muestra Tiendanube)" min="0" step="0.01">
-          </div>
+          <label class="web-calc-check">
+            <input type="checkbox" id="web-pago-nube">
+            Pagado con Pago Nube (ya tiene todo descontado, no restar el 1%)
+          </label>
           <div class="web-calc-lineas">
-            <div class="web-calc-linea"><span>Comisión (1% del subtotal)</span><b id="web-comision">$0</b></div>
             <div class="web-calc-linea"><span>Envío</span><b id="web-envio-linea">$0</b></div>
+            <div class="web-calc-linea"><span>Comisión (1% del total)</span><b id="web-comision">$0</b></div>
           </div>
           <div class="web-calc-neto-wrap">
             <span class="web-calc-neto-label">Se registra como</span>
