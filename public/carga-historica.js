@@ -386,7 +386,7 @@ async function renderHistorial() {
       <td>${s.horaLabel}</td>
       <td>${escapeHtml(s.producto)}</td>
       <td>${money(s.precio)}</td>
-      <td><span class="pm-tag ${s.metodo}">${PAYMENT_LABELS[s.metodo] || s.metodo}</span></td>
+      <td><span class="pm-tag ${s.metodo}">${PAYMENT_LABELS[s.metodo] || s.metodo}</span>${s.envioMetodo === "uber_moto" ? '<span class="uber-tag">🛵 Uber Moto</span>' : ""}</td>
       <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>
     `;
     tbody.appendChild(tr);

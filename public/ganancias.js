@@ -441,6 +441,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
       const ventaId = itemsDelPedido[0].ventaId;
       const horaLabel = itemsDelPedido[0].horaLabel;
       const metodo = itemsDelPedido[0].metodo;
+      const envioMetodo = itemsDelPedido[0].envioMetodo;
 
       const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
       const itemsConCosto = itemsDelPedido.filter(it => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
@@ -463,7 +464,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
       tr.innerHTML = `
         <td>${horaLabel}</td>
         <td><span class="expand-caret">▸</span>${escapeHtml(resumenProductos(itemsDelPedido))}</td>
-        <td>${metodo ? `<span class="pm-tag ${metodo}">${PAYMENT_LABELS[metodo] || metodo}</span>` : "—"}</td>
+        <td>${metodo ? `<span class="pm-tag ${metodo}">${PAYMENT_LABELS[metodo] || metodo}</span>` : "—"}${envioMetodo === "uber_moto" ? '<span class="uber-tag">🛵 Uber Moto</span>' : ""}</td>
         <td>${money(precioTotal)}</td>
         <td>${completo ? money(costoTotal) : `${money(costoTotal)} <span class="hint" style="margin:0;">(parcial)</span>`}</td>
         <td style="${gananciaTotal < 0 ? 'color:var(--red);' : ''}">${money(gananciaTotal)}</td>

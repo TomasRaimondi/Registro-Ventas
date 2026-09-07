@@ -907,6 +907,19 @@ body.modo-empleado #link-panel-ganancias {
 .pm-tag.mayorista { background: var(--green-soft); color: var(--green); }
 .pm-tag.web { background: var(--cyan-soft); color: var(--cyan); }
 
+.uber-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--purple-soft);
+  color: var(--purple);
+  border: 1px solid var(--purple);
+  white-space: nowrap;
+}
+
 .del-btn {
   background: none;
   border: none;

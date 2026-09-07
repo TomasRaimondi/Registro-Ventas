@@ -419,6 +419,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
       const ventaId = itemsDelPedido[0].ventaId;
       const horaLabel = itemsDelPedido[0].horaLabel;
       const metodo = itemsDelPedido[0].metodo;
+      const envioMetodo = itemsDelPedido[0].envioMetodo;
 
       const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
       const itemsConCosto = itemsDelPedido.filter((it) => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
@@ -435,7 +436,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
           <span class="acc-caret">▸</span>
           <span class="acc-info">
             <span class="acc-titulo">${escapeHtml(resumenProductos(itemsDelPedido))}</span>
-            <span class="acc-sub">${horaLabel}${metodo ? " · " + (PAYMENT_LABELS[metodo] || metodo) : ""}${!completo ? ` · ${itemsConCosto.length}/${itemsDelPedido.length} con costo` : ""}</span>
+            <span class="acc-sub">${horaLabel}${metodo ? " · " + (PAYMENT_LABELS[metodo] || metodo) : ""}${envioMetodo === "uber_moto" ? " · 🛵 Uber Moto" : ""}${!completo ? ` · ${itemsConCosto.length}/${itemsDelPedido.length} con costo` : ""}</span>
           </span>
           <span class="acc-valor">
             <b style="${gananciaTotal < 0 ? "color:var(--coral);" : ""}">${money(gananciaTotal)}</b>
