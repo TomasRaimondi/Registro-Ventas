@@ -137,6 +137,9 @@ productoSuggestions.addEventListener("mousedown", (e) => {
 
 // ---------- Selección de método de pago ----------
 
+const precioCantidadRow = document.getElementById("precio-cantidad-row");
+const webCalcWrap = document.getElementById("web-calc-wrap");
+
 let metodoSeleccionado = null;
 const payButtons = document.querySelectorAll(".pay-btn");
 payButtons.forEach(btn => {
@@ -144,8 +147,55 @@ payButtons.forEach(btn => {
     payButtons.forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     metodoSeleccionado = btn.dataset.metodo;
+
+    const esWeb = metodoSeleccionado === "web";
+    webCalcWrap.style.display = esWeb ? "block" : "none";
+    precioCantidadRow.style.display = esWeb ? "none" : "flex";
+    if (esWeb) {
+      document.getElementById("precio").value = "";
+      document.getElementById("cantidad").value = "1";
+    } else {
+      resetWebCalc();
+    }
   });
 });
+
+// ---------- Venta Web: calculadora de subtotal/envío/neto ----------
+// Descuenta el 1% de comisión (sobre el subtotal) y el costo de envío que se
+// haya cobrado, para dejar cargado directamente el valor neto de la venta.
+
+const webSubtotalInput = document.getElementById("web-subtotal");
+const webEnvioInput = document.getElementById("web-envio");
+const webComisionEl = document.getElementById("web-comision");
+const webEnvioLineaEl = document.getElementById("web-envio-linea");
+const webNetoEl = document.getElementById("web-neto");
+
+function calcularNetoWeb() {
+  const subtotal = parseFloat(webSubtotalInput.value) || 0;
+  const envio = parseFloat(webEnvioInput.value) || 0;
+  const comision = Math.round(subtotal * 0.01 * 100) / 100;
+  const neto = Math.round((subtotal - comision - envio) * 100) / 100;
+  return { subtotal, envio, comision, neto };
+}
+
+function actualizarWebCalc() {
+  const { comision, envio, neto } = calcularNetoWeb();
+  webComisionEl.textContent = (comision > 0 ? "-" : "") + money(comision);
+  webEnvioLineaEl.textContent = (envio > 0 ? "-" : "") + money(envio);
+  webNetoEl.textContent = money(Math.max(neto, 0));
+  webNetoEl.classList.remove("web-calc-pop");
+  void webNetoEl.offsetWidth;
+  webNetoEl.classList.add("web-calc-pop");
+}
+
+function resetWebCalc() {
+  webSubtotalInput.value = "";
+  webEnvioInput.value = "";
+  actualizarWebCalc();
+}
+
+webSubtotalInput.addEventListener("input", actualizarWebCalc);
+webEnvioInput.addEventListener("input", actualizarWebCalc);
 
 // ---------- Carrito ----------
 
@@ -186,16 +236,27 @@ function renderCart() {
 
 function agregarItemDesdeInputs() {
   const producto = productoInput.value.trim();
-  const precio = parseFloat(document.getElementById("precio").value);
-  const cantidadInput = parseInt(document.getElementById("cantidad").value, 10);
-  const cantidad = Number.isInteger(cantidadInput) && cantidadInput > 0 ? cantidadInput : 1;
+  let precio, cantidad;
+
+  if (metodoSeleccionado === "web") {
+    precio = calcularNetoWeb().neto;
+    cantidad = 1;
+  } else {
+    precio = parseFloat(document.getElementById("precio").value);
+    const cantidadInput = parseInt(document.getElementById("cantidad").value, 10);
+    cantidad = Number.isInteger(cantidadInput) && cantidadInput > 0 ? cantidadInput : 1;
+  }
 
   if (!producto || isNaN(precio) || precio <= 0) return false;
 
   carrito.push({ producto, precioUnitario: precio, cantidad });
   productoInput.value = "";
-  document.getElementById("precio").value = "";
-  document.getElementById("cantidad").value = "1";
+  if (metodoSeleccionado === "web") {
+    resetWebCalc();
+  } else {
+    document.getElementById("precio").value = "";
+    document.getElementById("cantidad").value = "1";
+  }
   renderSuggestions([]);
   renderCart();
   return true;
@@ -252,6 +313,9 @@ form.addEventListener("submit", async (e) => {
     renderCart();
     payButtons.forEach(b => b.classList.remove("active"));
     metodoSeleccionado = null;
+    webCalcWrap.style.display = "none";
+    precioCantidadRow.style.display = "flex";
+    resetWebCalc();
     productoInput.focus();
 
     await renderHistorial();

@@ -325,6 +325,40 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 
 .envio-number { color: var(--purple); }
 
+/* ---------- Venta Web: calculadora de subtotal/envío/neto ---------- */
+
+.web-calc {
+  border-radius: 14px;
+  border: 2px solid var(--blue);
+  background: linear-gradient(165deg, var(--blue-soft), transparent 65%);
+  padding: 16px 18px;
+}
+.web-calc-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 12px;
+}
+.web-calc-inputs { display: flex; gap: 10px; }
+.web-calc-inputs .input-prefix { flex: 1; }
+
+.web-calc-lineas { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; }
+.web-calc-linea { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-dim); }
+.web-calc-linea b { color: #e15b5b; font-weight: 700; }
+
+.web-calc-neto-wrap {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--blue-soft);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.web-calc-neto-label { font-size: 14px; font-weight: 700; color: var(--text); }
+.web-calc-neto { font-size: 30px; font-weight: 800; color: var(--blue); letter-spacing: -0.5px; }
+.web-calc-neto.web-calc-pop { animation: vp-pop .4s ease; }
+
 #venta-perdida-modal .modal-card { position: relative; }
 
 .modal-cerrar {
