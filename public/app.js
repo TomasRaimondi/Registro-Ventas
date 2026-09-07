@@ -302,41 +302,47 @@ payButtons.forEach(btn => {
 });
 
 // ---------- Venta Web: calculadora de subtotal/envío/neto ----------
-// Descuenta el 1% de comisión (sobre el subtotal) y el costo de envío que se
-// haya cobrado, para dejar cargado directamente el valor neto de la venta.
+// El Subtotal solo se usa para calcular la comisión de Tiendanube (1%). El Total
+// Neto es lo que muestra Tiendanube como total cobrado (puede variar del subtotal +
+// envío por el recargo de las cuotas), y de ahí se descuenta el envío y esa comisión
+// para saber lo que efectivamente entra y hay que registrar como venta.
 
 const webSubtotalInput = document.getElementById("web-subtotal");
 const webEnvioInput = document.getElementById("web-envio");
+const webTotalNetoInput = document.getElementById("web-total-neto");
 const webComisionEl = document.getElementById("web-comision");
 const webEnvioLineaEl = document.getElementById("web-envio-linea");
-const webNetoEl = document.getElementById("web-neto");
+const webResultadoEl = document.getElementById("web-resultado");
 
 function calcularNetoWeb() {
   const subtotal = parseFloat(webSubtotalInput.value) || 0;
   const envio = parseFloat(webEnvioInput.value) || 0;
+  const totalNeto = parseFloat(webTotalNetoInput.value) || 0;
   const comision = Math.round(subtotal * 0.01 * 100) / 100;
-  const neto = Math.round((subtotal - comision - envio) * 100) / 100;
-  return { subtotal, envio, comision, neto };
+  const resultado = Math.round((totalNeto - envio - comision) * 100) / 100;
+  return { subtotal, envio, totalNeto, comision, resultado };
 }
 
 function actualizarWebCalc() {
-  const { comision, envio, neto } = calcularNetoWeb();
+  const { comision, envio, resultado } = calcularNetoWeb();
   webComisionEl.textContent = (comision > 0 ? "-" : "") + money(comision);
   webEnvioLineaEl.textContent = (envio > 0 ? "-" : "") + money(envio);
-  webNetoEl.textContent = money(Math.max(neto, 0));
-  webNetoEl.classList.remove("web-calc-pop");
-  void webNetoEl.offsetWidth;
-  webNetoEl.classList.add("web-calc-pop");
+  webResultadoEl.textContent = money(Math.max(resultado, 0));
+  webResultadoEl.classList.remove("web-calc-pop");
+  void webResultadoEl.offsetWidth;
+  webResultadoEl.classList.add("web-calc-pop");
 }
 
 function resetWebCalc() {
   webSubtotalInput.value = "";
   webEnvioInput.value = "";
+  webTotalNetoInput.value = "";
   actualizarWebCalc();
 }
 
 webSubtotalInput.addEventListener("input", actualizarWebCalc);
 webEnvioInput.addEventListener("input", actualizarWebCalc);
+webTotalNetoInput.addEventListener("input", actualizarWebCalc);
 
 // ---------- Envío por Uber Moto (opcional, además del método de pago) ----------
 
@@ -408,7 +414,7 @@ function agregarItemDesdeInputs() {
   let precio, cantidad;
 
   if (metodoSeleccionado === "web") {
-    precio = calcularNetoWeb().neto;
+    precio = calcularNetoWeb().resultado;
     cantidad = 1;
   } else {
     precio = parseFloat(document.getElementById("precio").value);
