@@ -689,24 +689,26 @@ function renderHistory(sales, fecha, hoyFecha) {
 async function refresh() {
   const hoyFecha = getHoyFechaArgentina();
   const fechaActiva = fechaSeleccionada || hoyFecha;
+  const esHoy = fechaActiva === hoyFecha;
   fechaInput.max = hoyFecha;
   if (!fechaInput.value) fechaInput.value = hoyFecha;
 
-  let todaySales, historySales;
+  let sales;
   try {
-    if (fechaActiva === hoyFecha) {
-      todaySales = await fetchTodaySales();
-      historySales = todaySales;
-    } else {
-      [todaySales, historySales] = await Promise.all([fetchTodaySales(), fetchSalesForDate(fechaActiva)]);
-    }
+    sales = esHoy ? await fetchTodaySales() : await fetchSalesForDate(fechaActiva);
   } catch (err) {
     console.error("No se pudo cargar el estado del servidor:", err);
     return;
   }
 
-  renderMetrics(todaySales);
-  renderHistory(historySales, fechaActiva, hoyFecha);
+  // Las métricas (total vendido, mayorista, envíos, etc.) siguen al día que se esté
+  // viendo en el historial, no siempre a hoy.
+  document.querySelectorAll(".fecha-dinamica").forEach((el) => {
+    el.textContent = esHoy ? "hoy" : formatFechaLarga(fechaActiva);
+  });
+
+  renderMetrics(sales);
+  renderHistory(sales, fechaActiva, hoyFecha);
 }
 
 // ---------- Desglose por producto de una venta ----------
