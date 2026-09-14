@@ -365,7 +365,7 @@ function renderItemsTable() {
     tr.innerHTML = `
       <td>${escapeHtml(it.producto)}</td>
       <td><input type="number" class="input-cantidad" min="1" step="1" value="${it.cantidad}" style="width:80px;"></td>
-      <td class="col-costo">${it.costo !== null && it.costo !== undefined ? money(it.costo) : "—"}</td>
+      <td class="col-costo">${it.costo !== null && it.costo !== undefined ? `<input type="number" class="input-costo" min="0" step="0.01" value="${it.costo}" style="width:100px;">` : "—"}</td>
       <td><input type="number" class="input-precio-venta" min="0" step="0.01" placeholder="0" value="${it.precioVenta}" style="width:100px;"></td>
       <td class="col-costo subtotal-costo">${subtotalCosto !== null ? money(subtotalCosto) : "—"}</td>
       <td class="subtotal-venta">${money(subtotalVenta)}</td>
@@ -376,6 +376,7 @@ function renderItemsTable() {
 
     const inputCantidad = tr.querySelector(".input-cantidad");
     const inputPrecioVenta = tr.querySelector(".input-precio-venta");
+    const inputCosto = tr.querySelector(".input-costo");
 
     inputCantidad.addEventListener("focus", () => inputCantidad.select());
     inputCantidad.addEventListener("input", (e) => {
@@ -391,6 +392,18 @@ function renderItemsTable() {
       actualizarCalculosFila(tr, itemsPedido[idx]);
       recomputeTotales();
     });
+
+    // El costo se precarga con el de la planilla de costos, pero se puede pisar acá
+    // (por ejemplo si este pedido puntual tiene un costo distinto). No modifica la
+    // planilla global: es solo para el cálculo de ganancia de este pedido/presupuesto.
+    if (inputCosto) {
+      inputCosto.addEventListener("focus", () => inputCosto.select());
+      inputCosto.addEventListener("input", (e) => {
+        itemsPedido[idx].costo = e.target.value;
+        actualizarCalculosFila(tr, itemsPedido[idx]);
+        recomputeTotales();
+      });
+    }
 
     tr.querySelector(".del-btn").addEventListener("click", () => {
       itemsPedido.splice(idx, 1);
