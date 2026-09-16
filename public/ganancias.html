@@ -197,18 +197,19 @@
         </div>
         <div class="input-prefix">
           <span>$</span>
-          <input type="number" id="salario-comision" placeholder="Comisión / bono" min="0" step="0.01">
+          <input type="number" id="salario-comision" placeholder="Bono Mayorista" min="0" step="0.01">
         </div>
         <input type="text" id="salario-nota" placeholder="Nota (opcional)">
         <button type="submit" class="submit-btn">Agregar día</button>
       </form>
+      <p class="hint" style="text-align:left;">El Bono Minorista no se carga a mano: se calcula solo (5% del excedente sobre $45.000 en cada venta minorista de Chino) y se muestra abajo por día.</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Sueldo</th><th>Comisión</th><th>Nota</th><th></th></tr>
+            <tr><th>Fecha</th><th>Sueldo</th><th>Bono Minorista</th><th>Bono Mayorista</th><th>Nota</th><th></th></tr>
           </thead>
           <tbody id="salario-body">
-            <tr class="empty-row"><td colspan="5">Todavía no cargaste ningún día.</td></tr>
+            <tr class="empty-row"><td colspan="6">Todavía no cargaste ningún día.</td></tr>
           </tbody>
         </table>
       </div>

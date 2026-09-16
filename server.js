@@ -614,10 +614,9 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
-    // Comisiones minoristas del empleado: cualquier sesión válida puede verlas (así
-    // Chino ve en tiempo real cuánto va comisionando, no solo el dueño).
+    // Comisiones minoristas del empleado: público, igual que /api/salario (así Chino
+    // puede ver en salario.html cuánto va comisionando sin tener que loguearse ahí).
     if (pathname === "/api/comisiones-minoristas" && req.method === "GET") {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getAllComisionesMinoristas();
       return sendJson(res, 200, rows);
     }
@@ -1602,6 +1601,49 @@ function getLocalIps() {
   return ips;
 }
 
+// ---------- Sueldo automático: $30.000 de lunes a viernes a las 20:00 ----------
+// Se fija con una nota especial para no duplicarse si ya se cargó un sueldo ese día
+// (a mano o por este mismo chequeo). Al igual que la sincronización de Mercado Pago y
+// Cuenta DNI, se revisa también al arrancar el servidor por si estuvo dormido justo a
+// las 20hs (Render puede apagar el servicio si no tiene tráfico).
+
+const SALARIO_AUTOMATICO_MONTO = 30000;
+const SALARIO_AUTOMATICO_NOTA = "Sueldo automático";
+
+function esDiaDeSemana(fecha) {
+  const [y, m, d] = fecha.split("-").map(Number);
+  const dia = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = domingo, 6 = sábado
+  return dia >= 1 && dia <= 5;
+}
+
+async function chequearSalarioAutomatico() {
+  try {
+    const ahora = getArgentinaNow();
+    if (!esDiaDeSemana(ahora.fecha)) return;
+
+    const minuto = Number(ahora.horaLabel.slice(3, 5));
+    // Ventana de los primeros 5 minutos después de las 20:00 (por si el chequeo no
+    // cae justo al minuto, o el servidor tarda en despertar).
+    if (ahora.hora !== 20 || minuto >= 5) return;
+
+    const registros = await db.getAllSalario();
+    const yaTieneSueldoHoy = registros.some((r) => r.fecha === ahora.fecha && r.sueldo > 0);
+    if (yaTieneSueldoHoy) return;
+
+    await db.insertSalario({
+      id: crypto.randomUUID(),
+      fecha: ahora.fecha,
+      sueldo: SALARIO_AUTOMATICO_MONTO,
+      comision: 0,
+      nota: SALARIO_AUTOMATICO_NOTA,
+      creadoEn: new Date().toISOString(),
+    });
+    console.log(`Sueldo automático de $${SALARIO_AUTOMATICO_MONTO} agregado para ${ahora.fecha}`);
+  } catch (e) {
+    console.error("Error en chequearSalarioAutomatico:", e);
+  }
+}
+
 db.init().then(() => {
   server.listen(PORT, "0.0.0.0", () => {
     console.log("========================================");
@@ -1614,6 +1656,10 @@ db.init().then(() => {
     }
     console.log("");
     console.log("Base de datos: " + (db.usingTurso ? "Turso (nube)" : "archivo local ventas.db"));
+
+    // Sueldo automático de $30.000 de lunes a viernes a las 20hs.
+    chequearSalarioAutomatico();
+    setInterval(chequearSalarioAutomatico, 60 * 1000).unref();
 
     if (mercadopago.isConfigured()) {
       console.log(

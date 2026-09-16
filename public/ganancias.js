@@ -228,17 +228,18 @@ function escapeHtml(str) {
 }
 
 async function renderAll() {
-  let items, costos, gastos, salarios, composicion;
+  let items, costos, gastos, salarios, composicion, comisionesMinoristas;
   try {
     const hora = await api("/api/hora");
     hoyFechaCache = hora.fecha;
     const fechaActiva = fechaSeleccionada || hoyFechaCache;
-    [items, costos, gastos, salarios, composicion] = await Promise.all([
+    [items, costos, gastos, salarios, composicion, comisionesMinoristas] = await Promise.all([
       api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
       api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/salario"),
       api("/api/composicion"),
+      api("/api/comisiones-minoristas"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -360,17 +361,24 @@ async function renderAll() {
     });
   }
 
-  // Tabla de salario
+  // Tabla de salario (Bono Minorista se calcula solo, no se carga a mano)
+  const bonoMinoristaPorFecha = {};
+  comisionesMinoristas.forEach(c => {
+    bonoMinoristaPorFecha[c.fecha] = (bonoMinoristaPorFecha[c.fecha] || 0) + c.comision;
+  });
+
   const salarioBody = document.getElementById("salario-body");
   salarioBody.innerHTML = "";
   if (salarios.length === 0) {
-    salarioBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no cargaste ningún día.</td></tr>`;
+    salarioBody.innerHTML = `<tr class="empty-row"><td colspan="6">Todavía no cargaste ningún día.</td></tr>`;
   } else {
     [...salarios].reverse().forEach(s => {
+      const bonoMinorista = bonoMinoristaPorFecha[s.fecha] || 0;
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${s.fecha}</td>
         <td>${s.sueldo > 0 ? money(s.sueldo) : "—"}</td>
+        <td style="color:var(--green);">${bonoMinorista > 0 ? money(bonoMinorista) : "—"}</td>
         <td>${s.comision > 0 ? money(s.comision) : "—"}</td>
         <td>${s.nota ? escapeHtml(s.nota) : ""}</td>
         <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>

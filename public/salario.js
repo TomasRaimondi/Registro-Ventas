@@ -29,50 +29,77 @@ function getQuincena(fechaStr) {
   return { key, label };
 }
 
-function agruparPorQuincena(registros) {
+// Junta el sueldo/bono mayorista (cargados a mano, un registro por día) con el bono
+// minorista (calculado solo, una fila por venta que comisiona) en un solo mapa por
+// fecha, para poder agruparlos juntos por quincena y por día.
+function agruparPorFecha(registros, comisiones) {
   const mapa = new Map();
   registros.forEach(r => {
+    if (!mapa.has(r.fecha)) mapa.set(r.fecha, { fecha: r.fecha, sueldo: 0, bonoMayorista: 0, bonoMinorista: 0, notas: [] });
+    const acc = mapa.get(r.fecha);
+    acc.sueldo += r.sueldo;
+    acc.bonoMayorista += r.comision;
+    if (r.nota) acc.notas.push(r.nota);
+  });
+  comisiones.forEach(c => {
+    if (!mapa.has(c.fecha)) mapa.set(c.fecha, { fecha: c.fecha, sueldo: 0, bonoMayorista: 0, bonoMinorista: 0, notas: [] });
+    mapa.get(c.fecha).bonoMinorista += c.comision;
+  });
+  return [...mapa.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+function agruparPorQuincena(porFecha) {
+  const mapa = new Map();
+  porFecha.forEach(r => {
     const { key, label } = getQuincena(r.fecha);
-    if (!mapa.has(key)) mapa.set(key, { label, sueldo: 0, comision: 0 });
+    if (!mapa.has(key)) mapa.set(key, { label, sueldo: 0, bonoMinorista: 0, bonoMayorista: 0 });
     const acc = mapa.get(key);
     acc.sueldo += r.sueldo;
-    acc.comision += r.comision;
+    acc.bonoMinorista += r.bonoMinorista;
+    acc.bonoMayorista += r.bonoMayorista;
   });
   return [...mapa.entries()].sort((a, b) => b[0] - a[0]).map(([, v]) => v);
 }
 
 async function render() {
-  let registros;
+  let registros, comisiones;
   try {
-    registros = await fetch("/api/salario").then(r => r.json());
+    [registros, comisiones] = await Promise.all([
+      fetch("/api/salario").then(r => r.json()),
+      fetch("/api/comisiones-minoristas").then(r => r.json()),
+    ]);
   } catch (err) {
     console.error("No se pudo cargar el salario:", err);
     return;
   }
 
-  const sueldoAcumulado = registros.reduce((acc, r) => acc + r.sueldo, 0);
-  const comisionesTotal = registros.reduce((acc, r) => acc + r.comision, 0);
+  const porFecha = agruparPorFecha(registros, comisiones);
+
+  const sueldoAcumulado = porFecha.reduce((acc, r) => acc + r.sueldo, 0);
+  const bonoMinoristaTotal = porFecha.reduce((acc, r) => acc + r.bonoMinorista, 0);
+  const bonoMayoristaTotal = porFecha.reduce((acc, r) => acc + r.bonoMayorista, 0);
   const diasTrabajados = new Set(registros.map(r => r.fecha)).size;
 
-  document.getElementById("total-pagado").textContent = money(sueldoAcumulado + comisionesTotal);
+  document.getElementById("total-pagado").textContent = money(sueldoAcumulado + bonoMinoristaTotal + bonoMayoristaTotal);
   document.getElementById("sueldo-acumulado").textContent = money(sueldoAcumulado);
-  document.getElementById("comisiones-total").textContent = money(comisionesTotal);
+  document.getElementById("comisiones-total").textContent = money(bonoMinoristaTotal + bonoMayoristaTotal);
   document.getElementById("dias-trabajados").textContent =
     diasTrabajados === 1 ? "Trabajaste 1 día" : `Trabajaste ${diasTrabajados} días`;
 
   const quincenasBody = document.getElementById("quincenas-body");
   quincenasBody.innerHTML = "";
-  const quincenas = agruparPorQuincena(registros);
+  const quincenas = agruparPorQuincena(porFecha);
   if (quincenas.length === 0) {
-    quincenasBody.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no se cargó ningún día.</td></tr>`;
+    quincenasBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no se cargó ningún día.</td></tr>`;
   } else {
     quincenas.forEach(q => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(q.label)}</td>
         <td>${q.sueldo > 0 ? money(q.sueldo) : "—"}</td>
-        <td>${q.comision > 0 ? money(q.comision) : "—"}</td>
-        <td><strong>${money(q.sueldo + q.comision)}</strong></td>
+        <td style="color:var(--green);">${q.bonoMinorista > 0 ? money(q.bonoMinorista) : "—"}</td>
+        <td>${q.bonoMayorista > 0 ? money(q.bonoMayorista) : "—"}</td>
+        <td><strong>${money(q.sueldo + q.bonoMinorista + q.bonoMayorista)}</strong></td>
       `;
       quincenasBody.appendChild(tr);
     });
@@ -80,18 +107,19 @@ async function render() {
 
   const body = document.getElementById("salario-body");
   body.innerHTML = "";
-  if (registros.length === 0) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no se cargó ningún día.</td></tr>`;
+  if (porFecha.length === 0) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no se cargó ningún día.</td></tr>`;
     return;
   }
 
-  [...registros].reverse().forEach(r => {
+  [...porFecha].reverse().forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${formatFecha(r.fecha)}</td>
       <td>${r.sueldo > 0 ? money(r.sueldo) : "—"}</td>
-      <td>${r.comision > 0 ? money(r.comision) : "—"}</td>
-      <td>${r.nota ? escapeHtml(r.nota) : ""}</td>
+      <td style="color:var(--green);">${r.bonoMinorista > 0 ? money(r.bonoMinorista) : "—"}</td>
+      <td>${r.bonoMayorista > 0 ? money(r.bonoMayorista) : "—"}</td>
+      <td>${r.notas.length ? escapeHtml(r.notas.join(", ")) : ""}</td>
     `;
     body.appendChild(tr);
   });
