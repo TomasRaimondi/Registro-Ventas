@@ -284,6 +284,12 @@
   #vpTexto:focus{border-color:var(--accent)}
 
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* ---------- login ---------- */
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .login-card{width:100%;max-width:340px}
+  .login-card h2{margin:0 0 16px;font-size:20px;font-weight:700}
+  .error-hint{color:var(--coral);font-size:13px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -312,9 +318,24 @@
   <a class="nav-item" href="/salario.html"><span class="em">💼</span>Mi salario</a>
   <hr class="nav-sep">
   <button type="button" class="nav-item" id="navDesktop"><span class="em">🖥️</span>Ver versión de escritorio</button>
+  <button type="button" class="nav-item" id="logoutBtn" style="display:none;"><span class="em">🚪</span>Cerrar sesión</button>
 </nav>
 
-<main>
+<div class="login-wrap" id="loginCard">
+  <div class="card login-card">
+    <h2>Acceso privado</h2>
+    <form id="loginForm" autocomplete="off">
+      <label class="lbl" for="usuario">Usuario</label>
+      <input type="text" id="usuario" placeholder="Tomás o Chino" autocomplete="username" required>
+      <label class="lbl" for="password" style="margin-top:10px;">Contraseña</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+      <button type="submit" class="submit" style="margin-top:14px;">Entrar</button>
+      <p class="error-hint" id="loginError" style="display:none;"></p>
+    </form>
+  </div>
+</div>
+
+<main id="appContent" style="display:none;">
   <div class="card">
     <label class="lbl" for="prod">Producto</label>
     <div class="autocomplete-wrap">
@@ -395,7 +416,7 @@
   </div>
 </main>
 
-<div class="actionbar">
+<div class="actionbar" id="actionbar" style="display:none;">
   <button type="button" class="submit" id="save">Registrar venta</button>
   <button type="button" class="lost" id="lostBtn"><b id="lostCount">0</b>perdida</button>
 </div>

@@ -16,6 +16,12 @@ const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito
 const CUENTA_DNI_COMISION = 0.006;
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
 
+// Comisión minorista del empleado: 5% del excedente por sobre $45.000 en cada venta
+// que él mismo registre (no mayorista), a partir del 2026-09-16.
+const COMISION_MINORISTA_UMBRAL = 45000;
+const COMISION_MINORISTA_PORCENTAJE = 0.05;
+const COMISION_MINORISTA_DESDE = "2026-09-16";
+
 function normalizeNombre(s) {
   return (s || "").trim().toLowerCase();
 }
@@ -76,8 +82,9 @@ try {
   console.error("No se pudo leer admin-config.json:", e.message);
 }
 
-// token -> "owner" | "empleado". El empleado solo puede usar los endpoints que
-// explícitamente chequean isAuthenticated (no isOwner) más abajo.
+// token -> { role: "owner" | "empleado", usuario: "tomas" | "chino" }. El empleado
+// solo puede usar los endpoints que explícitamente chequean isAuthenticated (no
+// isOwner) más abajo.
 const sessions = new Map();
 
 function parseCookies(req) {
@@ -92,9 +99,19 @@ function parseCookies(req) {
   return cookies;
 }
 
-function getRole(req) {
+function getSession(req) {
   const cookies = parseCookies(req);
   return (cookies.session && sessions.get(cookies.session)) || null;
+}
+
+function getRole(req) {
+  const s = getSession(req);
+  return s ? s.role : null;
+}
+
+function getUsuario(req) {
+  const s = getSession(req);
+  return s ? s.usuario : null;
 }
 
 // Cualquier sesión válida (dueño o empleado).
@@ -447,6 +464,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/ventas" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const metodo = String(body.metodo || "");
 
@@ -515,6 +533,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const cliente = body.cliente ? String(body.cliente).trim().slice(0, 200) : null;
+      const vendedor = getUsuario(req);
 
       const row = {
         id: crypto.randomUUID(),
@@ -528,6 +547,7 @@ const server = http.createServer(async (req, res) => {
         cliente,
         envioMetodo,
         envioCosto,
+        vendedor,
       };
 
       await db.insert(row);
@@ -535,6 +555,30 @@ const server = http.createServer(async (req, res) => {
         await db.insertItem({ id: crypto.randomUUID(), ventaId: row.id, producto: it.producto, precio: it.precio });
       }
       await ajustarStockPorItems(itemsProcessed, -1);
+
+      // Comisión minorista automática: 5% del excedente por sobre $45.000, solo en
+      // ventas no mayoristas que registra el empleado (Chino), desde el 16/09/2026.
+      if (
+        vendedor === "chino" &&
+        metodo !== "mayorista" &&
+        row.fecha >= COMISION_MINORISTA_DESDE &&
+        row.precio > COMISION_MINORISTA_UMBRAL
+      ) {
+        const excedente = Math.round((row.precio - COMISION_MINORISTA_UMBRAL) * 100) / 100;
+        const comision = Math.round(excedente * COMISION_MINORISTA_PORCENTAJE * 100) / 100;
+        await db.insertComisionMinorista({
+          id: crypto.randomUUID(),
+          ventaId: row.id,
+          vendedor,
+          montoVenta: row.precio,
+          excedente,
+          comision,
+          fecha: row.fecha,
+          hora: row.hora,
+          horaLabel: row.horaLabel,
+          creadoEn: row.creadoEn,
+        });
+      }
 
       return sendJson(res, 201, { ...row, items: itemsProcessed });
     }
@@ -549,6 +593,7 @@ const server = http.createServer(async (req, res) => {
       await ajustarStockPorItems(itemsDeLaVenta, +1);
       await db.deleteItemsByVentaId(id);
       await db.deleteById(id);
+      await db.deleteComisionesByVentaId(id);
       return sendJson(res, 200, { ok: true });
     }
 
@@ -567,6 +612,14 @@ const server = http.createServer(async (req, res) => {
 
       await db.deleteByFecha(fecha);
       return sendJson(res, 200, { ok: true });
+    }
+
+    // Comisiones minoristas del empleado: cualquier sesión válida puede verlas (así
+    // Chino ve en tiempo real cuánto va comisionando, no solo el dueño).
+    if (pathname === "/api/comisiones-minoristas" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllComisionesMinoristas();
+      return sendJson(res, 200, rows);
     }
 
     if (pathname === "/api/ventas-perdidas" && req.method === "GET") {
@@ -675,26 +728,42 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/login" && req.method === "POST") {
       const body = await readJsonBody(req);
       const password = String(body.password || "");
+      // "usuario" es nuevo (Registro de Ventas pide usuario + contraseña). El resto
+      // de las páginas del panel siguen mandando solo la contraseña: se mantiene ese
+      // modo para no romperlas.
+      const usuarioInput = body.usuario !== undefined && body.usuario !== null
+        ? String(body.usuario).trim().toLowerCase()
+        : null;
 
       if (!ADMIN_PASSWORD) {
         return sendJson(res, 500, { error: "No hay contraseña configurada en el servidor" });
       }
 
       let role = null;
-      if (password === ADMIN_PASSWORD) role = "owner";
-      else if (EMPLOYEE_PASSWORD && password === EMPLOYEE_PASSWORD) role = "empleado";
+      let usuario = null;
 
-      if (!role) {
-        return sendJson(res, 401, { error: "Contraseña incorrecta" });
+      if (usuarioInput !== null) {
+        if ((usuarioInput === "tomas" || usuarioInput === "tomás") && password === ADMIN_PASSWORD) {
+          role = "owner";
+          usuario = "tomas";
+        } else if (usuarioInput === "chino" && EMPLOYEE_PASSWORD && password === EMPLOYEE_PASSWORD) {
+          role = "empleado";
+          usuario = "chino";
+        }
+        if (!role) return sendJson(res, 401, { error: "Usuario o contraseña incorrectos" });
+      } else {
+        if (password === ADMIN_PASSWORD) { role = "owner"; usuario = "tomas"; }
+        else if (EMPLOYEE_PASSWORD && password === EMPLOYEE_PASSWORD) { role = "empleado"; usuario = "chino"; }
+        if (!role) return sendJson(res, 401, { error: "Contraseña incorrecta" });
       }
 
       const token = crypto.randomUUID();
-      sessions.set(token, role);
+      sessions.set(token, { role, usuario });
       res.setHeader(
         "Set-Cookie",
         `session=${token}; HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax`
       );
-      return sendJson(res, 200, { ok: true, role });
+      return sendJson(res, 200, { ok: true, role, usuario });
     }
 
     if (pathname === "/api/logout" && req.method === "POST") {
@@ -705,7 +774,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/auth-check" && req.method === "GET") {
-      return sendJson(res, 200, { authenticated: isAuthenticated(req), role: getRole(req) });
+      return sendJson(res, 200, { authenticated: isAuthenticated(req), role: getRole(req), usuario: getUsuario(req) });
     }
 
     // ---------- Costos y gastos (protegidos, requieren sesión) ----------

@@ -46,13 +46,73 @@ setInterval(tickClock, 60000);
 // ---------- Cliente de API ----------
 
 async function api(url, options) {
-  const res = await fetch(url, options);
+  const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Error de red (${res.status})`);
+    const e = new Error(err.error || `Error de red (${res.status})`);
+    e.status = res.status;
+    throw e;
   }
   if (res.status === 204) return null;
   return res.json();
+}
+
+// ---------- Login ----------
+
+const loginCard = document.getElementById("loginCard");
+const appContent = document.getElementById("appContent");
+const actionbar = document.getElementById("actionbar");
+const logoutBtn = document.getElementById("logoutBtn");
+
+let appIniciada = false;
+
+function showApp() {
+  loginCard.style.display = "none";
+  appContent.style.display = "block";
+  actionbar.style.display = "flex";
+  logoutBtn.style.display = "flex";
+  if (!appIniciada) {
+    appIniciada = true;
+    iniciarApp();
+  }
+}
+
+function showLogin() {
+  loginCard.style.display = "flex";
+  appContent.style.display = "none";
+  actionbar.style.display = "none";
+  logoutBtn.style.display = "none";
+}
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const usuario = document.getElementById("usuario").value;
+  const password = document.getElementById("password").value;
+  const errorHint = document.getElementById("loginError");
+  errorHint.style.display = "none";
+  try {
+    await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, password }),
+    });
+    document.getElementById("password").value = "";
+    showApp();
+  } catch (err) {
+    errorHint.textContent = err.message || "Usuario o contraseña incorrectos.";
+    errorHint.style.display = "block";
+  }
+});
+
+logoutBtn.onclick = async () => {
+  await api("/api/logout", { method: "POST" }).catch(() => {});
+  showLogin();
+};
+
+async function checkAuth() {
+  const { authenticated } = await api("/api/auth-check");
+  if (authenticated) showApp();
+  else showLogin();
 }
 
 // ---------- Panel lateral ----------
@@ -107,8 +167,7 @@ let listaProductos = [];
 async function cargarProductos() {
   try { listaProductos = await api("/api/productos"); } catch (e) {}
 }
-cargarProductos();
-setInterval(cargarProductos, 30000);
+// (cargarProductos() y su intervalo arrancan desde iniciarApp(), después del login)
 
 const prod = document.getElementById("prod");
 const prodSuggestions = document.getElementById("prodSuggestions");
@@ -258,7 +317,7 @@ async function cargarContadorPerdidas() {
     document.getElementById("badgePerdidas").textContent = rows.length;
   } catch (e) {}
 }
-cargarContadorPerdidas();
+// (cargarContadorPerdidas() arranca desde iniciarApp(), después del login)
 
 function abrirVp() {
   vpTexto.value = "";
@@ -374,8 +433,7 @@ document.getElementById("pagosActualizar").onclick = async () => {
   }
 };
 
-cargarPagosRecientes();
-setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);
+// (cargarPagosRecientes() y su intervalo arrancan desde iniciarApp(), después del login)
 
 // ---------- Registrar venta ----------
 
@@ -503,9 +561,24 @@ async function refresh() {
     render(sales, totalPrevio);
     totalPrevio = sales.filter((s) => s.metodo !== "mayorista").reduce((acc, s) => acc + s.precio, 0);
   } catch (err) {
+    if (err.status === 401) { showLogin(); return; }
     console.error("No se pudo cargar el estado del servidor:", err);
   }
 }
 
-refresh();
-setInterval(refresh, 5000);
+// ---------- Arranque, una vez logueado ----------
+
+function iniciarApp() {
+  cargarProductos();
+  setInterval(cargarProductos, 30000);
+
+  cargarContadorPerdidas();
+
+  cargarPagosRecientes();
+  setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);
+
+  refresh();
+  setInterval(refresh, 5000);
+}
+
+checkAuth();

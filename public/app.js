@@ -40,13 +40,70 @@ tickClock();
 // ---------- Cliente de API ----------
 
 async function api(url, options) {
-  const res = await fetch(url, options);
+  const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Error de red (${res.status})`);
+    const e = new Error(err.error || `Error de red (${res.status})`);
+    e.status = res.status;
+    throw e;
   }
   if (res.status === 204) return null;
   return res.json();
+}
+
+// ---------- Login ----------
+
+const loginCard = document.getElementById("login-card");
+const appContent = document.getElementById("app-content");
+const logoutBtn = document.getElementById("logout-btn");
+
+let appIniciada = false;
+
+function showApp() {
+  loginCard.style.display = "none";
+  appContent.style.display = "block";
+  logoutBtn.style.display = "inline-block";
+  if (!appIniciada) {
+    appIniciada = true;
+    iniciarApp();
+  }
+}
+
+function showLogin() {
+  loginCard.style.display = "block";
+  appContent.style.display = "none";
+  logoutBtn.style.display = "none";
+}
+
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const usuario = document.getElementById("usuario").value;
+  const password = document.getElementById("password").value;
+  const errorHint = document.getElementById("login-error");
+  errorHint.style.display = "none";
+  try {
+    await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, password }),
+    });
+    document.getElementById("password").value = "";
+    showApp();
+  } catch (err) {
+    errorHint.textContent = err.message || "Usuario o contraseña incorrectos.";
+    errorHint.style.display = "block";
+  }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await api("/api/logout", { method: "POST" }).catch(() => {});
+  showLogin();
+});
+
+async function checkAuth() {
+  const { authenticated } = await api("/api/auth-check");
+  if (authenticated) showApp();
+  else showLogin();
 }
 
 async function fetchTodaySales() {
@@ -153,7 +210,7 @@ vpForm.addEventListener("submit", (e) => {
   guardarVentaPerdida(motivo, null);
 });
 
-cargarContadorVentasPerdidas();
+// (cargarContadorVentasPerdidas() se llama desde iniciarApp(), después del login)
 
 // ---------- Pagos recientes (transferencias) ----------
 // Público, sin login: es para que el empleado vea qué transferencias entraron y cargue
@@ -223,8 +280,7 @@ pagosActualizarBtn.addEventListener("click", async () => {
   }
 });
 
-cargarPagosRecientes();
-setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);
+// (cargarPagosRecientes() y su intervalo arrancan desde iniciarApp(), después del login)
 
 // ---------- Autocompletado de producto ----------
 
@@ -237,8 +293,7 @@ async function cargarProductos() {
     console.error("No se pudo cargar la lista de productos:", e);
   }
 }
-cargarProductos();
-setInterval(cargarProductos, 30000);
+// (cargarProductos() y su intervalo arrancan desde iniciarApp(), después del login)
 
 const productoInput = document.getElementById("producto");
 const productoSuggestions = document.getElementById("producto-suggestions");
@@ -697,6 +752,7 @@ async function refresh() {
   try {
     sales = esHoy ? await fetchTodaySales() : await fetchSalesForDate(fechaActiva);
   } catch (err) {
+    if (err.status === 401) { showLogin(); return; }
     console.error("No se pudo cargar el estado del servidor:", err);
     return;
   }
@@ -759,7 +815,20 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-refresh();
+// ---------- Arranque, una vez logueado ----------
 
-// Se refresca solo, para que las métricas se actualicen aunque carguen ventas desde otro dispositivo
-setInterval(refresh, 5000);
+function iniciarApp() {
+  cargarContadorVentasPerdidas();
+
+  cargarPagosRecientes();
+  setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);
+
+  cargarProductos();
+  setInterval(cargarProductos, 30000);
+
+  refresh();
+  // Se refresca solo, para que las métricas se actualicen aunque carguen ventas desde otro dispositivo
+  setInterval(refresh, 5000);
+}
+
+checkAuth();

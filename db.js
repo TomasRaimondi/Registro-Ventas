@@ -140,6 +140,18 @@ const SCHEMA = `
     actualizadoEn TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos_recibidos (fecha);
+  CREATE TABLE IF NOT EXISTS comisiones_minoristas (
+    id TEXT PRIMARY KEY,
+    ventaId TEXT NOT NULL,
+    vendedor TEXT NOT NULL,
+    montoVenta REAL NOT NULL,
+    excedente REAL NOT NULL,
+    comision REAL NOT NULL,
+    fecha TEXT NOT NULL,
+    hora INTEGER NOT NULL,
+    horaLabel TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -188,6 +200,16 @@ async function migrarEnvio(execFn) {
   }
 }
 
+// Migración aditiva: agrega quién registró la venta ("tomas" | "chino"), para poder
+// calcular la comisión minorista del empleado sobre lo que él mismo carga.
+async function migrarVendedor(execFn) {
+  try {
+    await execFn("ALTER TABLE ventas ADD COLUMN vendedor TEXT");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
 let impl;
@@ -209,6 +231,7 @@ if (USE_TURSO) {
       await migrarLoteId((sql) => client.execute(sql));
       await migrarCliente((sql) => client.execute(sql));
       await migrarEnvio((sql) => client.execute(sql));
+      await migrarVendedor((sql) => client.execute(sql));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -235,9 +258,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       await client.execute({
-        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null],
+        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null],
       });
     },
     async deleteById(id) {
@@ -564,6 +587,22 @@ if (USE_TURSO) {
       const res = await client.execute({ sql: "DELETE FROM pagos_recibidos WHERE id = ?", args: [id] });
       return res.rowsAffected;
     },
+
+    // Comisión minorista del empleado (5% del excedente sobre $45.000 por venta).
+    async insertComisionMinorista(row) {
+      await client.execute({
+        sql: `INSERT INTO comisiones_minoristas (id, ventaId, vendedor, montoVenta, excedente, comision, fecha, hora, horaLabel, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.ventaId, row.vendedor, row.montoVenta, row.excedente, row.comision, row.fecha, row.hora, row.horaLabel, row.creadoEn],
+      });
+    },
+    async getAllComisionesMinoristas() {
+      const res = await client.execute("SELECT * FROM comisiones_minoristas ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async deleteComisionesByVentaId(ventaId) {
+      await client.execute({ sql: "DELETE FROM comisiones_minoristas WHERE ventaId = ?", args: [ventaId] });
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -578,6 +617,7 @@ if (USE_TURSO) {
       await migrarLoteId(async (sql) => db.exec(sql));
       await migrarCliente(async (sql) => db.exec(sql));
       await migrarEnvio(async (sql) => db.exec(sql));
+      await migrarVendedor(async (sql) => db.exec(sql));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -597,9 +637,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       db.prepare(
-        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null);
+        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null);
     },
     async deleteById(id) {
       db.prepare("DELETE FROM ventas WHERE id = ?").run(id);
@@ -869,6 +909,20 @@ if (USE_TURSO) {
     async deletePago(id) {
       const info = db.prepare("DELETE FROM pagos_recibidos WHERE id = ?").run(id);
       return info.changes;
+    },
+
+    // Comisión minorista del empleado (5% del excedente sobre $45.000 por venta).
+    async insertComisionMinorista(row) {
+      db.prepare(
+        `INSERT INTO comisiones_minoristas (id, ventaId, vendedor, montoVenta, excedente, comision, fecha, hora, horaLabel, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.ventaId, row.vendedor, row.montoVenta, row.excedente, row.comision, row.fecha, row.hora, row.horaLabel, row.creadoEn);
+    },
+    async getAllComisionesMinoristas() {
+      return db.prepare("SELECT * FROM comisiones_minoristas ORDER BY creadoEn ASC").all();
+    },
+    async deleteComisionesByVentaId(ventaId) {
+      db.prepare("DELETE FROM comisiones_minoristas WHERE ventaId = ?").run(ventaId);
     },
   };
 }

@@ -49,10 +49,28 @@
       <span id="clock-time">--:--:--</span>
       <span id="clock-date">--</span>
     </div>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
   </div>
 </header>
 
-<main class="layout">
+<!-- Login -->
+<section class="card login-card" id="login-card">
+  <h2>Acceso privado</h2>
+  <form id="login-form" autocomplete="off">
+    <div class="field">
+      <label for="usuario">Usuario</label>
+      <input type="text" id="usuario" name="usuario" placeholder="Tomás o Chino" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Contraseña</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="submit-btn">Entrar</button>
+    <p class="hint error-hint" id="login-error" style="display:none;">Usuario o contraseña incorrectos.</p>
+  </form>
+</section>
+
+<main class="layout" id="app-content" style="display:none;">
 
   <!-- Formulario de carga -->
   <section class="card form-card">
