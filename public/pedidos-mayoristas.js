@@ -205,7 +205,7 @@ document.getElementById("nuevo-pedido-btn").addEventListener("click", async () =
 
 // ---------- Editar un pedido ya guardado ----------
 
-async function iniciarEdicionPedido(venta, items, costoPorProducto) {
+async function iniciarEdicionPedido(venta, items) {
   try {
     await cargarProductosDisponibles();
   } catch (err) {
@@ -222,9 +222,11 @@ async function iniciarEdicionPedido(venta, items, costoPorProducto) {
 
   document.getElementById("pedido-cliente").value = venta.cliente || "";
 
+  // El costo de cada item ya viene calculado desde el servidor con el valor que estaba
+  // vigente el día de este pedido (no el actual), para no pisar silenciosamente el
+  // costo real que tenía en ese momento.
   itemsPedido = agruparProductosReciente(items).map(g => {
-    const key = normalizeNombre(g.producto);
-    const costo = Object.prototype.hasOwnProperty.call(costoPorProducto, key) ? costoPorProducto[key] : 0;
+    const costo = g.items[0].costo ?? 0;
     const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
     const precioVenta = Math.round((precioTotal / g.cantidad) * 100) / 100;
     return { producto: g.producto, costo, cantidad: g.cantidad, precioVenta: String(precioVenta) };
@@ -773,7 +775,7 @@ function agruparProductosReciente(items) {
 
 let recienteExpandidoId = null;
 
-function renderDetalleReciente(ventaId, row, items, costoPorProducto) {
+function renderDetalleReciente(ventaId, row, items) {
   row.classList.add("expanded");
   recienteExpandidoId = ventaId;
 
@@ -782,9 +784,8 @@ function renderDetalleReciente(ventaId, row, items, costoPorProducto) {
   const td = document.createElement("td");
   td.colSpan = 5;
   td.innerHTML = agruparProductosReciente(items).map(g => {
-    const key = normalizeNombre(g.producto);
-    const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
-    const costoUnit = tieneCosto ? costoPorProducto[key] : null;
+    const costoUnit = g.items[0].costo ?? null;
+    const tieneCosto = costoUnit !== null && costoUnit !== undefined;
     const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
     const precioVentaUnit = precioTotal / g.cantidad;
     const costoTotal = tieneCosto ? costoUnit * g.cantidad : null;
@@ -805,7 +806,7 @@ function renderDetalleReciente(ventaId, row, items, costoPorProducto) {
   row.after(detailRow);
 }
 
-function toggleDetalleReciente(ventaId, row, items, costoPorProducto) {
+function toggleDetalleReciente(ventaId, row, items) {
   const existing = row.nextElementSibling;
   if (existing && existing.classList.contains("sale-detail-row")) {
     existing.remove();
@@ -818,21 +819,20 @@ function toggleDetalleReciente(ventaId, row, items, costoPorProducto) {
   tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
   tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
 
-  renderDetalleReciente(ventaId, row, items, costoPorProducto);
+  renderDetalleReciente(ventaId, row, items);
 }
 
+// El costo de cada item ya viene calculado desde el servidor (/api/reportes) con el
+// valor que estaba vigente el día de esa venta, no el actual.
 async function cargarRecientes() {
   const body = document.getElementById("recientes-body");
-  let data, costos;
+  let data;
   try {
-    [data, costos] = await Promise.all([api("/api/reportes"), api("/api/costos")]);
+    data = await api("/api/reportes");
   } catch (err) {
     console.error(err);
     return;
   }
-
-  const costoPorProducto = {};
-  costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
 
   const ventasMayoristas = data.ventas
     .filter(v => v.metodo === "mayorista")
@@ -862,10 +862,10 @@ async function cargarRecientes() {
       <td>${money(v.precio)}</td>
       <td><button type="button" class="del-btn editar-btn" title="Editar pedido">✎</button><button type="button" class="del-btn" title="Borrar pedido">✕</button></td>
     `;
-    tr.addEventListener("click", () => toggleDetalleReciente(v.id, tr, items, costoPorProducto));
+    tr.addEventListener("click", () => toggleDetalleReciente(v.id, tr, items));
     tr.querySelector(".editar-btn").addEventListener("click", (e) => {
       e.stopPropagation();
-      iniciarEdicionPedido(v, items, costoPorProducto);
+      iniciarEdicionPedido(v, items);
     });
     tr.querySelector(".del-btn:not(.editar-btn)").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -874,7 +874,7 @@ async function cargarRecientes() {
     body.appendChild(tr);
 
     if (recienteExpandidoId === v.id) {
-      renderDetalleReciente(v.id, tr, items, costoPorProducto);
+      renderDetalleReciente(v.id, tr, items);
     }
   });
 }

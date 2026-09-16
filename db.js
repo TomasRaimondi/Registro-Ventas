@@ -15,6 +15,13 @@ const SCHEMA = `
     producto TEXT PRIMARY KEY,
     costo REAL NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS costos_historial (
+    producto TEXT NOT NULL,
+    vigenteDesde TEXT NOT NULL,
+    costo REAL NOT NULL,
+    creadoEn TEXT NOT NULL,
+    PRIMARY KEY (producto, vigenteDesde)
+  );
   CREATE TABLE IF NOT EXISTS gastos (
     id TEXT PRIMARY KEY,
     concepto TEXT NOT NULL,
@@ -287,6 +294,20 @@ if (USE_TURSO) {
     },
     async deleteCosto(producto) {
       await client.execute({ sql: "DELETE FROM costos WHERE producto = ?", args: [producto] });
+    },
+
+    // Historial de costos: para que la ganancia de una venta vieja se calcule con el
+    // costo que el producto tenía en ese momento, no con el costo actual.
+    async getCostosHistorial() {
+      const res = await client.execute("SELECT * FROM costos_historial ORDER BY producto ASC, vigenteDesde ASC");
+      return res.rows;
+    },
+    async upsertCostoHistorial(row) {
+      await client.execute({
+        sql: `INSERT INTO costos_historial (producto, vigenteDesde, costo, creadoEn) VALUES (?, ?, ?, ?)
+              ON CONFLICT(producto, vigenteDesde) DO UPDATE SET costo = excluded.costo`,
+        args: [row.producto, row.vigenteDesde, row.costo, row.creadoEn],
+      });
     },
     async updateStock(producto, stock) {
       await client.execute({ sql: "UPDATE costos SET stock = ? WHERE producto = ?", args: [stock, producto] });
@@ -662,6 +683,18 @@ if (USE_TURSO) {
     },
     async deleteCosto(producto) {
       db.prepare("DELETE FROM costos WHERE producto = ?").run(producto);
+    },
+
+    // Historial de costos: para que la ganancia de una venta vieja se calcule con el
+    // costo que el producto tenía en ese momento, no con el costo actual.
+    async getCostosHistorial() {
+      return db.prepare("SELECT * FROM costos_historial ORDER BY producto ASC, vigenteDesde ASC").all();
+    },
+    async upsertCostoHistorial(row) {
+      db.prepare(
+        `INSERT INTO costos_historial (producto, vigenteDesde, costo, creadoEn) VALUES (?, ?, ?, ?)
+         ON CONFLICT(producto, vigenteDesde) DO UPDATE SET costo = excluded.costo`
+      ).run(row.producto, row.vigenteDesde, row.costo, row.creadoEn);
     },
     async updateStock(producto, stock) {
       db.prepare("UPDATE costos SET stock = ? WHERE producto = ?").run(stock, producto);

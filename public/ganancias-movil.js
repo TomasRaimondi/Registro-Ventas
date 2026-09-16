@@ -205,17 +205,18 @@ async function deleteSalario(id) {
 // ---------- Render ----------
 
 async function renderAll() {
-  let items, costos, gastos, salarios, composicion;
+  let items, costos, gastos, salarios, composicion, comisionesMinoristas;
   try {
     const hora = await api("/api/hora");
     hoyFechaCache = hora.fecha;
     const fechaActiva = fechaSeleccionada || hoyFechaCache;
-    [items, costos, gastos, salarios, composicion] = await Promise.all([
+    [items, costos, gastos, salarios, composicion, comisionesMinoristas] = await Promise.all([
       api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
       api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/salario"),
       api("/api/composicion"),
+      api("/api/comisiones-minoristas"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -230,17 +231,16 @@ async function renderAll() {
   if (!fechaSelectorInput.value) fechaSelectorInput.value = fechaActiva;
   fechaSelectorHoyBtn.style.display = esHoy ? "none" : "inline-block";
 
-  const costoPorProducto = {};
-  costos.forEach((c) => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
-
+  // El costo de cada item ya viene calculado desde el servidor con el valor vigente
+  // ese día (no el actual), para que la ganancia de un día viejo no se mueva si hoy
+  // se actualiza el costo de un producto.
   let gananciaBruta = 0;
   let itemsConsiderados = 0;
   const sinCostoSet = new Set();
 
   items.forEach((it) => {
-    const key = normalizeNombre(it.producto);
-    if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
-      gananciaBruta += it.precio - costoPorProducto[key];
+    if (it.costo !== null && it.costo !== undefined) {
+      gananciaBruta += it.precio - it.costo;
       itemsConsiderados++;
     } else {
       sinCostoSet.add(it.producto);
@@ -298,15 +298,13 @@ async function renderAll() {
     detalleListEl.innerHTML = `<p class="empty">Todavía no hay ventas ${esHoy ? "hoy" : "ese día"}.</p>`;
   } else {
     detalleListEl.innerHTML = [...items].reverse().map((it) => {
-      const key = normalizeNombre(it.producto);
-      const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
-      const costo = tieneCosto ? costoPorProducto[key] : null;
-      const ganancia = tieneCosto ? it.precio - costo : null;
+      const tieneCosto = it.costo !== null && it.costo !== undefined;
+      const ganancia = tieneCosto ? it.precio - it.costo : null;
       return `
         <div class="list-row">
           <div class="list-row-info">
             <span class="list-row-titulo">${escapeHtml(it.producto)}</span>
-            <span class="list-row-sub">${it.horaLabel} · ${money(it.precio)}${tieneCosto ? " · costo " + money(costo) : ""}</span>
+            <span class="list-row-sub">${it.horaLabel} · ${money(it.precio)}${tieneCosto ? " · costo " + money(it.costo) : ""}</span>
           </div>
           <span class="list-row-valor" style="${ganancia !== null && ganancia < 0 ? "color:var(--coral);" : ""}">${ganancia !== null ? money(ganancia) : "—"}</span>
         </div>
@@ -314,7 +312,7 @@ async function renderAll() {
     }).join("");
   }
 
-  renderPedidos(items, costoPorProducto, esHoy);
+  renderPedidos(items, esHoy);
 
   // Gastos
   const gastosList = document.getElementById("gastos-list");
@@ -334,20 +332,28 @@ async function renderAll() {
     gastosList.querySelectorAll(".list-row-del").forEach((btn) => { btn.onclick = () => deleteGasto(btn.dataset.id); });
   }
 
-  // Salario
+  // Salario (Bono Minorista se calcula solo, no se carga a mano)
+  const bonoMinoristaPorFecha = {};
+  comisionesMinoristas.forEach((c) => {
+    bonoMinoristaPorFecha[c.fecha] = (bonoMinoristaPorFecha[c.fecha] || 0) + c.comision;
+  });
+
   const salarioList = document.getElementById("salario-list");
   if (salarios.length === 0) {
     salarioList.innerHTML = `<p class="empty">Todavía no cargaste ningún día.</p>`;
   } else {
-    salarioList.innerHTML = [...salarios].reverse().map((s) => `
+    salarioList.innerHTML = [...salarios].reverse().map((s) => {
+      const bonoMinorista = bonoMinoristaPorFecha[s.fecha] || 0;
+      return `
       <div class="list-row">
         <div class="list-row-info">
           <span class="list-row-titulo">${s.fecha}</span>
-          <span class="list-row-sub">${s.sueldo > 0 ? "Sueldo " + money(s.sueldo) : ""}${s.comision > 0 ? " · Comisión " + money(s.comision) : ""}${s.nota ? " · " + escapeHtml(s.nota) : ""}</span>
+          <span class="list-row-sub">${s.sueldo > 0 ? "Sueldo " + money(s.sueldo) : ""}${bonoMinorista > 0 ? " · Bono Minorista " + money(bonoMinorista) : ""}${s.comision > 0 ? " · Bono Mayorista " + money(s.comision) : ""}${s.nota ? " · " + escapeHtml(s.nota) : ""}</span>
         </div>
         <button type="button" class="list-row-del" data-id="${s.id}">✕</button>
       </div>
-    `).join("");
+    `;
+    }).join("");
     salarioList.querySelectorAll(".list-row-del").forEach((btn) => { btn.onclick = () => deleteSalario(btn.dataset.id); });
   }
 }
@@ -387,11 +393,10 @@ function resumenProductos(itemsDelPedido) {
 
 let pedidoExpandidoId = null;
 
-function detalleAcordeonHtml(itemsDelPedido, costoPorProducto) {
+function detalleAcordeonHtml(itemsDelPedido) {
   return agruparProductosPedido(itemsDelPedido).map((g) => {
-    const key = normalizeNombre(g.producto);
-    const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
-    const costoUnit = tieneCosto ? costoPorProducto[key] : null;
+    const costoUnit = g.items[0].costo;
+    const tieneCosto = costoUnit !== null && costoUnit !== undefined;
     const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
     const costoTotal = tieneCosto ? costoUnit * g.cantidad : null;
     const ganancia = tieneCosto ? precioTotal - costoTotal : null;
@@ -405,7 +410,7 @@ function detalleAcordeonHtml(itemsDelPedido, costoPorProducto) {
   }).join("");
 }
 
-function renderPedidos(items, costoPorProducto, esHoy) {
+function renderPedidos(items, esHoy) {
   const list = document.getElementById("pedidos-list");
   const pedidos = agruparPorPedido(items);
 
@@ -422,8 +427,8 @@ function renderPedidos(items, costoPorProducto, esHoy) {
       const envioMetodo = itemsDelPedido[0].envioMetodo;
 
       const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
-      const itemsConCosto = itemsDelPedido.filter((it) => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
-      const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - costoPorProducto[normalizeNombre(it.producto)]), 0);
+      const itemsConCosto = itemsDelPedido.filter((it) => it.costo !== null && it.costo !== undefined);
+      const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - it.costo), 0);
       const completo = itemsConCosto.length === itemsDelPedido.length;
       const rentabilidadPct = precioTotal > 0 ? (gananciaTotal / precioTotal) * 100 : null;
 
@@ -452,7 +457,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
         list.querySelectorAll(".acc-row.open").forEach((r) => { r.classList.remove("open"); r.nextElementSibling.style.display = "none"; });
         if (!abierto) {
           row.classList.add("open");
-          detail.innerHTML = detalleAcordeonHtml(itemsDelPedido, costoPorProducto);
+          detail.innerHTML = detalleAcordeonHtml(itemsDelPedido);
           detail.style.display = "flex";
           pedidoExpandidoId = ventaId;
         } else {
@@ -464,7 +469,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
 
       if (pedidoExpandidoId === ventaId) {
         row.classList.add("open");
-        detail.innerHTML = detalleAcordeonHtml(itemsDelPedido, costoPorProducto);
+        detail.innerHTML = detalleAcordeonHtml(itemsDelPedido);
         detail.style.display = "flex";
       }
     });

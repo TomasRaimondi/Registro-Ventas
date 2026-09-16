@@ -67,6 +67,101 @@ async function recalcularCostosCombos() {
   }
 }
 
+// ---------- Historial de costos (para que la ganancia de ventas viejas no cambie) ----------
+// La tabla "costos" siempre representa el valor ACTUAL de cada producto, usado tal cual
+// para stock y para armar pedidos nuevos. Para calcular la ganancia de una venta ya
+// pasada, en cambio, hay que usar el costo que el producto tenía EN ESE MOMENTO, no el
+// de ahora. Eso se guarda en "costos_historial": cada fila dice "desde tal fecha, este
+// producto costaba tanto". Los combos no se versionan aparte: su costo histórico se
+// deriva sumando el costo histórico de sus componentes en esa misma fecha.
+
+// Se llama cada vez que se edita el costo de un producto (no de un combo: un combo nunca
+// se edita directo, se recalcula solo). Si es la primera vez que este producto cambia de
+// costo, el valor que tenía ANTES queda registrado como vigente "desde siempre" (una
+// fecha bien anterior a cualquier venta real), para que las ventas viejas sigan usando
+// ese costo viejo. El valor nuevo queda vigente desde hoy.
+async function registrarHistorialCosto(producto, nuevoCosto, costoAnterior, fechaEfectiva) {
+  const historialCompleto = await db.getCostosHistorial();
+  const yaTieneHistorial = historialCompleto.some((h) => h.producto === producto);
+
+  if (!yaTieneHistorial && costoAnterior !== null && costoAnterior !== undefined && costoAnterior !== nuevoCosto) {
+    await db.upsertCostoHistorial({
+      producto,
+      vigenteDesde: "2000-01-01",
+      costo: costoAnterior,
+      creadoEn: new Date().toISOString(),
+    });
+  }
+
+  await db.upsertCostoHistorial({
+    producto,
+    vigenteDesde: fechaEfectiva,
+    costo: nuevoCosto,
+    creadoEn: new Date().toISOString(),
+  });
+}
+
+// Junta costos actuales + historial + composición de combos en las estructuras que
+// necesita calcularCostoHistorico, para no volver a pedirlas por cada item de una venta.
+async function construirIndiceCostoHistorico() {
+  const [costos, historial, composicion] = await Promise.all([
+    db.getCostos(),
+    db.getCostosHistorial(),
+    db.getComposicion(),
+  ]);
+
+  const costoPorProductoActual = {};
+  costos.forEach((c) => { costoPorProductoActual[c.producto] = c.costo; });
+
+  const historialPorProducto = {};
+  historial.forEach((h) => {
+    if (!historialPorProducto[h.producto]) historialPorProducto[h.producto] = [];
+    historialPorProducto[h.producto].push(h);
+  });
+  // getCostosHistorial ya viene ordenado por vigenteDesde ASC.
+
+  const componentesPorCombo = {};
+  composicion.forEach((c) => {
+    if (!componentesPorCombo[c.comboProducto]) componentesPorCombo[c.comboProducto] = [];
+    componentesPorCombo[c.comboProducto].push({ componente: c.componenteProducto, cantidad: c.cantidad });
+  });
+
+  return { costoPorProductoActual, historialPorProducto, componentesPorCombo };
+}
+
+// Costo de "producto" vigente en "fecha" (YYYY-MM-DD). null si no se puede determinar
+// (el producto, o alguno de los componentes de un combo, todavía no tiene costo cargado).
+function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) {
+  if (visitados.has(producto)) return null; // evita un ciclo de combos que se contienen entre sí
+  visitados.add(producto);
+
+  const componentes = indice.componentesPorCombo[producto];
+  if (componentes) {
+    let total = 0;
+    for (const { componente, cantidad } of componentes) {
+      const costoComponente = calcularCostoHistorico(componente, fecha, indice, visitados);
+      if (costoComponente === null) return null;
+      total += costoComponente * cantidad;
+    }
+    return total;
+  }
+
+  const historial = indice.historialPorProducto[producto];
+  if (historial && historial.length) {
+    let resultado = null;
+    for (const h of historial) {
+      if (h.vigenteDesde <= fecha) resultado = h.costo;
+      else break;
+    }
+    if (resultado !== null) return resultado;
+  }
+
+  // Sin historial que aplique a esa fecha (producto que nunca cambió de costo desde que
+  // existe este historial): se usa el costo actual como mejor aproximación disponible.
+  const actual = indice.costoPorProductoActual[producto];
+  return actual === undefined ? null : actual;
+}
+
 // ---------- Contraseñas del panel (dueño y empleado) ----------
 
 let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
@@ -669,7 +764,11 @@ const server = http.createServer(async (req, res) => {
       // un item único a partir de la venta original para que sigan apareciendo acá.
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
-      const [ventasDelDia, items] = await Promise.all([db.getByFecha(fecha), db.getItemsByFecha(fecha)]);
+      const [ventasDelDia, items, indiceCosto] = await Promise.all([
+        db.getByFecha(fecha),
+        db.getItemsByFecha(fecha),
+        construirIndiceCostoHistorico(),
+      ]);
 
       const itemsPorVenta = new Map();
       for (const it of items) {
@@ -682,11 +781,11 @@ const server = http.createServer(async (req, res) => {
         const itemsDeEstaVenta = itemsPorVenta.get(venta.id);
         if (itemsDeEstaVenta && itemsDeEstaVenta.length) {
           for (const it of itemsDeEstaVenta) {
-            resultado.push({ ventaId: venta.id, producto: it.producto, precio: it.precio, horaLabel: venta.horaLabel, metodo: venta.metodo, envioMetodo: venta.envioMetodo });
+            resultado.push({ ventaId: venta.id, producto: it.producto, precio: it.precio, costo: calcularCostoHistorico(it.producto, fecha, indiceCosto), horaLabel: venta.horaLabel, metodo: venta.metodo, envioMetodo: venta.envioMetodo });
           }
         } else {
           // Venta antigua sin items propios: se usa el producto/precio original como único item
-          resultado.push({ ventaId: venta.id, producto: venta.producto, precio: venta.precio, horaLabel: venta.horaLabel, metodo: venta.metodo, envioMetodo: venta.envioMetodo });
+          resultado.push({ ventaId: venta.id, producto: venta.producto, precio: venta.precio, costo: calcularCostoHistorico(venta.producto, fecha, indiceCosto), horaLabel: venta.horaLabel, metodo: venta.metodo, envioMetodo: venta.envioMetodo });
         }
       }
 
@@ -696,10 +795,11 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/reportes" && req.method === "GET") {
       // Protegido: historial completo (todos los días) para el panel de reportes.
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
-      const [ventas, items, gastos] = await Promise.all([
+      const [ventas, items, gastos, indiceCosto] = await Promise.all([
         db.getAllVentas(),
         db.getAllItems(),
         db.getAllGastos(),
+        construirIndiceCostoHistorico(),
       ]);
 
       // Ventas de antes del carrito no tienen fila en venta_items: se reconstruye
@@ -717,6 +817,13 @@ const server = http.createServer(async (req, res) => {
             metodo: venta.metodo,
           });
         }
+      }
+
+      // El costo de cada item se calcula con el que estaba vigente en la fecha DE ESE
+      // item, no con el costo actual: así la ganancia de ventas viejas no se mueve
+      // cuando se actualiza el costo de un producto hoy.
+      for (const it of itemsCompletos) {
+        it.costo = calcularCostoHistorico(it.producto, it.fecha, indiceCosto);
       }
 
       return sendJson(res, 200, { ventas, items: itemsCompletos, gastos });
@@ -793,8 +900,13 @@ const server = http.createServer(async (req, res) => {
       if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
       if (!Number.isFinite(costo) || costo < 0) return sendJson(res, 400, { error: "Costo inválido" });
 
-      const producto = resolverProductoExistente(await db.getCostos(), productoIngresado);
+      const costosActuales = await db.getCostos();
+      const producto = resolverProductoExistente(costosActuales, productoIngresado);
+      const filaActual = costosActuales.find((c) => c.producto === producto);
+      const costoAnterior = filaActual ? filaActual.costo : null;
+
       await db.upsertCosto(producto, costo);
+      await registrarHistorialCosto(producto, costo, costoAnterior, getArgentinaNow().fecha);
       await recalcularCostosCombos();
       return sendJson(res, 200, { ok: true, producto, costo });
     }

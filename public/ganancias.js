@@ -254,17 +254,16 @@ async function renderAll() {
   if (!fechaSelectorInput.value) fechaSelectorInput.value = fechaActiva;
   fechaSelectorHoyBtn.style.display = esHoy ? "none" : "inline-block";
 
-  const costoPorProducto = {};
-  costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
-
+  // El costo de cada item ya viene calculado desde el servidor con el valor que tenía
+  // vigente ese día (no el costo actual), para que la ganancia de un día viejo no se
+  // mueva si hoy se actualiza el costo de un producto.
   let gananciaBruta = 0;
   let itemsConsiderados = 0;
   const sinCostoSet = new Set();
 
   items.forEach(it => {
-    const key = normalizeNombre(it.producto);
-    if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
-      gananciaBruta += it.precio - costoPorProducto[key];
+    if (it.costo !== null && it.costo !== undefined) {
+      gananciaBruta += it.precio - it.costo;
       itemsConsiderados++;
     } else {
       sinCostoSet.add(it.producto);
@@ -321,24 +320,22 @@ async function renderAll() {
     detalleBody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay ventas ${esHoy ? "hoy" : "ese día"}.</td></tr>`;
   } else {
     [...items].reverse().forEach(it => {
-      const key = normalizeNombre(it.producto);
-      const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
-      const costo = tieneCosto ? costoPorProducto[key] : null;
-      const ganancia = tieneCosto ? it.precio - costo : null;
+      const tieneCosto = it.costo !== null && it.costo !== undefined;
+      const ganancia = tieneCosto ? it.precio - it.costo : null;
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${it.horaLabel}</td>
         <td>${escapeHtml(it.producto)}</td>
         <td>${money(it.precio)}</td>
-        <td>${tieneCosto ? money(costo) : "—"}</td>
+        <td>${tieneCosto ? money(it.costo) : "—"}</td>
         <td style="${ganancia !== null && ganancia < 0 ? 'color:#e15b5b;' : ''}">${ganancia !== null ? money(ganancia) : "—"}</td>
       `;
       detalleBody.appendChild(tr);
     });
   }
 
-  renderPedidos(items, costoPorProducto, esHoy);
+  renderPedidos(items, esHoy);
 
   // Tabla de gastos
   const gastosBody = document.getElementById("gastos-body");
@@ -434,7 +431,7 @@ function resumenProductos(itemsDelPedido) {
 // (que reconstruye toda la tabla cada 8s) en vez de cerrarse solo.
 let pedidoExpandidoId = null;
 
-function renderPedidos(items, costoPorProducto, esHoy) {
+function renderPedidos(items, esHoy) {
   const body = document.getElementById("pedidos-body");
   body.innerHTML = "";
 
@@ -452,9 +449,9 @@ function renderPedidos(items, costoPorProducto, esHoy) {
       const envioMetodo = itemsDelPedido[0].envioMetodo;
 
       const precioTotal = itemsDelPedido.reduce((acc, it) => acc + it.precio, 0);
-      const itemsConCosto = itemsDelPedido.filter(it => Object.prototype.hasOwnProperty.call(costoPorProducto, normalizeNombre(it.producto)));
-      const costoTotal = itemsConCosto.reduce((acc, it) => acc + costoPorProducto[normalizeNombre(it.producto)], 0);
-      const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - costoPorProducto[normalizeNombre(it.producto)]), 0);
+      const itemsConCosto = itemsDelPedido.filter(it => it.costo !== null && it.costo !== undefined);
+      const costoTotal = itemsConCosto.reduce((acc, it) => acc + it.costo, 0);
+      const gananciaTotal = itemsConCosto.reduce((acc, it) => acc + (it.precio - it.costo), 0);
       const completo = itemsConCosto.length === itemsDelPedido.length;
       const rentabilidadPct = precioTotal > 0 ? (gananciaTotal / precioTotal) * 100 : null;
 
@@ -481,11 +478,11 @@ function renderPedidos(items, costoPorProducto, esHoy) {
           ${!completo ? `<span class="hint" style="margin:0;">(${itemsConCosto.length}/${itemsDelPedido.length} con costo)</span>` : ""}
         </td>
       `;
-      tr.addEventListener("click", () => togglePedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto));
+      tr.addEventListener("click", () => togglePedidoDetail(ventaId, tr, itemsDelPedido));
       body.appendChild(tr);
 
       if (pedidoExpandidoId === ventaId) {
-        expandirPedidoDetail(ventaId, tr, itemsDelPedido, costoPorProducto);
+        expandirPedidoDetail(ventaId, tr, itemsDelPedido);
       }
     });
   }
@@ -496,7 +493,7 @@ function renderPedidos(items, costoPorProducto, esHoy) {
   document.getElementById("rentabilidad-mayorista").textContent = mayPct !== null ? mayPct.toFixed(1) + "%" : "—";
 }
 
-function expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
+function expandirPedidoDetail(ventaId, row, itemsDelPedido) {
   row.classList.add("expanded");
   pedidoExpandidoId = ventaId;
 
@@ -505,9 +502,8 @@ function expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   const td = document.createElement("td");
   td.colSpan = 7;
   td.innerHTML = agruparProductosPedido(itemsDelPedido).map(g => {
-    const key = normalizeNombre(g.producto);
-    const tieneCosto = Object.prototype.hasOwnProperty.call(costoPorProducto, key);
-    const costoUnit = tieneCosto ? costoPorProducto[key] : null;
+    const costoUnit = g.items[0].costo;
+    const tieneCosto = costoUnit !== null && costoUnit !== undefined;
     const precioTotal = g.items.reduce((acc, it) => acc + it.precio, 0);
     const precioVentaUnit = precioTotal / g.cantidad;
     const costoTotal = tieneCosto ? costoUnit * g.cantidad : null;
@@ -528,7 +524,7 @@ function expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   row.after(detailRow);
 }
 
-function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
+function togglePedidoDetail(ventaId, row, itemsDelPedido) {
   const existing = row.nextElementSibling;
   if (existing && existing.classList.contains("sale-detail-row")) {
     existing.remove();
@@ -541,7 +537,7 @@ function togglePedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto) {
   tbody.querySelectorAll(".sale-detail-row").forEach(r => r.remove());
   tbody.querySelectorAll(".sale-row.expanded").forEach(r => r.classList.remove("expanded"));
 
-  expandirPedidoDetail(ventaId, row, itemsDelPedido, costoPorProducto);
+  expandirPedidoDetail(ventaId, row, itemsDelPedido);
 }
 
 checkAuth();

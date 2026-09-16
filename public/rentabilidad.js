@@ -526,11 +526,13 @@ function unidadesConsumidasPorPeriodo(productoObjetivo, composicion, periodo) {
 // los componentes de un combo (no hay forma de saber qué parte del precio del combo le
 // corresponde a cada componente): solo cuenta las ventas donde el producto elegido se
 // vendió directamente con su propio precio registrado.
+//
+// El costo de cada item ya viene calculado desde el servidor con el valor que estaba
+// vigente ese día (no el actual), así que la ganancia de un período viejo no se mueve
+// si hoy se actualiza el costo del producto.
 function metricasPorPeriodo(productoObjetivo, periodo) {
-  const costoRow = costosGlobal.find(c => normalizeNombre(c.producto) === normalizeNombre(productoObjetivo));
-  const costo = costoRow ? costoRow.costo : null;
-
   const porPeriodo = {};
+  let tieneAlgunCosto = false;
   function entradaDe(fecha) {
     const key = periodo === "semana" ? getWeekStart(fecha) : getMonthKey(fecha);
     if (!porPeriodo[key]) porPeriodo[key] = { unidades: 0, ingresos: 0, ganancia: 0 };
@@ -542,10 +544,13 @@ function metricasPorPeriodo(productoObjetivo, periodo) {
     const entrada = entradaDe(it.fecha);
     entrada.unidades += 1;
     entrada.ingresos += it.precio;
-    if (costo !== null) entrada.ganancia += it.precio - costo;
+    if (it.costo !== null && it.costo !== undefined) {
+      entrada.ganancia += it.precio - it.costo;
+      tieneAlgunCosto = true;
+    }
   });
 
-  return { porPeriodo, tieneCosto: costo !== null };
+  return { porPeriodo, tieneCosto: tieneAlgunCosto };
 }
 
 function renderCrecimiento() {
