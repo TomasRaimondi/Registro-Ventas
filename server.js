@@ -1607,19 +1607,24 @@ function getLocalIps() {
 // Cuenta DNI, se revisa también al arrancar el servidor por si estuvo dormido justo a
 // las 20hs (Render puede apagar el servicio si no tiene tráfico).
 
-const SALARIO_AUTOMATICO_MONTO = 30000;
+const SALARIO_AUTOMATICO_MONTO = 30000; // lunes a viernes
+const SALARIO_AUTOMATICO_MONTO_SABADO = 15000; // sábado (domingo no se trabaja)
 const SALARIO_AUTOMATICO_NOTA = "Sueldo automático";
 
-function esDiaDeSemana(fecha) {
+// Lunes a viernes: sueldo completo. Sábado: mitad. Domingo: no se trabaja (null).
+function montoSueldoAutomatico(fecha) {
   const [y, m, d] = fecha.split("-").map(Number);
-  const dia = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = domingo, 6 = sábado
-  return dia >= 1 && dia <= 5;
+  const dia = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = domingo ... 6 = sábado
+  if (dia >= 1 && dia <= 5) return SALARIO_AUTOMATICO_MONTO;
+  if (dia === 6) return SALARIO_AUTOMATICO_MONTO_SABADO;
+  return null;
 }
 
 async function chequearSalarioAutomatico() {
   try {
     const ahora = getArgentinaNow();
-    if (!esDiaDeSemana(ahora.fecha)) return;
+    const monto = montoSueldoAutomatico(ahora.fecha);
+    if (monto === null) return; // domingo
 
     const minuto = Number(ahora.horaLabel.slice(3, 5));
     // Ventana de los primeros 5 minutos después de las 20:00 (por si el chequeo no
@@ -1633,12 +1638,12 @@ async function chequearSalarioAutomatico() {
     await db.insertSalario({
       id: crypto.randomUUID(),
       fecha: ahora.fecha,
-      sueldo: SALARIO_AUTOMATICO_MONTO,
+      sueldo: monto,
       comision: 0,
       nota: SALARIO_AUTOMATICO_NOTA,
       creadoEn: new Date().toISOString(),
     });
-    console.log(`Sueldo automático de $${SALARIO_AUTOMATICO_MONTO} agregado para ${ahora.fecha}`);
+    console.log(`Sueldo automático de $${monto} agregado para ${ahora.fecha}`);
   } catch (e) {
     console.error("Error en chequearSalarioAutomatico:", e);
   }
