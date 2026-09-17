@@ -653,9 +653,11 @@ const server = http.createServer(async (req, res) => {
 
       // Comisión minorista automática: 5% del excedente por sobre $45.000, solo en
       // ventas no mayoristas que registra el empleado (Chino), desde el 16/09/2026.
+      // No aplica en envíos por Uber Moto.
       if (
         vendedor === "chino" &&
         metodo !== "mayorista" &&
+        envioMetodo !== "uber_moto" &&
         row.fecha >= COMISION_MINORISTA_DESDE &&
         row.precio > COMISION_MINORISTA_UMBRAL
       ) {
