@@ -20,6 +20,12 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function formatFechaLarga(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
 async function api(url, options) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -358,6 +364,84 @@ async function deleteSale(id) {
   }
 }
 
+function renderMetrics(sales) {
+  // Total del día y cantidad de ventas (no incluye Mayorista, que tiene su total aparte)
+  const ventasSinMayorista = sales.filter(s => s.metodo !== "mayorista");
+  const total = ventasSinMayorista.reduce((acc, s) => acc + s.precio, 0);
+  document.getElementById("total-dia").textContent = money(total);
+  document.getElementById("cant-ventas").textContent =
+    ventasSinMayorista.length === 1 ? "1 venta" : `${ventasSinMayorista.length} ventas`;
+
+  // Total exclusivo de ventas registradas como Mayorista
+  const ventasMayorista = sales.filter(s => s.metodo === "mayorista");
+  const totalMayorista = ventasMayorista.reduce((acc, s) => acc + s.precio, 0);
+  document.getElementById("total-dia-mayorista").textContent = money(totalMayorista);
+  document.getElementById("cant-ventas-mayorista").textContent =
+    ventasMayorista.length === 1 ? "1 venta" : `${ventasMayorista.length} ventas`;
+
+  // Envíos por Uber Moto de la fecha: cuántos salieron y cuánto se gastó en viajes
+  const envios = sales.filter(s => s.envioMetodo === "uber_moto");
+  const costoEnvios = envios.reduce((acc, s) => acc + (s.envioCosto || 0), 0);
+  document.getElementById("cant-envios-hoy").textContent = envios.length;
+  document.getElementById("costo-envios-hoy").textContent = `${money(costoEnvios)} en viajes`;
+
+  // Totales por método de pago
+  const totalsByMethod = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, cuentadni: 0, mayorista: 0, web: 0 };
+  sales.forEach(s => { totalsByMethod[s.metodo] = (totalsByMethod[s.metodo] || 0) + s.precio; });
+  document.getElementById("total-efectivo").textContent = money(totalsByMethod.efectivo);
+  document.getElementById("total-transferencia").textContent = money(totalsByMethod.transferencia);
+  document.getElementById("total-debito").textContent = money(totalsByMethod.debito);
+  document.getElementById("total-credito").textContent = money(totalsByMethod.credito);
+  document.getElementById("total-cuentadni").textContent = money(totalsByMethod.cuentadni);
+  document.getElementById("total-mayorista").textContent = money(totalsByMethod.mayorista);
+  document.getElementById("total-web").textContent = money(totalsByMethod.web);
+
+  // Volumen de ventas por hora (0 a 23)
+  const byHour = Array(24).fill(0);
+  sales.forEach(s => { byHour[s.hora] += s.precio; });
+
+  const maxVal = Math.max(...byHour, 1);
+  const chart = document.getElementById("hour-chart");
+  chart.innerHTML = "";
+
+  const activeHours = byHour
+    .map((v, h) => ({ h, v }))
+    .filter(x => x.v > 0)
+    .map(x => x.h);
+
+  let startHour = 8, endHour = 22;
+  if (activeHours.length) {
+    startHour = Math.min(startHour, Math.min(...activeHours));
+    endHour = Math.max(endHour, Math.max(...activeHours));
+  }
+
+  for (let h = startHour; h <= endHour; h++) {
+    const value = byHour[h];
+    const heightPct = value > 0 ? Math.max((value / maxVal) * 100, 4) : 2;
+
+    const wrap = document.createElement("div");
+    wrap.className = "chart-bar-wrap";
+
+    const valLabel = document.createElement("span");
+    valLabel.className = "chart-bar-value";
+    valLabel.textContent = value > 0 ? money(value) : "";
+
+    const bar = document.createElement("div");
+    bar.className = "chart-bar";
+    bar.style.height = heightPct + "%";
+    bar.title = `${h}:00 - ${money(value)}`;
+
+    const hLabel = document.createElement("span");
+    hLabel.className = "chart-bar-label";
+    hLabel.textContent = String(h).padStart(2, "0") + "h";
+
+    wrap.appendChild(valLabel);
+    wrap.appendChild(bar);
+    wrap.appendChild(hLabel);
+    chart.appendChild(wrap);
+  }
+}
+
 async function renderHistorial() {
   const fecha = document.getElementById("fecha-venta").value;
   const tbody = document.getElementById("history-body");
@@ -373,6 +457,11 @@ async function renderHistorial() {
     console.error("No se pudo cargar el historial:", err);
     return;
   }
+
+  document.querySelectorAll(".fecha-dinamica").forEach((el) => {
+    el.textContent = formatFechaLarga(fecha);
+  });
+  renderMetrics(sales);
 
   if (sales.length === 0) {
     tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay ventas cargadas para esta fecha.</td></tr>`;
