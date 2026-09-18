@@ -257,18 +257,19 @@ function escapeHtml(str) {
 }
 
 async function renderAll() {
-  let items, costos, gastos, salarios, composicion, comisionesMinoristas;
+  let items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas;
   try {
     const hora = await api("/api/hora");
     hoyFechaCache = hora.fecha;
     const fechaActiva = fechaSeleccionada || hoyFechaCache;
-    [items, costos, gastos, salarios, composicion, comisionesMinoristas] = await Promise.all([
+    [items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas] = await Promise.all([
       api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
       api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/salario"),
       api("/api/composicion"),
       api("/api/comisiones-minoristas"),
+      api("/api/bonos-mayoristas"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -413,6 +414,10 @@ async function renderAll() {
   comisionesMinoristas.forEach(c => {
     bonoMinoristaPorFecha[c.fecha] = (bonoMinoristaPorFecha[c.fecha] || 0) + c.comision;
   });
+  const bonoMayoristaAutoPorFecha = {};
+  bonosMayoristas.forEach(b => {
+    bonoMayoristaAutoPorFecha[b.fecha] = (bonoMayoristaAutoPorFecha[b.fecha] || 0) + b.bono;
+  });
 
   const salarioBody = document.getElementById("salario-body");
   // Si el usuario está editando una celda de este cuadro, no lo pisamos con el
@@ -425,12 +430,16 @@ async function renderAll() {
       [...salarios].reverse().forEach(s => {
         const tieneOverride = s.bonoMinoristaManual !== null && s.bonoMinoristaManual !== undefined;
         const bonoMinorista = tieneOverride ? s.bonoMinoristaManual : (bonoMinoristaPorFecha[s.fecha] || 0);
+        const bonoMayoristaAuto = bonoMayoristaAutoPorFecha[s.fecha] || 0;
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${s.fecha}</td>
           <td><input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="sueldo" value="${s.sueldo || 0}" min="0" step="0.01"></td>
           <td><input type="number" class="salario-cell-input" style="width:95px;color:var(--green);" data-id="${s.id}" data-campo="bonoMinoristaManual" value="${bonoMinorista}" min="0" step="0.01" title="${tieneOverride ? "Editado a mano" : "Calculado automáticamente (5% del excedente en ventas de Chino)"}"></td>
-          <td><input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="comision" value="${s.comision || 0}" min="0" step="0.01"></td>
+          <td>
+            <input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="comision" value="${s.comision || 0}" min="0" step="0.01" title="Bono mayorista cargado a mano (no incluye el automático)">
+            ${bonoMayoristaAuto > 0 ? `<div class="hint" style="font-size:11px;margin-top:2px;">+ ${money(bonoMayoristaAuto)} auto (20% ganancia)</div>` : ""}
+          </td>
           <td>${s.nota ? escapeHtml(s.nota) : ""}</td>
           <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>
         `;

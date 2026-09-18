@@ -159,6 +159,17 @@ const SCHEMA = `
     horaLabel TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS bonos_mayoristas (
+    id TEXT PRIMARY KEY,
+    ventaId TEXT NOT NULL,
+    vendedor TEXT NOT NULL,
+    gananciaNeta REAL NOT NULL,
+    bono REAL NOT NULL,
+    fecha TEXT NOT NULL,
+    hora INTEGER NOT NULL,
+    horaLabel TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -649,6 +660,22 @@ if (USE_TURSO) {
     async deleteComisionesByVentaId(ventaId) {
       await client.execute({ sql: "DELETE FROM comisiones_minoristas WHERE ventaId = ?", args: [ventaId] });
     },
+
+    // Bono mayorista del empleado (20% de la ganancia neta de la venta mayorista).
+    async insertBonoMayorista(row) {
+      await client.execute({
+        sql: `INSERT INTO bonos_mayoristas (id, ventaId, vendedor, gananciaNeta, bono, fecha, hora, horaLabel, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.ventaId, row.vendedor, row.gananciaNeta, row.bono, row.fecha, row.hora, row.horaLabel, row.creadoEn],
+      });
+    },
+    async getAllBonosMayoristas() {
+      const res = await client.execute("SELECT * FROM bonos_mayoristas ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async deleteBonosMayoristasByVentaId(ventaId) {
+      await client.execute({ sql: "DELETE FROM bonos_mayoristas WHERE ventaId = ?", args: [ventaId] });
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -995,6 +1022,20 @@ if (USE_TURSO) {
     },
     async deleteComisionesByVentaId(ventaId) {
       db.prepare("DELETE FROM comisiones_minoristas WHERE ventaId = ?").run(ventaId);
+    },
+
+    // Bono mayorista del empleado (20% de la ganancia neta de la venta mayorista).
+    async insertBonoMayorista(row) {
+      db.prepare(
+        `INSERT INTO bonos_mayoristas (id, ventaId, vendedor, gananciaNeta, bono, fecha, hora, horaLabel, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.ventaId, row.vendedor, row.gananciaNeta, row.bono, row.fecha, row.hora, row.horaLabel, row.creadoEn);
+    },
+    async getAllBonosMayoristas() {
+      return db.prepare("SELECT * FROM bonos_mayoristas ORDER BY creadoEn ASC").all();
+    },
+    async deleteBonosMayoristasByVentaId(ventaId) {
+      db.prepare("DELETE FROM bonos_mayoristas WHERE ventaId = ?").run(ventaId);
     },
   };
 }

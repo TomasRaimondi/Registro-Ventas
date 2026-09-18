@@ -29,10 +29,11 @@ function getQuincena(fechaStr) {
   return { key, label };
 }
 
-// Junta el sueldo/bono mayorista (cargados a mano, un registro por día) con el bono
-// minorista (calculado solo, una fila por venta que comisiona) en un solo mapa por
-// fecha, para poder agruparlos juntos por quincena y por día.
-function agruparPorFecha(registros, comisiones) {
+// Junta el sueldo/bono mayorista manual (cargados a mano, un registro por día), el
+// bono mayorista automático (20% de ganancia neta, una fila por venta mayorista que
+// lo genera) y el bono minorista (calculado solo, una fila por venta que comisiona)
+// en un solo mapa por fecha, para poder agruparlos juntos por quincena y por día.
+function agruparPorFecha(registros, comisiones, bonosMayoristas) {
   const mapa = new Map();
   const fechasConOverride = new Set();
   registros.forEach(r => {
@@ -53,6 +54,10 @@ function agruparPorFecha(registros, comisiones) {
     if (!mapa.has(c.fecha)) mapa.set(c.fecha, { fecha: c.fecha, sueldo: 0, bonoMayorista: 0, bonoMinorista: 0, notas: [] });
     mapa.get(c.fecha).bonoMinorista += c.comision;
   });
+  (bonosMayoristas || []).forEach(b => {
+    if (!mapa.has(b.fecha)) mapa.set(b.fecha, { fecha: b.fecha, sueldo: 0, bonoMayorista: 0, bonoMinorista: 0, notas: [] });
+    mapa.get(b.fecha).bonoMayorista += b.bono;
+  });
   return [...mapa.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
 
@@ -70,18 +75,19 @@ function agruparPorQuincena(porFecha) {
 }
 
 async function render() {
-  let registros, comisiones;
+  let registros, comisiones, bonosMayoristas;
   try {
-    [registros, comisiones] = await Promise.all([
+    [registros, comisiones, bonosMayoristas] = await Promise.all([
       fetch("/api/salario").then(r => r.json()),
       fetch("/api/comisiones-minoristas").then(r => r.json()),
+      fetch("/api/bonos-mayoristas").then(r => r.json()),
     ]);
   } catch (err) {
     console.error("No se pudo cargar el salario:", err);
     return;
   }
 
-  const porFecha = agruparPorFecha(registros, comisiones);
+  const porFecha = agruparPorFecha(registros, comisiones, bonosMayoristas);
 
   const sueldoAcumulado = porFecha.reduce((acc, r) => acc + r.sueldo, 0);
   const bonoMinoristaTotal = porFecha.reduce((acc, r) => acc + r.bonoMinorista, 0);

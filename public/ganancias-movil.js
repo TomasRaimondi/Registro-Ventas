@@ -205,18 +205,19 @@ async function deleteSalario(id) {
 // ---------- Render ----------
 
 async function renderAll() {
-  let items, costos, gastos, salarios, composicion, comisionesMinoristas;
+  let items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas;
   try {
     const hora = await api("/api/hora");
     hoyFechaCache = hora.fecha;
     const fechaActiva = fechaSeleccionada || hoyFechaCache;
-    [items, costos, gastos, salarios, composicion, comisionesMinoristas] = await Promise.all([
+    [items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas] = await Promise.all([
       api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
       api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/salario"),
       api("/api/composicion"),
       api("/api/comisiones-minoristas"),
+      api("/api/bonos-mayoristas"),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -337,6 +338,10 @@ async function renderAll() {
   comisionesMinoristas.forEach((c) => {
     bonoMinoristaPorFecha[c.fecha] = (bonoMinoristaPorFecha[c.fecha] || 0) + c.comision;
   });
+  const bonoMayoristaAutoPorFecha = {};
+  bonosMayoristas.forEach((b) => {
+    bonoMayoristaAutoPorFecha[b.fecha] = (bonoMayoristaAutoPorFecha[b.fecha] || 0) + b.bono;
+  });
 
   const salarioList = document.getElementById("salario-list");
   if (salarios.length === 0) {
@@ -346,11 +351,12 @@ async function renderAll() {
       const bonoMinorista = (s.bonoMinoristaManual !== null && s.bonoMinoristaManual !== undefined)
         ? s.bonoMinoristaManual
         : (bonoMinoristaPorFecha[s.fecha] || 0);
+      const bonoMayorista = s.comision + (bonoMayoristaAutoPorFecha[s.fecha] || 0);
       return `
       <div class="list-row">
         <div class="list-row-info">
           <span class="list-row-titulo">${s.fecha}</span>
-          <span class="list-row-sub">${s.sueldo > 0 ? "Sueldo " + money(s.sueldo) : ""}${bonoMinorista > 0 ? " · Bono Minorista " + money(bonoMinorista) : ""}${s.comision > 0 ? " · Bono Mayorista " + money(s.comision) : ""}${s.nota ? " · " + escapeHtml(s.nota) : ""}</span>
+          <span class="list-row-sub">${s.sueldo > 0 ? "Sueldo " + money(s.sueldo) : ""}${bonoMinorista > 0 ? " · Bono Minorista " + money(bonoMinorista) : ""}${bonoMayorista > 0 ? " · Bono Mayorista " + money(bonoMayorista) : ""}${s.nota ? " · " + escapeHtml(s.nota) : ""}</span>
         </div>
         <button type="button" class="list-row-del" data-id="${s.id}">✕</button>
       </div>

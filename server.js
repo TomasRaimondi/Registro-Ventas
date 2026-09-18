@@ -22,6 +22,11 @@ const COMISION_MINORISTA_UMBRAL = 45000;
 const COMISION_MINORISTA_PORCENTAJE = 0.05;
 const COMISION_MINORISTA_DESDE = "2026-09-16";
 
+// Bono mayorista automático del empleado: 20% de la ganancia neta de cada venta
+// mayorista que él mismo registre, a partir del 2026-09-18.
+const BONO_MAYORISTA_AUTOMATICO_PORCENTAJE = 0.20;
+const BONO_MAYORISTA_AUTOMATICO_DESDE = "2026-09-18";
+
 function normalizeNombre(s) {
   return (s || "").trim().toLowerCase();
 }
@@ -677,6 +682,34 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // Bono mayorista automático: 20% de la ganancia neta de la venta, solo en
+      // ventas mayoristas que registra el empleado (Chino), desde el 18/09/2026.
+      if (
+        vendedor === "chino" &&
+        metodo === "mayorista" &&
+        row.fecha >= BONO_MAYORISTA_AUTOMATICO_DESDE
+      ) {
+        const indiceCosto = await construirIndiceCostoHistorico();
+        const gananciaNeta = itemsProcessed.reduce((acc, it) => {
+          const costo = calcularCostoHistorico(it.producto, row.fecha, indiceCosto);
+          return costo !== null ? acc + (it.precio - costo) : acc;
+        }, 0);
+        const bono = Math.round(Math.max(0, gananciaNeta) * BONO_MAYORISTA_AUTOMATICO_PORCENTAJE * 100) / 100;
+        if (bono > 0) {
+          await db.insertBonoMayorista({
+            id: crypto.randomUUID(),
+            ventaId: row.id,
+            vendedor,
+            gananciaNeta: Math.round(gananciaNeta * 100) / 100,
+            bono,
+            fecha: row.fecha,
+            hora: row.hora,
+            horaLabel: row.horaLabel,
+            creadoEn: row.creadoEn,
+          });
+        }
+      }
+
       return sendJson(res, 201, { ...row, items: itemsProcessed });
     }
 
@@ -691,6 +724,7 @@ const server = http.createServer(async (req, res) => {
       await db.deleteItemsByVentaId(id);
       await db.deleteById(id);
       await db.deleteComisionesByVentaId(id);
+      await db.deleteBonosMayoristasByVentaId(id);
       return sendJson(res, 200, { ok: true });
     }
 
@@ -715,6 +749,13 @@ const server = http.createServer(async (req, res) => {
     // puede ver en salario.html cuánto va comisionando sin tener que loguearse ahí).
     if (pathname === "/api/comisiones-minoristas" && req.method === "GET") {
       const rows = await db.getAllComisionesMinoristas();
+      return sendJson(res, 200, rows);
+    }
+
+    // Bonos mayoristas automáticos del empleado: público, mismo criterio que
+    // /api/comisiones-minoristas (lo consume salario.html, que no tiene login).
+    if (pathname === "/api/bonos-mayoristas" && req.method === "GET") {
+      const rows = await db.getAllBonosMayoristas();
       return sendJson(res, 200, rows);
     }
 
@@ -1793,16 +1834,19 @@ async function chequearSalarioAutomatico() {
       console.log(`Sueldo automático de $${monto} agregado para ${ahora.fecha}`);
     }
 
-    // Registrar también como gasto del día (sueldo + comisión minorista acumulada
-    // hasta este momento), para que la ganancia neta lo tenga en cuenta.
+    // Registrar también como gasto del día (sueldo + comisión minorista + bono
+    // mayorista acumulados hasta este momento), para que la ganancia neta lo tenga en cuenta.
     const gastosHoy = await db.getGastosByFecha(ahora.fecha);
     const yaTieneGastoSueldoHoy = gastosHoy.some((g) => g.concepto === "Sueldo Chino");
     if (!yaTieneGastoSueldoHoy) {
-      const comisiones = await db.getAllComisionesMinoristas();
+      const [comisiones, bonos] = await Promise.all([db.getAllComisionesMinoristas(), db.getAllBonosMayoristas()]);
       const comisionDelDia = comisiones
         .filter((c) => c.fecha === ahora.fecha)
         .reduce((acc, c) => acc + c.comision, 0);
-      const montoGasto = Math.round((monto + comisionDelDia) * 100) / 100;
+      const bonoMayoristaDelDia = bonos
+        .filter((b) => b.fecha === ahora.fecha)
+        .reduce((acc, b) => acc + b.bono, 0);
+      const montoGasto = Math.round((monto + comisionDelDia + bonoMayoristaDelDia) * 100) / 100;
       await db.insertGasto({
         id: crypto.randomUUID(),
         concepto: "Sueldo Chino",
