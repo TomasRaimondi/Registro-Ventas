@@ -1747,17 +1747,38 @@ async function chequearSalarioAutomatico() {
 
     const registros = await db.getAllSalario();
     const yaTieneSueldoHoy = registros.some((r) => r.fecha === ahora.fecha && r.sueldo > 0);
-    if (yaTieneSueldoHoy) return;
+    if (!yaTieneSueldoHoy) {
+      await db.insertSalario({
+        id: crypto.randomUUID(),
+        fecha: ahora.fecha,
+        sueldo: monto,
+        comision: 0,
+        nota: SALARIO_AUTOMATICO_NOTA,
+        creadoEn: new Date().toISOString(),
+      });
+      console.log(`Sueldo automático de $${monto} agregado para ${ahora.fecha}`);
+    }
 
-    await db.insertSalario({
-      id: crypto.randomUUID(),
-      fecha: ahora.fecha,
-      sueldo: monto,
-      comision: 0,
-      nota: SALARIO_AUTOMATICO_NOTA,
-      creadoEn: new Date().toISOString(),
-    });
-    console.log(`Sueldo automático de $${monto} agregado para ${ahora.fecha}`);
+    // Registrar también como gasto del día (sueldo + comisión minorista acumulada
+    // hasta este momento), para que la ganancia neta lo tenga en cuenta.
+    const gastosHoy = await db.getGastosByFecha(ahora.fecha);
+    const yaTieneGastoSueldoHoy = gastosHoy.some((g) => g.concepto === "Sueldo Chino");
+    if (!yaTieneGastoSueldoHoy) {
+      const comisiones = await db.getAllComisionesMinoristas();
+      const comisionDelDia = comisiones
+        .filter((c) => c.fecha === ahora.fecha)
+        .reduce((acc, c) => acc + c.comision, 0);
+      const montoGasto = Math.round((monto + comisionDelDia) * 100) / 100;
+      await db.insertGasto({
+        id: crypto.randomUUID(),
+        concepto: "Sueldo Chino",
+        monto: montoGasto,
+        fecha: ahora.fecha,
+        horaLabel: ahora.horaLabel,
+        creadoEn: new Date().toISOString(),
+      });
+      console.log(`Gasto "Sueldo Chino" de $${montoGasto} agregado para ${ahora.fecha}`);
+    }
   } catch (e) {
     console.error("Error en chequearSalarioAutomatico:", e);
   }
