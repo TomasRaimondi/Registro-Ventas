@@ -51,6 +51,7 @@ function showApp() {
     fechaInput.value = now.toISOString().slice(0, 10);
   }
   renderAll();
+  cargarGananciaAcumulada();
 }
 
 function showLogin() {
@@ -136,6 +137,7 @@ document.getElementById("costo-form").addEventListener("submit", async (e) => {
     });
     e.target.reset();
     renderAll();
+    cargarGananciaAcumulada();
   } catch (err) {
     alert("No se pudo guardar el costo.\n" + err.message);
   }
@@ -145,6 +147,7 @@ async function deleteCosto(producto) {
   try {
     await api("/api/costos/" + encodeURIComponent(producto), { method: "DELETE" });
     renderAll();
+    cargarGananciaAcumulada();
   } catch (err) {
     alert("No se pudo borrar el costo.\n" + err.message);
   }
@@ -166,6 +169,7 @@ document.getElementById("gasto-form").addEventListener("submit", async (e) => {
     });
     e.target.reset();
     renderAll();
+    cargarGananciaAcumulada();
   } catch (err) {
     alert("No se pudo registrar el gasto.\n" + err.message);
   }
@@ -175,6 +179,7 @@ async function deleteGasto(id) {
   try {
     await api("/api/gastos/" + encodeURIComponent(id), { method: "DELETE" });
     renderAll();
+    cargarGananciaAcumulada();
   } catch (err) {
     alert("No se pudo borrar el gasto.\n" + err.message);
   }
@@ -218,6 +223,30 @@ async function deleteSalario(id) {
     alert("No se pudo borrar el registro.\n" + err.message);
   }
 }
+
+// ---------- Ganancia acumulada (histórica, todo el período) ----------
+// Se calcula aparte de renderAll() porque implica traer TODO el historial
+// (no solo el día activo), así que se refresca menos seguido: al entrar,
+// después de guardar/borrar un costo o gasto, y cada 60s en segundo plano.
+
+async function cargarGananciaAcumulada() {
+  let reportes;
+  try {
+    reportes = await api("/api/reportes");
+  } catch (err) {
+    if (err.status === 401) return;
+    console.error("No se pudo cargar la ganancia acumulada:", err);
+    return;
+  }
+  const gananciaBrutaAcum = reportes.items.reduce((acc, it) => {
+    return (it.costo !== null && it.costo !== undefined) ? acc + (it.precio - it.costo) : acc;
+  }, 0);
+  const gastoTotalAcum = reportes.gastos.reduce((acc, g) => acc + g.monto, 0);
+  const el = document.getElementById("ganancia-acumulada");
+  el.textContent = money(gananciaBrutaAcum - gastoTotalAcum);
+}
+
+setInterval(() => { if (appContent.style.display !== "none") cargarGananciaAcumulada(); }, 60000);
 
 // ---------- Render ----------
 
@@ -281,6 +310,27 @@ async function renderAll() {
   gananciaNetaEl.textContent = money(gananciaNeta);
   gananciaNetaEl.classList.toggle("value-positive", gananciaNeta > 0);
   gananciaNetaEl.classList.toggle("value-negative", gananciaNeta < 0);
+
+  // Por canal de venta: Web (método "web" + cualquier envío por Uber Moto, sea cual
+  // sea el método de pago), Local (efectivo/transferencia/débito/crédito/cuenta DNI
+  // sin envío por Uber Moto) y Mayorista. Ganancia por canal usa el mismo costo
+  // histórico ya calculado por item.
+  const canalTotales = { web: 0, local: 0, mayorista: 0 };
+  const canalGanancias = { web: 0, local: 0, mayorista: 0 };
+  items.forEach(it => {
+    let canal;
+    if (it.metodo === "mayorista") canal = "mayorista";
+    else if (it.metodo === "web" || it.envioMetodo === "uber_moto") canal = "web";
+    else canal = "local";
+    canalTotales[canal] += it.precio;
+    if (it.costo !== null && it.costo !== undefined) canalGanancias[canal] += it.precio - it.costo;
+  });
+  document.getElementById("canal-web-total").textContent = money(canalTotales.web);
+  document.getElementById("canal-local-total").textContent = money(canalTotales.local);
+  document.getElementById("canal-mayorista-total").textContent = money(canalTotales.mayorista);
+  document.getElementById("canal-web-ganancia").textContent = money(canalGanancias.web);
+  document.getElementById("canal-local-ganancia").textContent = money(canalGanancias.local);
+  document.getElementById("canal-mayorista-ganancia").textContent = money(canalGanancias.mayorista);
 
   const sinCostoCard = document.getElementById("sin-costo-card");
   const sinCostoList = document.getElementById("sin-costo-list");

@@ -93,6 +93,52 @@
         <span class="label">Ganancia neta <span class="fecha-dinamica">hoy</span></span>
         <span class="big-number" id="ganancia-neta">$0</span>
       </div>
+      <div class="card metric-card metric-card-wide">
+        <span class="label">Ganancia acumulada (histórica)</span>
+        <span class="big-number" id="ganancia-acumulada">$0</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Por canal de venta <span class="fecha-dinamica">hoy</span></h2>
+      <div class="payment-grid">
+        <div class="payment-item">
+          <span class="pm-icon">🌐</span>
+          <span class="pm-name">Web</span>
+          <span class="pm-value" id="canal-web-total">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">🏪</span>
+          <span class="pm-name">Local</span>
+          <span class="pm-value" id="canal-local-total">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">🏷️</span>
+          <span class="pm-name">Mayorista</span>
+          <span class="pm-value" id="canal-mayorista-total">$0</span>
+        </div>
+      </div>
+      <p class="hint" style="text-align:left;margin:10px 0 0;">Los envíos por Uber Moto se cuentan dentro de Web.</p>
+
+      <h2 style="margin-top:22px;">Ganancia por canal <span class="fecha-dinamica">hoy</span></h2>
+      <div class="payment-grid">
+        <div class="payment-item">
+          <span class="pm-icon">🌐</span>
+          <span class="pm-name">Web</span>
+          <span class="pm-value" id="canal-web-ganancia">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">🏪</span>
+          <span class="pm-name">Local</span>
+          <span class="pm-value" id="canal-local-ganancia">$0</span>
+        </div>
+        <div class="payment-item">
+          <span class="pm-icon">🏷️</span>
+          <span class="pm-name">Mayorista</span>
+          <span class="pm-value" id="canal-mayorista-ganancia">$0</span>
+        </div>
+      </div>
+      <p class="hint" style="text-align:left;margin:10px 0 0;">Solo considera productos con costo cargado.</p>
     </section>
 
     <section class="card" id="sin-costo-card" style="display:none;">
