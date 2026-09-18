@@ -645,6 +645,19 @@ function renderMetrics(sales) {
   document.getElementById("cant-envios-hoy").textContent = envios.length;
   document.getElementById("costo-envios-hoy").textContent = `${money(costoEnvios)} en viajes`;
 
+  // Por canal de venta: Web (incluye método "web" y todo envío por Uber Moto,
+  // sea cual sea el método de pago), Local (efectivo/transferencia/débito/
+  // crédito/cuenta DNI sin envío por Uber Moto) y Mayorista.
+  let totalCanalWeb = 0, totalCanalLocal = 0, totalCanalMayorista = 0;
+  sales.forEach(s => {
+    if (s.metodo === "mayorista") totalCanalMayorista += s.precio;
+    else if (s.metodo === "web" || s.envioMetodo === "uber_moto") totalCanalWeb += s.precio;
+    else totalCanalLocal += s.precio;
+  });
+  document.getElementById("canal-web").textContent = money(totalCanalWeb);
+  document.getElementById("canal-local").textContent = money(totalCanalLocal);
+  document.getElementById("canal-mayorista").textContent = money(totalCanalMayorista);
+
   // Totales por método de pago
   const totalsByMethod = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, cuentadni: 0, mayorista: 0, web: 0 };
   sales.forEach(s => { totalsByMethod[s.metodo] = (totalsByMethod[s.metodo] || 0) + s.precio; });
