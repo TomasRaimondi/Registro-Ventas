@@ -34,14 +34,22 @@ function getQuincena(fechaStr) {
 // fecha, para poder agruparlos juntos por quincena y por día.
 function agruparPorFecha(registros, comisiones) {
   const mapa = new Map();
+  const fechasConOverride = new Set();
   registros.forEach(r => {
     if (!mapa.has(r.fecha)) mapa.set(r.fecha, { fecha: r.fecha, sueldo: 0, bonoMayorista: 0, bonoMinorista: 0, notas: [] });
     const acc = mapa.get(r.fecha);
     acc.sueldo += r.sueldo;
     acc.bonoMayorista += r.comision;
     if (r.nota) acc.notas.push(r.nota);
+    // Si el Bono Minorista de ese día se editó a mano (en Panel de Ganancias), ese
+    // valor pisa al cálculo automático de abajo.
+    if (r.bonoMinoristaManual !== null && r.bonoMinoristaManual !== undefined) {
+      acc.bonoMinorista += r.bonoMinoristaManual;
+      fechasConOverride.add(r.fecha);
+    }
   });
   comisiones.forEach(c => {
+    if (fechasConOverride.has(c.fecha)) return;
     if (!mapa.has(c.fecha)) mapa.set(c.fecha, { fecha: c.fecha, sueldo: 0, bonoMayorista: 0, bonoMinorista: 0, notas: [] });
     mapa.get(c.fecha).bonoMinorista += c.comision;
   });

@@ -415,26 +415,57 @@ async function renderAll() {
   });
 
   const salarioBody = document.getElementById("salario-body");
-  salarioBody.innerHTML = "";
-  if (salarios.length === 0) {
-    salarioBody.innerHTML = `<tr class="empty-row"><td colspan="6">Todavía no cargaste ningún día.</td></tr>`;
-  } else {
-    [...salarios].reverse().forEach(s => {
-      const bonoMinorista = bonoMinoristaPorFecha[s.fecha] || 0;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${s.fecha}</td>
-        <td>${s.sueldo > 0 ? money(s.sueldo) : "—"}</td>
-        <td style="color:var(--green);">${bonoMinorista > 0 ? money(bonoMinorista) : "—"}</td>
-        <td>${s.comision > 0 ? money(s.comision) : "—"}</td>
-        <td>${s.nota ? escapeHtml(s.nota) : ""}</td>
-        <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>
-      `;
-      salarioBody.appendChild(tr);
+  // Si el usuario está editando una celda de este cuadro, no lo pisamos con el
+  // auto-refresh de 8s (perdería lo que estaba escribiendo).
+  if (!salarioBody.contains(document.activeElement)) {
+    salarioBody.innerHTML = "";
+    if (salarios.length === 0) {
+      salarioBody.innerHTML = `<tr class="empty-row"><td colspan="6">Todavía no cargaste ningún día.</td></tr>`;
+    } else {
+      [...salarios].reverse().forEach(s => {
+        const tieneOverride = s.bonoMinoristaManual !== null && s.bonoMinoristaManual !== undefined;
+        const bonoMinorista = tieneOverride ? s.bonoMinoristaManual : (bonoMinoristaPorFecha[s.fecha] || 0);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${s.fecha}</td>
+          <td><input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="sueldo" value="${s.sueldo || 0}" min="0" step="0.01"></td>
+          <td><input type="number" class="salario-cell-input" style="width:95px;color:var(--green);" data-id="${s.id}" data-campo="bonoMinoristaManual" value="${bonoMinorista}" min="0" step="0.01" title="${tieneOverride ? "Editado a mano" : "Calculado automáticamente (5% del excedente en ventas de Chino)"}"></td>
+          <td><input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="comision" value="${s.comision || 0}" min="0" step="0.01"></td>
+          <td>${s.nota ? escapeHtml(s.nota) : ""}</td>
+          <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>
+        `;
+        salarioBody.appendChild(tr);
+      });
+      salarioBody.querySelectorAll(".del-btn").forEach(btn => {
+        btn.addEventListener("click", () => deleteSalario(btn.dataset.id));
+      });
+      salarioBody.querySelectorAll(".salario-cell-input").forEach(input => {
+        input.addEventListener("change", () => guardarCeldaSalario(input));
+      });
+    }
+  }
+}
+
+async function guardarCeldaSalario(input) {
+  const id = input.dataset.id;
+  const campo = input.dataset.campo;
+  const valor = parseFloat(input.value);
+  if (isNaN(valor) || valor < 0) {
+    alert("Ingresá un monto válido (0 o más).");
+    renderAll();
+    return;
+  }
+  try {
+    await api("/api/salario/" + encodeURIComponent(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [campo]: valor }),
     });
-    salarioBody.querySelectorAll(".del-btn").forEach(btn => {
-      btn.addEventListener("click", () => deleteSalario(btn.dataset.id));
-    });
+    renderAll();
+    cargarGananciaAcumulada();
+  } catch (err) {
+    alert("No se pudo actualizar.\n" + err.message);
+    renderAll();
   }
 }
 

@@ -343,7 +343,9 @@ async function renderAll() {
     salarioList.innerHTML = `<p class="empty">Todavía no cargaste ningún día.</p>`;
   } else {
     salarioList.innerHTML = [...salarios].reverse().map((s) => {
-      const bonoMinorista = bonoMinoristaPorFecha[s.fecha] || 0;
+      const bonoMinorista = (s.bonoMinoristaManual !== null && s.bonoMinoristaManual !== undefined)
+        ? s.bonoMinoristaManual
+        : (bonoMinoristaPorFecha[s.fecha] || 0);
       return `
       <div class="list-row">
         <div class="list-row-info">

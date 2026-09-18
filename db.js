@@ -217,6 +217,17 @@ async function migrarVendedor(execFn) {
   }
 }
 
+// Migración aditiva: permite sobreescribir a mano, por día, el Bono Minorista que
+// normalmente se calcula solo (suma de comisiones_minoristas de ese día). Si es
+// NULL, se sigue usando el valor calculado; si tiene un número, ese pisa al cálculo.
+async function migrarBonoMinoristaManual(execFn) {
+  try {
+    await execFn("ALTER TABLE salario ADD COLUMN bonoMinoristaManual REAL");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
 let impl;
@@ -239,6 +250,7 @@ if (USE_TURSO) {
       await migrarCliente((sql) => client.execute(sql));
       await migrarEnvio((sql) => client.execute(sql));
       await migrarVendedor((sql) => client.execute(sql));
+      await migrarBonoMinoristaManual((sql) => client.execute(sql));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -399,6 +411,19 @@ if (USE_TURSO) {
     },
     async deleteSalario(id) {
       await client.execute({ sql: "DELETE FROM salario WHERE id = ?", args: [id] });
+    },
+    async updateSalario(id, campos) {
+      const sets = [];
+      const args = [];
+      for (const campo of ["sueldo", "comision", "bonoMinoristaManual"]) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      args.push(id);
+      await client.execute({ sql: `UPDATE salario SET ${sets.join(", ")} WHERE id = ?`, args });
     },
 
     async getAllTableroTareas() {
@@ -639,6 +664,7 @@ if (USE_TURSO) {
       await migrarCliente(async (sql) => db.exec(sql));
       await migrarEnvio(async (sql) => db.exec(sql));
       await migrarVendedor(async (sql) => db.exec(sql));
+      await migrarBonoMinoristaManual(async (sql) => db.exec(sql));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -767,6 +793,19 @@ if (USE_TURSO) {
     },
     async deleteSalario(id) {
       db.prepare("DELETE FROM salario WHERE id = ?").run(id);
+    },
+    async updateSalario(id, campos) {
+      const sets = [];
+      const args = [];
+      for (const campo of ["sueldo", "comision", "bonoMinoristaManual"]) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      args.push(id);
+      db.prepare(`UPDATE salario SET ${sets.join(", ")} WHERE id = ?`).run(...args);
     },
 
     async getAllTableroTareas() {

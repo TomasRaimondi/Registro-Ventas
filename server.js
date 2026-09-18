@@ -1345,6 +1345,40 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (pathname.startsWith("/api/salario/") && req.method === "PUT") {
+      // Permite editar a mano, por día, el Sueldo, el Bono Mayorista (comision) y el
+      // Bono Minorista (que por defecto se calcula solo a partir de comisiones_minoristas;
+      // acá se guarda un valor que lo pisa, sin tocar esas comisiones individuales).
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/salario/".length));
+      const body = await readJsonBody(req);
+      const campos = {};
+
+      if (body.sueldo !== undefined) {
+        const sueldo = Number(body.sueldo);
+        if (!Number.isFinite(sueldo) || sueldo < 0) return sendJson(res, 400, { error: "Sueldo inválido" });
+        campos.sueldo = sueldo;
+      }
+      if (body.comision !== undefined) {
+        const comision = Number(body.comision);
+        if (!Number.isFinite(comision) || comision < 0) return sendJson(res, 400, { error: "Bono Mayorista inválido" });
+        campos.comision = comision;
+      }
+      if (body.bonoMinoristaManual !== undefined) {
+        if (body.bonoMinoristaManual === null) {
+          campos.bonoMinoristaManual = null;
+        } else {
+          const bono = Number(body.bonoMinoristaManual);
+          if (!Number.isFinite(bono) || bono < 0) return sendJson(res, 400, { error: "Bono Minorista inválido" });
+          campos.bonoMinoristaManual = bono;
+        }
+      }
+
+      if (!Object.keys(campos).length) return sendJson(res, 400, { error: "Nada para actualizar" });
+      await db.updateSalario(id, campos);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Tablero de tareas ----------
     // Sin contraseña, igual que /api/ventas y la lectura de /api/salario: es un
     // pizarrón compartido en el local, lo usa tanto el dueño como el empleado.
