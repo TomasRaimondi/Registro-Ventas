@@ -22,6 +22,22 @@ function formatFechaCorta(fecha) {
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
   "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
+function getWeekStart(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay();
+  const diff = (day === 0 ? -6 : 1) - day; // retrocede hasta el lunes
+  date.setUTCDate(date.getUTCDate() + diff);
+  return date.toISOString().slice(0, 10);
+}
+
+function getWeekEnd(weekStartStr) {
+  const [y, m, d] = weekStartStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + 6);
+  return date.toISOString().slice(0, 10);
+}
+
 async function api(url, options) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -206,22 +222,31 @@ function agruparConceptosSimilares(gastos) {
   return resultado;
 }
 
-function agruparPorMes(gastos) {
+// Agrupa los gastos por semana (lunes a domingo) o por mes calendario, según tipoPeriodo.
+// Cada bucket queda con su propio total y la lista de gastos que caen ahí, para poder
+// después desglosarlos por concepto (agruparConceptosSimilares) dentro de ese período.
+function agruparPorPeriodo(gastos, tipoPeriodo) {
   const mapa = new Map();
   gastos.forEach(g => {
-    const [y, m] = g.fecha.split("-").map(Number);
-    const key = y * 12 + (m - 1);
-    if (!mapa.has(key)) mapa.set(key, { label: `${MESES[m - 1]} ${y}`, total: 0, gastos: [] });
+    const key = tipoPeriodo === "semana" ? getWeekStart(g.fecha) : g.fecha.slice(0, 7);
+    if (!mapa.has(key)) {
+      const label = tipoPeriodo === "semana"
+        ? `${formatFechaCorta(key)} al ${formatFechaCorta(getWeekEnd(key))}`
+        : (() => { const [y, m] = key.split("-").map(Number); return `${MESES[m - 1]} ${y}`; })();
+      mapa.set(key, { key, label, total: 0, gastos: [] });
+    }
     const acc = mapa.get(key);
     acc.total += g.monto;
     acc.gastos.push(g);
   });
-  return [...mapa.entries()].sort((a, b) => b[0] - a[0]).map(([, v]) => v);
+  return [...mapa.values()].sort((a, b) => b.key.localeCompare(a.key));
 }
 
 // ---------- Gastos fijos mensuales (estimados) ----------
 
 let gastosFijosGlobal = [];
+let gastosGlobal = [];
+let periodoActivo = "semana";
 
 function renderGastosFijos() {
   const body = document.getElementById("gastos-fijos-body");
@@ -283,6 +308,128 @@ function precargarGastoFijo(concepto, monto) {
   document.getElementById("gasto-fijo-monto").focus();
 }
 
+// ---------- Desglose por período (semana o mes), con ranking de conceptos ----------
+
+document.getElementById("periodo-tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".periodo-tab");
+  if (!btn) return;
+  periodoActivo = btn.dataset.periodo;
+  document.querySelectorAll("#periodo-tabs .periodo-tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderDesglosePeriodo();
+});
+
+function renderDesglosePeriodo() {
+  const esSemana = periodoActivo === "semana";
+  document.getElementById("tendencia-titulo").textContent = esSemana ? "Evolución por semana" : "Evolución por mes";
+  document.getElementById("desglose-titulo").textContent = esSemana ? "Gastos por semana" : "Gastos por mes";
+
+  const periodos = agruparPorPeriodo(gastosGlobal, periodoActivo);
+
+  // Gráfico de tendencia: las últimas 12, de más vieja a más nueva.
+  const ultimas = [...periodos].reverse().slice(-12);
+  const chart = document.getElementById("tendencia-chart");
+  chart.innerHTML = "";
+  const maxVal = Math.max(...ultimas.map(p => p.total), 1);
+  ultimas.forEach(p => {
+    const heightPct = p.total > 0 ? Math.max((p.total / maxVal) * 100, 4) : 2;
+    const etiquetaCorta = esSemana ? formatFechaCorta(p.key) : p.key.slice(5);
+    const wrap = document.createElement("div");
+    wrap.className = "chart-bar-wrap";
+    wrap.innerHTML = `
+      <span class="chart-bar-value">${p.total > 0 ? money(p.total) : ""}</span>
+      <div class="chart-bar" style="height:${heightPct}%" title="${escapeHtml(p.label)}: ${money(p.total)}"></div>
+      <span class="chart-bar-label">${escapeHtml(etiquetaCorta)}</span>
+    `;
+    chart.appendChild(wrap);
+  });
+
+  // Bloques por período, el más reciente desplegado por defecto. Adentro de cada uno,
+  // el ranking de conceptos de ESE período (para saber qué pesó más esa semana/mes),
+  // y un desplegable con el detalle día por día.
+  const container = document.getElementById("periodos-container");
+  const empty = document.getElementById("periodos-empty");
+  container.querySelectorAll(".mes-bloque").forEach(el => el.remove());
+  empty.style.display = periodos.length === 0 ? "block" : "none";
+
+  periodos.forEach((periodo, index) => {
+    const bloque = document.createElement("div");
+    bloque.className = "mes-bloque";
+
+    const conceptosDelPeriodo = agruparConceptosSimilares(periodo.gastos);
+    const maxConcepto = Math.max(...conceptosDelPeriodo.map(c => c.total), 1);
+    const filasConceptos = conceptosDelPeriodo.map(c => {
+      const pct = periodo.total > 0 ? (c.total / periodo.total) * 100 : 0;
+      const anchoBarra = (c.total / maxConcepto) * 100;
+      return `
+        <tr>
+          <td>${escapeHtml(c.concepto)}</td>
+          <td>${c.veces}</td>
+          <td>${money(c.total)}</td>
+          <td style="white-space:nowrap;">
+            ${pct.toFixed(0)}%
+            <div style="background:var(--card-border); border-radius:4px; height:6px; margin-top:4px; width:80px; overflow:hidden;">
+              <div style="background:var(--accent); height:100%; width:${anchoBarra}%;"></div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    const filasDetalle = [...periodo.gastos]
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.creadoEn.localeCompare(b.creadoEn))
+      .map(g => `
+        <tr>
+          <td>${formatFechaCorta(g.fecha)}</td>
+          <td>${escapeHtml(g.concepto)}</td>
+          <td>${money(g.monto)}</td>
+        </tr>
+      `).join("");
+
+    const abierto = index === 0;
+    bloque.innerHTML = `
+      <h3 class="collapsible-header mes-header${abierto ? " expanded" : ""}">
+        <span><span class="expand-caret">▸</span>${escapeHtml(periodo.label.charAt(0).toUpperCase() + periodo.label.slice(1))}</span>
+        <span class="mes-total">${money(periodo.total)}</span>
+      </h3>
+      <div class="mes-tabla" style="display:${abierto ? "block" : "none"};">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Concepto</th><th>Veces</th><th>Total</th><th>% del período</th></tr></thead>
+            <tbody>${filasConceptos}</tbody>
+          </table>
+        </div>
+        <p class="collapsible-header detalle-dia-toggle" style="margin-top:12px; text-align:left;"><span class="expand-caret">▸</span>Ver detalle día por día</p>
+        <div class="table-wrap detalle-dia-tabla" style="display:none; margin-top:8px;">
+          <table>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th></tr></thead>
+            <tbody>${filasDetalle}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const header = bloque.querySelector(".mes-header");
+    const tabla = bloque.querySelector(".mes-tabla");
+    header.addEventListener("click", () => {
+      const abierto = tabla.style.display !== "none";
+      tabla.style.display = abierto ? "none" : "block";
+      header.classList.toggle("expanded", !abierto);
+    });
+
+    const detalleBtn = bloque.querySelector(".detalle-dia-toggle");
+    const detalleTabla = bloque.querySelector(".detalle-dia-tabla");
+    detalleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const abierto = detalleTabla.style.display !== "none";
+      detalleTabla.style.display = abierto ? "none" : "block";
+      detalleBtn.classList.toggle("expanded", !abierto);
+    });
+
+    container.appendChild(bloque);
+  });
+}
+
 // ---------- Render principal ----------
 
 async function renderAll() {
@@ -305,52 +452,8 @@ async function renderAll() {
 
   renderGastosFijos();
 
-  // Desglose mensual, con el mes más reciente desplegado por defecto
-  const mesesContainer = document.getElementById("meses-container");
-  const mesesEmpty = document.getElementById("meses-empty");
-  mesesContainer.querySelectorAll(".mes-bloque").forEach(el => el.remove());
-
-  const meses = agruparPorMes(gastos);
-  mesesEmpty.style.display = meses.length === 0 ? "block" : "none";
-
-  meses.forEach((mes, index) => {
-    const bloque = document.createElement("div");
-    bloque.className = "mes-bloque";
-
-    const filas = [...mes.gastos]
-      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.creadoEn.localeCompare(b.creadoEn))
-      .map(g => `
-        <tr>
-          <td>${formatFechaCorta(g.fecha)}</td>
-          <td>${escapeHtml(g.concepto)}</td>
-          <td>${money(g.monto)}</td>
-        </tr>
-      `).join("");
-
-    const abierto = index === 0;
-    bloque.innerHTML = `
-      <h3 class="collapsible-header mes-header${abierto ? " expanded" : ""}">
-        <span><span class="expand-caret">▸</span>${escapeHtml(mes.label.charAt(0).toUpperCase() + mes.label.slice(1))}</span>
-        <span class="mes-total">${money(mes.total)}</span>
-      </h3>
-      <div class="table-wrap mes-tabla" style="display:${abierto ? "block" : "none"};">
-        <table>
-          <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th></tr></thead>
-          <tbody>${filas}</tbody>
-        </table>
-      </div>
-    `;
-
-    const header = bloque.querySelector(".mes-header");
-    const tabla = bloque.querySelector(".mes-tabla");
-    header.addEventListener("click", () => {
-      const abierto = tabla.style.display !== "none";
-      tabla.style.display = abierto ? "none" : "block";
-      header.classList.toggle("expanded", !abierto);
-    });
-
-    mesesContainer.appendChild(bloque);
-  });
+  gastosGlobal = gastos;
+  renderDesglosePeriodo();
 
   // Gastos que más se repiten (agrupados por similitud, con tendencia)
   const repetidosBody = document.getElementById("repetidos-body");

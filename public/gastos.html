@@ -51,10 +51,19 @@
     </section>
 
     <section class="card">
-      <h2>Desglose mensual</h2>
-      <p class="hint" style="text-align:left;">Hacé clic en un mes para ver el detalle día por día.</p>
-      <div id="meses-container">
-        <p class="hint" id="meses-empty" style="display:none;">Todavía no hay gastos cargados.</p>
+      <div class="periodo-tabs" id="periodo-tabs">
+        <button type="button" class="periodo-tab active" data-periodo="semana">Semana</button>
+        <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
+      </div>
+      <h2 id="tendencia-titulo">Evolución por semana</h2>
+      <div class="chart chart-tall" id="tendencia-chart"></div>
+    </section>
+
+    <section class="card">
+      <h2 id="desglose-titulo">Gastos por semana</h2>
+      <p class="hint" style="text-align:left;">Hacé clic en un período para ver en qué se fue la plata, ordenado de mayor a menor. Dentro también podés ver el detalle día por día.</p>
+      <div id="periodos-container">
+        <p class="hint" id="periodos-empty" style="display:none;">Todavía no hay gastos cargados.</p>
       </div>
     </section>
 
