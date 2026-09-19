@@ -351,7 +351,10 @@ async function renderAll() {
       const bonoMinorista = (s.bonoMinoristaManual !== null && s.bonoMinoristaManual !== undefined)
         ? s.bonoMinoristaManual
         : (bonoMinoristaPorFecha[s.fecha] || 0);
-      const bonoMayorista = s.comision + (bonoMayoristaAutoPorFecha[s.fecha] || 0);
+      const bonoMayoristaAuto = (s.bonoMayoristaAutoManual !== null && s.bonoMayoristaAutoManual !== undefined)
+        ? s.bonoMayoristaAutoManual
+        : (bonoMayoristaAutoPorFecha[s.fecha] || 0);
+      const bonoMayorista = s.comision + bonoMayoristaAuto;
       return `
       <div class="list-row">
         <div class="list-row-info">

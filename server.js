@@ -1414,6 +1414,15 @@ const server = http.createServer(async (req, res) => {
           campos.bonoMinoristaManual = bono;
         }
       }
+      if (body.bonoMayoristaAutoManual !== undefined) {
+        if (body.bonoMayoristaAutoManual === null) {
+          campos.bonoMayoristaAutoManual = null;
+        } else {
+          const bono = Number(body.bonoMayoristaAutoManual);
+          if (!Number.isFinite(bono) || bono < 0) return sendJson(res, 400, { error: "Bono Mayorista automático inválido" });
+          campos.bonoMayoristaAutoManual = bono;
+        }
+      }
 
       if (!Object.keys(campos).length) return sendJson(res, 400, { error: "Nada para actualizar" });
       await db.updateSalario(id, campos);
@@ -1843,9 +1852,14 @@ async function chequearSalarioAutomatico() {
       const comisionDelDia = comisiones
         .filter((c) => c.fecha === ahora.fecha)
         .reduce((acc, c) => acc + c.comision, 0);
-      const bonoMayoristaDelDia = bonos
-        .filter((b) => b.fecha === ahora.fecha)
-        .reduce((acc, b) => acc + b.bono, 0);
+      // Si el Bono Mayorista automático de hoy ya fue editado a mano (en Panel de
+      // Ganancias), ese valor pisa al cálculo, igual que con el Bono Minorista.
+      const overridesBonoMayoristaHoy = registros.filter(
+        (r) => r.fecha === ahora.fecha && r.bonoMayoristaAutoManual !== null && r.bonoMayoristaAutoManual !== undefined
+      );
+      const bonoMayoristaDelDia = overridesBonoMayoristaHoy.length
+        ? overridesBonoMayoristaHoy.reduce((acc, r) => acc + r.bonoMayoristaAutoManual, 0)
+        : bonos.filter((b) => b.fecha === ahora.fecha).reduce((acc, b) => acc + b.bono, 0);
       const montoGasto = Math.round((monto + comisionDelDia + bonoMayoristaDelDia) * 100) / 100;
       await db.insertGasto({
         id: crypto.randomUUID(),

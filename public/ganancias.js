@@ -430,15 +430,18 @@ async function renderAll() {
       [...salarios].reverse().forEach(s => {
         const tieneOverride = s.bonoMinoristaManual !== null && s.bonoMinoristaManual !== undefined;
         const bonoMinorista = tieneOverride ? s.bonoMinoristaManual : (bonoMinoristaPorFecha[s.fecha] || 0);
-        const bonoMayoristaAuto = bonoMayoristaAutoPorFecha[s.fecha] || 0;
+        const tieneOverrideMayorista = s.bonoMayoristaAutoManual !== null && s.bonoMayoristaAutoManual !== undefined;
+        const bonoMayoristaAuto = tieneOverrideMayorista ? s.bonoMayoristaAutoManual : (bonoMayoristaAutoPorFecha[s.fecha] || 0);
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${s.fecha}</td>
           <td><input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="sueldo" value="${s.sueldo || 0}" min="0" step="0.01"></td>
           <td><input type="number" class="salario-cell-input" style="width:95px;color:var(--green);" data-id="${s.id}" data-campo="bonoMinoristaManual" value="${bonoMinorista}" min="0" step="0.01" title="${tieneOverride ? "Editado a mano" : "Calculado automáticamente (5% del excedente en ventas de Chino)"}"></td>
           <td>
-            <input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="comision" value="${s.comision || 0}" min="0" step="0.01" title="Bono mayorista cargado a mano (no incluye el automático)">
-            ${bonoMayoristaAuto > 0 ? `<div class="hint" style="font-size:11px;margin-top:2px;">+ ${money(bonoMayoristaAuto)} auto (20% ganancia)</div>` : ""}
+            <div class="hint" style="font-size:10px;margin-bottom:2px;">Manual</div>
+            <input type="number" class="salario-cell-input" style="width:95px;" data-id="${s.id}" data-campo="comision" value="${s.comision || 0}" min="0" step="0.01">
+            <div class="hint" style="font-size:10px;margin:4px 0 2px;">Automático (20%)</div>
+            <input type="number" class="salario-cell-input" style="width:95px;color:var(--green);" data-id="${s.id}" data-campo="bonoMayoristaAutoManual" value="${bonoMayoristaAuto}" min="0" step="0.01" title="${tieneOverrideMayorista ? "Editado a mano" : "Calculado automáticamente (20% de la ganancia neta en ventas mayoristas de Chino)"}">
           </td>
           <td>${s.nota ? escapeHtml(s.nota) : ""}</td>
           <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>

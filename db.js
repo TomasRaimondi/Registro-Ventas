@@ -239,6 +239,17 @@ async function migrarBonoMinoristaManual(execFn) {
   }
 }
 
+// Migración aditiva: igual que bonoMinoristaManual, pero para el Bono Mayorista
+// automático (20% de la ganancia neta en ventas mayoristas de Chino). Si es NULL,
+// se sigue usando el total calculado ese día; si tiene un número, ese pisa al cálculo.
+async function migrarBonoMayoristaAutoManual(execFn) {
+  try {
+    await execFn("ALTER TABLE salario ADD COLUMN bonoMayoristaAutoManual REAL");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
 let impl;
@@ -262,6 +273,7 @@ if (USE_TURSO) {
       await migrarEnvio((sql) => client.execute(sql));
       await migrarVendedor((sql) => client.execute(sql));
       await migrarBonoMinoristaManual((sql) => client.execute(sql));
+      await migrarBonoMayoristaAutoManual((sql) => client.execute(sql));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -426,7 +438,7 @@ if (USE_TURSO) {
     async updateSalario(id, campos) {
       const sets = [];
       const args = [];
-      for (const campo of ["sueldo", "comision", "bonoMinoristaManual"]) {
+      for (const campo of ["sueldo", "comision", "bonoMinoristaManual", "bonoMayoristaAutoManual"]) {
         if (Object.prototype.hasOwnProperty.call(campos, campo)) {
           sets.push(`${campo} = ?`);
           args.push(campos[campo]);
@@ -692,6 +704,7 @@ if (USE_TURSO) {
       await migrarEnvio(async (sql) => db.exec(sql));
       await migrarVendedor(async (sql) => db.exec(sql));
       await migrarBonoMinoristaManual(async (sql) => db.exec(sql));
+      await migrarBonoMayoristaAutoManual(async (sql) => db.exec(sql));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -824,7 +837,7 @@ if (USE_TURSO) {
     async updateSalario(id, campos) {
       const sets = [];
       const args = [];
-      for (const campo of ["sueldo", "comision", "bonoMinoristaManual"]) {
+      for (const campo of ["sueldo", "comision", "bonoMinoristaManual", "bonoMayoristaAutoManual"]) {
         if (Object.prototype.hasOwnProperty.call(campos, campo)) {
           sets.push(`${campo} = ?`);
           args.push(campos[campo]);
