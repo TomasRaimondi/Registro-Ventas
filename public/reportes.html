@@ -45,76 +45,77 @@
   <div id="app-content" style="display:none;">
 
     <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:20px;">
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="volumen">
         <span class="label">Volumen</span>
         <span class="big-number" id="stat-volumen">$0</span>
         <span class="metric-sub" id="label-volumen"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="volumen-mayorista">
         <span class="label">Volumen mayorista</span>
         <span class="big-number" id="stat-volumen-mayorista" style="color:var(--orange);">$0</span>
         <span class="metric-sub" id="label-volumen-mayorista"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="ganancia-bruta">
         <span class="label">Ganancia bruta</span>
         <span class="big-number" id="stat-ganancia-bruta">$0</span>
         <span class="metric-sub" id="label-ganancia-bruta"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="pct-retorno-general">
         <span class="label">% Retorno general</span>
         <span class="big-number" id="stat-pct-retorno-general">—</span>
         <span class="metric-sub" id="label-pct-retorno-general"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="ganancia-bruta-minorista">
         <span class="label">Gan. bruta minorista</span>
         <span class="big-number" id="stat-ganancia-bruta-minorista">$0</span>
         <span class="metric-sub" id="label-ganancia-bruta-minorista"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="pct-retorno-minorista">
         <span class="label">% Retorno minorista</span>
         <span class="big-number" id="stat-pct-retorno-minorista">—</span>
         <span class="metric-sub" id="label-pct-retorno-minorista"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="ganancia-bruta-mayorista">
         <span class="label">Gan. bruta mayorista</span>
         <span class="big-number" id="stat-ganancia-bruta-mayorista" style="color:var(--orange);">$0</span>
         <span class="metric-sub" id="label-ganancia-bruta-mayorista"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="pct-retorno-mayorista">
         <span class="label">% Retorno mayorista</span>
         <span class="big-number" id="stat-pct-retorno-mayorista" style="color:var(--orange);">—</span>
         <span class="metric-sub" id="label-pct-retorno-mayorista"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="ganancia-neta">
         <span class="label">Ganancia neta</span>
         <span class="big-number" id="stat-ganancia-neta">$0</span>
         <span class="metric-sub" id="label-ganancia-neta"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="pct-retorno-neto">
         <span class="label">% Retorno neto</span>
         <span class="big-number" id="stat-pct-retorno-neto">—</span>
         <span class="metric-sub" id="label-pct-retorno-neto"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="gasto">
         <span class="label">Gasto</span>
         <span class="big-number" id="stat-gasto" style="color:var(--red);">$0</span>
         <span class="metric-sub" id="label-gasto"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="cant-ventas">
         <span class="label">Ventas</span>
         <span class="big-number" id="stat-cant-ventas">0</span>
         <span class="metric-sub" id="label-cant-ventas"></span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="ticket-promedio">
         <span class="label">Ticket promedio</span>
         <span class="big-number" id="stat-ticket-promedio">$0</span>
       </div>
-      <div class="card metric-card">
+      <div class="card metric-card metric-card-clickable" data-metric="dias">
         <span class="label">Días con actividad</span>
         <span class="big-number" id="stat-dias">0</span>
         <span class="metric-sub" id="label-dias"></span>
       </div>
     </section>
+    <p class="hint">Tocá cualquier cuadro para ver su evolución por día, semana o mes.</p>
 
     <section class="card">
       <div class="periodo-tabs" id="periodo-tabs">
@@ -189,6 +190,25 @@
   </div>
 
 </main>
+
+<div id="metric-modal" class="modal-overlay" style="display:none;">
+  <div class="card modal-card" style="max-width:720px; max-height:85vh; overflow-y:auto;">
+    <button type="button" class="modal-cerrar" id="metric-modal-cerrar" aria-label="Cerrar">×</button>
+    <h2 id="metric-modal-titulo">Métrica</h2>
+    <div class="periodo-tabs" id="metric-modal-tabs">
+      <button type="button" class="periodo-tab active" data-periodo="dia">Día</button>
+      <button type="button" class="periodo-tab" data-periodo="semana">Semana</button>
+      <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
+    </div>
+    <div class="chart chart-tall" id="metric-modal-chart"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th id="metric-modal-th-periodo">Día</th><th>Valor</th></tr></thead>
+        <tbody id="metric-modal-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <script src="reportes.js"></script>
 </body>

@@ -335,6 +335,199 @@ function agruparPorMesHistorico() {
   return Object.values(grupos).sort((a, b) => a.key.localeCompare(b.key));
 }
 
+// ---------- Modal de evolución por métrica (al hacer clic en un cuadro) ----------
+// A diferencia de las pestañas Día/Semana/Mes de arriba (que eligen UN rango para
+// mostrar todas las métricas juntas), esto muestra la evolución de UNA sola métrica
+// en una ventana rodante: últimos 30 días, últimas 12 semanas o últimos 12 meses.
+
+function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
+  const brutaTotal = g.gananciaBruta + g.gananciaBrutaMayorista;
+  const volumenTotal = g.volumen + g.volumenMayorista;
+  const neta = brutaTotal - g.gasto;
+  const pct = (num, den) => (den > 0 ? (num / den) * 100 : null);
+  const pctFmt = (v) => (v !== null ? v.toFixed(1) + "%" : "—");
+
+  switch (metricKey) {
+    case "volumen": return { raw: g.volumen, formatted: money(g.volumen) };
+    case "volumen-mayorista": return { raw: g.volumenMayorista, formatted: money(g.volumenMayorista) };
+    case "ganancia-bruta": return { raw: brutaTotal, formatted: money(brutaTotal) };
+    case "pct-retorno-general": { const v = pct(brutaTotal, volumenTotal); return { raw: v || 0, formatted: pctFmt(v) }; }
+    case "ganancia-bruta-minorista": return { raw: g.gananciaBruta, formatted: money(g.gananciaBruta) };
+    case "pct-retorno-minorista": { const v = pct(g.gananciaBruta, g.volumen); return { raw: v || 0, formatted: pctFmt(v) }; }
+    case "ganancia-bruta-mayorista": return { raw: g.gananciaBrutaMayorista, formatted: money(g.gananciaBrutaMayorista) };
+    case "pct-retorno-mayorista": { const v = pct(g.gananciaBrutaMayorista, g.volumenMayorista); return { raw: v || 0, formatted: pctFmt(v) }; }
+    case "ganancia-neta": return { raw: neta, formatted: money(neta) };
+    case "pct-retorno-neto": { const v = pct(neta, volumenTotal); return { raw: v || 0, formatted: pctFmt(v) }; }
+    case "gasto": return { raw: g.gasto, formatted: money(g.gasto) };
+    case "cant-ventas": return { raw: g.cantVentas, formatted: String(g.cantVentas) };
+    case "ticket-promedio": { const v = g.cantVentas ? g.volumen / g.cantVentas : 0; return { raw: v, formatted: money(v) }; }
+    case "dias": return { raw: g.diasConDatos, formatted: `${g.diasConDatos} de ${diasEnPeriodo}` };
+    default: return { raw: 0, formatted: "—" };
+  }
+}
+
+function diasRecientes(n) {
+  const [y, m, d] = hoyFecha.split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d));
+  const fechas = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const dd = new Date(base);
+    dd.setUTCDate(base.getUTCDate() - i);
+    fechas.push(dd.toISOString().slice(0, 10));
+  }
+  return fechas;
+}
+
+function semanasRecientes(n) {
+  const [y, m, d] = getWeekStart(hoyFecha).split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d));
+  const semanas = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const dd = new Date(base);
+    dd.setUTCDate(base.getUTCDate() - i * 7);
+    semanas.push(dd.toISOString().slice(0, 10));
+  }
+  return semanas;
+}
+
+function mesesRecientes(n) {
+  const [y, m] = getMonthKey(hoyFecha).split("-").map(Number);
+  const meses = [];
+  for (let i = n - 1; i >= 0; i--) {
+    let mm = m - i;
+    let yy = y;
+    while (mm <= 0) { mm += 12; yy -= 1; }
+    meses.push(`${yy}-${String(mm).padStart(2, "0")}`);
+  }
+  return meses;
+}
+
+function grupoDeUnDia(fecha) {
+  const d = porFechaGlobal[fecha];
+  const g = grupoVacio(fecha, formatFecha(fecha));
+  if (d) sumarEnGrupo(g, { ...d, diasConDatos: 1 });
+  return g;
+}
+
+function grupoDeUnaSemana(ws) {
+  const g = grupoVacio(ws, `${formatFecha(ws)}-${formatFecha(getWeekEnd(ws))}`);
+  fechasDeSemana(ws).forEach(fecha => {
+    const d = porFechaGlobal[fecha];
+    if (d) sumarEnGrupo(g, { ...d, diasConDatos: 1 });
+  });
+  return g;
+}
+
+function grupoDeUnMes(mk) {
+  const g = grupoVacio(mk, getMonthLabel(mk));
+  Object.keys(porFechaGlobal).filter(fecha => getMonthKey(fecha) === mk).forEach(fecha => {
+    sumarEnGrupo(g, { ...porFechaGlobal[fecha], diasConDatos: 1 });
+  });
+  return g;
+}
+
+function renderSingleBarChart(container, entries) {
+  container.innerHTML = "";
+  if (entries.length === 0) return;
+  const maxAbs = Math.max(...entries.map(e => Math.abs(e.raw)), 1);
+  entries.forEach(e => {
+    const heightPct = e.raw !== 0 ? Math.max((Math.abs(e.raw) / maxAbs) * 100, 4) : 2;
+    const wrap = document.createElement("div");
+    wrap.className = "chart-bar-wrap";
+
+    const valLabel = document.createElement("span");
+    valLabel.className = "chart-bar-value";
+    valLabel.textContent = e.formatted;
+
+    const bar = document.createElement("div");
+    bar.className = "chart-bar";
+    bar.style.height = heightPct + "%";
+    if (e.raw < 0) bar.style.background = "linear-gradient(180deg, #e15b5b, #b83f3f)";
+    bar.title = `${e.label}: ${e.formatted}`;
+
+    const hLabel = document.createElement("span");
+    hLabel.className = "chart-bar-label";
+    hLabel.textContent = e.label;
+
+    wrap.appendChild(valLabel);
+    wrap.appendChild(bar);
+    wrap.appendChild(hLabel);
+    container.appendChild(wrap);
+  });
+}
+
+let metricModalKey = null;
+let metricModalPeriodo = "dia";
+
+function abrirMetricModal(metricKey, titulo) {
+  metricModalKey = metricKey;
+  metricModalPeriodo = "dia";
+  document.getElementById("metric-modal-titulo").textContent = titulo;
+  document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
+  document.getElementById("metric-modal").style.display = "flex";
+  renderMetricModal();
+}
+
+function cerrarMetricModal() {
+  document.getElementById("metric-modal").style.display = "none";
+  metricModalKey = null;
+}
+
+function renderMetricModal() {
+  if (!metricModalKey) return;
+
+  let claves, grupoFn, diasEnPeriodoFn, thLabel;
+  if (metricModalPeriodo === "dia") {
+    claves = diasRecientes(30);
+    grupoFn = grupoDeUnDia;
+    diasEnPeriodoFn = () => 1;
+    thLabel = "Día";
+  } else if (metricModalPeriodo === "semana") {
+    claves = semanasRecientes(12);
+    grupoFn = grupoDeUnaSemana;
+    diasEnPeriodoFn = () => 7;
+    thLabel = "Semana";
+  } else {
+    claves = mesesRecientes(12);
+    grupoFn = grupoDeUnMes;
+    diasEnPeriodoFn = (mk) => getDiasEnMes(mk);
+    thLabel = "Mes";
+  }
+
+  const entries = claves.map(key => {
+    const g = grupoFn(key);
+    const { raw, formatted } = calcularValorMetrica(metricModalKey, g, diasEnPeriodoFn(key));
+    return { label: g.label, raw, formatted };
+  });
+
+  document.getElementById("metric-modal-th-periodo").textContent = thLabel;
+  renderSingleBarChart(document.getElementById("metric-modal-chart"), entries);
+
+  document.getElementById("metric-modal-body").innerHTML = [...entries].reverse().map(e => `
+    <tr><td>${escapeHtml(e.label)}</td><td>${escapeHtml(e.formatted)}</td></tr>
+  `).join("");
+}
+
+document.querySelectorAll(".metric-card-clickable").forEach(card => {
+  card.addEventListener("click", () => {
+    const titulo = card.querySelector(".label").textContent;
+    abrirMetricModal(card.dataset.metric, titulo);
+  });
+});
+
+document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    metricModalPeriodo = btn.dataset.periodo;
+    document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
+    renderMetricModal();
+  });
+});
+
+document.getElementById("metric-modal-cerrar").addEventListener("click", cerrarMetricModal);
+document.getElementById("metric-modal").addEventListener("click", (e) => {
+  if (e.target.id === "metric-modal") cerrarMetricModal();
+});
+
 // ---------- Render por período ----------
 
 function renderPeriodo(tipo) {

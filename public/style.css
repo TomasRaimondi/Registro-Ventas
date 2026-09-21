@@ -1156,6 +1156,8 @@ body.modo-empleado #link-panel-ganancias {
 .metric-card .big-number { font-size: 26px; }
 .metric-card-wide { min-height: 110px; }
 .metric-card-wide .big-number { font-size: 34px; }
+.metric-card-clickable { cursor: pointer; transition: border-color .15s, transform .15s; }
+.metric-card-clickable:hover { border-color: var(--accent); transform: translateY(-2px); }
 .metric-sub {
   display: block;
   margin-top: 6px;
