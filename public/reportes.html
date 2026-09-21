@@ -194,11 +194,17 @@
 <div id="metric-modal" class="modal-overlay" style="display:none;">
   <div class="card modal-card" id="metric-modal-card" style="max-width:720px; max-height:85vh; overflow-y:auto;">
     <button type="button" class="modal-cerrar" id="metric-modal-cerrar" aria-label="Cerrar">×</button>
-    <h2 id="metric-modal-titulo">Métrica</h2>
+    <h2><span id="metric-modal-titulo">Métrica</span><span class="live-badge" id="metric-modal-live-badge" style="display:none;"><span class="live-dot"></span>En vivo</span></h2>
     <div class="periodo-tabs" id="metric-modal-tabs">
       <button type="button" class="periodo-tab active" data-periodo="dia">Día</button>
       <button type="button" class="periodo-tab" data-periodo="semana">Semana</button>
       <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
+      <button type="button" class="periodo-tab" data-periodo="vivo">🔴 En vivo (hoy)</button>
+    </div>
+    <div class="periodo-tabs" id="metric-modal-timeframe" style="display:none; margin-top:8px;">
+      <button type="button" class="periodo-tab" data-tf="15">15 min</button>
+      <button type="button" class="periodo-tab active" data-tf="60">1 hora</button>
+      <button type="button" class="periodo-tab" data-tf="240">4 horas</button>
     </div>
     <div class="periodo-tabs" id="metric-modal-tipo-grafico" style="margin-top:8px;">
       <button type="button" class="periodo-tab" data-tipo="lineas">📈 Líneas</button>

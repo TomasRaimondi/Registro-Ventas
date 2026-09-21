@@ -201,10 +201,12 @@ function renderDualBarChart(container, entries, { colorBySignA = false, labelA =
 // ---------- Estado global ----------
 
 let hoyFecha = null;
+let horaLabelActualGlobal = "00:00:00";
 let ventasGlobal = [];
 let itemsGlobal = [];
 let gastosGlobal = [];
 let porFechaGlobal = {};
+let costoPorProductoGlobal = {};
 let periodoActual = "dia";
 let semanaSeleccionada = null; // weekStart (YYYY-MM-DD), usada por la pestaña "Día"
 let mesSeleccionado = null; // YYYY-MM, usada por la pestaña "Semana"
@@ -225,6 +227,7 @@ async function renderAll() {
       api("/api/hora"),
     ]);
     hoyFecha = hora.fecha;
+    horaLabelActualGlobal = hora.horaLabel;
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
     console.error(err);
@@ -237,6 +240,7 @@ async function renderAll() {
 
   const costoPorProducto = {};
   costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
+  costoPorProductoGlobal = costoPorProducto;
 
   const porFecha = {};
   function getDia(fecha) {
@@ -272,6 +276,10 @@ async function renderAll() {
   if (!mesSeleccionado) mesSeleccionado = getMonthKey(hoyFecha);
 
   renderPeriodo(periodoActual);
+
+  // Si el modal de métrica está abierto en modo "En vivo", este mismo refresco
+  // (disparado cada 15s por el polling de esa vista) también lo actualiza a él.
+  if (metricModalKey && metricModalPeriodo === "vivo") renderMetricModal();
 }
 
 // ---------- Selectores de semana / mes ----------
@@ -424,6 +432,60 @@ function grupoDeUnMes(mk) {
     sumarEnGrupo(g, { ...porFechaGlobal[fecha], diasConDatos: 1 });
   });
   return g;
+}
+
+// ---------- "En vivo" (intradía de hoy): mismos datos ya cargados, agrupados en
+// bloques de N minutos, como el timeframe de un gráfico intradía. ----------
+
+function claveBucketIntradia(horaLabel, minutosBucket) {
+  const [h, m] = horaLabel.split(":").map(Number);
+  const totalMin = h * 60 + m;
+  const bucketMin = Math.floor(totalMin / minutosBucket) * minutosBucket;
+  return `${String(Math.floor(bucketMin / 60)).padStart(2, "0")}:${String(bucketMin % 60).padStart(2, "0")}`;
+}
+
+function agruparPorBucketIntradia(minutosBucket) {
+  const gruposMap = new Map();
+  function getBucket(horaLabel) {
+    const key = claveBucketIntradia(horaLabel, minutosBucket);
+    if (!gruposMap.has(key)) gruposMap.set(key, grupoVacio(key, key));
+    return gruposMap.get(key);
+  }
+
+  ventasGlobal.filter(v => v.fecha === hoyFecha).forEach(v => {
+    const g = getBucket(v.horaLabel);
+    if (v.metodo === "mayorista") g.volumenMayorista += v.precio;
+    else g.volumen += v.precio;
+    g.cantVentas++;
+  });
+
+  itemsGlobal.filter(it => it.fecha === hoyFecha).forEach(it => {
+    const g = getBucket(it.horaLabel);
+    const key = normalizeNombre(it.producto);
+    if (Object.prototype.hasOwnProperty.call(costoPorProductoGlobal, key)) {
+      const margen = it.precio - costoPorProductoGlobal[key];
+      if (it.metodo === "mayorista") g.gananciaBrutaMayorista += margen;
+      else g.gananciaBruta += margen;
+    }
+  });
+
+  gastosGlobal.filter(g2 => g2.fecha === hoyFecha).forEach(g2 => {
+    const g = getBucket(g2.horaLabel);
+    g.gasto += g2.monto;
+  });
+
+  // Se listan TODOS los bloques desde las 00:00 hasta el bloque actual (aunque estén
+  // vacíos), para que el eje de tiempo sea continuo y el gráfico "avance" solo a medida
+  // que pasan los minutos, como uno en vivo de verdad.
+  const [hAhora, mAhora] = horaLabelActualGlobal.split(":").map(Number);
+  const minutosAhora = hAhora * 60 + mAhora;
+  const ultimoBucketMin = Math.floor(minutosAhora / minutosBucket) * minutosBucket;
+  const resultado = [];
+  for (let min = 0; min <= ultimoBucketMin; min += minutosBucket) {
+    const key = `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+    resultado.push(gruposMap.get(key) || grupoVacio(key, key));
+  }
+  return resultado;
 }
 
 function renderSingleBarChart(container, entries) {
@@ -619,6 +681,8 @@ document.addEventListener("click", (e) => {
 let metricModalKey = null;
 let metricModalPeriodo = "dia";
 let metricModalTipoGrafico = "barras";
+let metricModalTimeframe = 60; // minutos, usado en el modo "vivo"
+let metricModalLiveInterval = null;
 
 function abrirMetricModal(metricKey, titulo) {
   metricModalKey = metricKey;
@@ -627,6 +691,7 @@ function abrirMetricModal(metricKey, titulo) {
   document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
   document.getElementById("metric-modal").style.display = "flex";
   setMetricModalMaximizado(false);
+  actualizarModoVivo();
   renderMetricModal();
 }
 
@@ -635,33 +700,50 @@ function cerrarMetricModal() {
   metricModalKey = null;
   ocultarChartTooltip();
   setMetricModalMaximizado(false);
+  actualizarModoVivo();
+}
+
+// Prende o apaga el polling de 15s y muestra/oculta el selector de timeframe y la
+// insignia "En vivo", según si la pestaña activa del modal es "vivo" o no.
+function actualizarModoVivo() {
+  const enVivo = metricModalKey && metricModalPeriodo === "vivo";
+  document.getElementById("metric-modal-live-badge").style.display = enVivo ? "inline-flex" : "none";
+  document.getElementById("metric-modal-timeframe").style.display = enVivo ? "flex" : "none";
+  if (enVivo && !metricModalLiveInterval) {
+    metricModalLiveInterval = setInterval(renderAll, 15000);
+  } else if (!enVivo && metricModalLiveInterval) {
+    clearInterval(metricModalLiveInterval);
+    metricModalLiveInterval = null;
+  }
 }
 
 function renderMetricModal() {
   if (!metricModalKey) return;
   ocultarChartTooltip();
 
-  let claves, grupoFn, diasEnPeriodoFn, thLabel;
+  let grupos, thLabel;
   if (metricModalPeriodo === "dia") {
-    claves = diasRecientes(30);
-    grupoFn = grupoDeUnDia;
-    diasEnPeriodoFn = () => 1;
+    grupos = diasRecientes(30).map(grupoDeUnDia);
     thLabel = "Día";
   } else if (metricModalPeriodo === "semana") {
-    claves = semanasRecientes(12);
-    grupoFn = grupoDeUnaSemana;
-    diasEnPeriodoFn = () => 7;
+    grupos = semanasRecientes(12).map(grupoDeUnaSemana);
     thLabel = "Semana";
-  } else {
-    claves = mesesRecientes(12);
-    grupoFn = grupoDeUnMes;
-    diasEnPeriodoFn = (mk) => getDiasEnMes(mk);
+  } else if (metricModalPeriodo === "mes") {
+    grupos = mesesRecientes(12).map(grupoDeUnMes);
     thLabel = "Mes";
+  } else {
+    grupos = agruparPorBucketIntradia(metricModalTimeframe);
+    thLabel = "Hora";
   }
 
-  const entries = claves.map(key => {
-    const g = grupoFn(key);
-    const { raw, formatted } = calcularValorMetrica(metricModalKey, g, diasEnPeriodoFn(key));
+  const diasEnPeriodoDe = (g) => {
+    if (metricModalPeriodo === "semana") return 7;
+    if (metricModalPeriodo === "mes") return getDiasEnMes(g.key);
+    return 1;
+  };
+
+  const entries = grupos.map(g => {
+    const { raw, formatted } = calcularValorMetrica(metricModalKey, g, diasEnPeriodoDe(g));
     return { label: g.label, raw, formatted };
   });
 
@@ -691,6 +773,7 @@ document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(btn => {
   btn.addEventListener("click", () => {
     metricModalPeriodo = btn.dataset.periodo;
     document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
+    actualizarModoVivo();
     renderMetricModal();
   });
 });
@@ -699,6 +782,14 @@ document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab").forEach(btn
   btn.addEventListener("click", () => {
     metricModalTipoGrafico = btn.dataset.tipo;
     document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
+    renderMetricModal();
+  });
+});
+
+document.querySelectorAll("#metric-modal-timeframe .periodo-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    metricModalTimeframe = Number(btn.dataset.tf);
+    document.querySelectorAll("#metric-modal-timeframe .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
     renderMetricModal();
   });
 });
