@@ -430,7 +430,8 @@ function renderSingleBarChart(container, entries) {
   container.innerHTML = "";
   if (entries.length === 0) return;
   const maxAbs = Math.max(...entries.map(e => Math.abs(e.raw)), 1);
-  entries.forEach(e => {
+  const barras = [];
+  entries.forEach((e, i) => {
     const heightPct = e.raw !== 0 ? Math.max((Math.abs(e.raw) / maxAbs) * 100, 4) : 2;
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
@@ -441,7 +442,8 @@ function renderSingleBarChart(container, entries) {
 
     const bar = document.createElement("div");
     bar.className = "chart-bar";
-    bar.style.height = heightPct + "%";
+    bar.style.height = "0%"; // arranca en 0 y crece animado (ver abajo)
+    bar.style.transitionDelay = Math.min(i * 12, 300) + "ms";
     if (e.raw < 0) bar.style.background = "linear-gradient(180deg, #e15b5b, #b83f3f)";
     bar.title = `${e.label}: ${e.formatted}`;
 
@@ -453,6 +455,13 @@ function renderSingleBarChart(container, entries) {
     wrap.appendChild(bar);
     wrap.appendChild(hLabel);
     container.appendChild(wrap);
+    barras.push({ bar, heightPct });
+  });
+
+  // Crecimiento animado: se fija la altura real recién en el siguiente frame, para que
+  // la transición CSS (.chart-bar { transition: height .2s }) tenga de dónde arrancar.
+  requestAnimationFrame(() => {
+    barras.forEach(({ bar, heightPct }) => { bar.style.height = heightPct + "%"; });
   });
 }
 
@@ -464,10 +473,31 @@ function formatValorEje(metricKey, raw) {
   return money(raw);
 }
 
+// Elige qué índices llevan etiqueta en el eje X: separados por un ancho mínimo en
+// píxeles (así nunca se pisan entre sí), pero siempre mostrando el último punto —
+// si el anterior mostrado queda demasiado pegado a él, se saca ese en vez de amontonarlos.
+function elegirIndicesEtiquetas(n, plotW) {
+  if (n <= 1) return [0];
+  const minGapPx = 72;
+  const pxPorPunto = plotW / (n - 1);
+  const step = Math.max(1, Math.round(minGapPx / pxPorPunto));
+  const idxs = [];
+  for (let i = 0; i < n; i += step) idxs.push(i);
+  const ultimo = n - 1;
+  if (idxs[idxs.length - 1] !== ultimo) {
+    const anterior = idxs[idxs.length - 1];
+    if (ultimo - anterior < step * 0.6) idxs.pop();
+    idxs.push(ultimo);
+  }
+  return idxs;
+}
+
 // Gráfico de línea con eje X (períodos) e Y (valor), a diferencia del de barras: se
 // entiende mejor cuando hay muchos puntos seguidos (ej. 30 días), que amontonados en
-// barras quedan ilegibles.
+// barras quedan ilegibles. Los puntos se pueden tocar/clickear para ver el valor exacto
+// en un tooltip, y la línea se dibuja animada al abrir o cambiar de vista.
 function renderLineChart(container, entries, metricKey) {
+  ocultarChartTooltip();
   container.innerHTML = "";
   if (entries.length === 0) return;
 
@@ -501,31 +531,90 @@ function renderLineChart(container, entries, metricKey) {
 
   const puntos = entries.map((e, i) => `${xFor(i).toFixed(1)},${yFor(e.raw).toFixed(1)}`).join(" ");
 
+  const indicesConEtiqueta = new Set(elegirIndicesEtiquetas(entries.length, plotW));
   let xLabelsSvg = "";
-  const stepLabel = Math.max(1, Math.ceil(entries.length / 10));
   entries.forEach((e, i) => {
-    if (i % stepLabel === 0 || i === entries.length - 1) {
+    if (indicesConEtiqueta.has(i)) {
       xLabelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--text-dim)">${escapeHtml(e.label)}</text>`;
     }
   });
 
   const circlesSvg = entries.map((e, i) => `
-    <circle cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="3.5" fill="var(--accent)">
-      <title>${escapeHtml(e.label)}: ${escapeHtml(e.formatted)}</title>
-    </circle>
+    <circle
+      class="chart-line-point"
+      style="animation-delay:${Math.min(i * 15, 400)}ms;"
+      cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="4" fill="var(--accent)"
+      data-label="${escapeHtml(e.label)}" data-valor="${escapeHtml(e.formatted)}"
+    ></circle>
   `).join("");
 
   container.style.display = "block";
   container.style.overflowX = "auto";
+  container.style.position = "relative";
   container.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;">
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="100%" style="display:block;">
       ${gridSvg}
-      <polyline points="${puntos}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
+      <polyline class="chart-line-path" points="${puntos}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
       ${circlesSvg}
       ${xLabelsSvg}
     </svg>
   `;
+
+  // Animación de "dibujado" de la línea: se calcula el largo real del trazo y se anima
+  // el stroke-dashoffset de ese valor a 0.
+  const path = container.querySelector(".chart-line-path");
+  if (path && typeof path.getTotalLength === "function") {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = String(len);
+    path.style.strokeDashoffset = String(len);
+    path.getBoundingClientRect(); // fuerza reflow para que la transición no arranque ya en 0
+    path.style.transition = "stroke-dashoffset .8s ease";
+    requestAnimationFrame(() => { path.style.strokeDashoffset = "0"; });
+  }
 }
+
+// ---------- Tooltip de los puntos del gráfico de líneas ----------
+// Un solo elemento reutilizado (no uno por punto), posicionado con position:fixed según
+// dónde haya quedado el punto tocado/clickeado en pantalla — funciona igual con scroll
+// horizontal del gráfico y en modo pantalla completa.
+
+let chartTooltipEl = null;
+function getChartTooltipEl() {
+  if (!chartTooltipEl) {
+    chartTooltipEl = document.createElement("div");
+    chartTooltipEl.className = "chart-line-tooltip";
+    document.body.appendChild(chartTooltipEl);
+  }
+  return chartTooltipEl;
+}
+
+function mostrarChartTooltip(circle) {
+  const tt = getChartTooltipEl();
+  tt.innerHTML = `<span class="tt-label">${circle.dataset.label}</span>${circle.dataset.valor}`;
+  const rect = circle.getBoundingClientRect();
+  tt.style.left = (rect.left + rect.width / 2) + "px";
+  tt.style.top = rect.top + "px";
+  tt.style.display = "block";
+  document.querySelectorAll(".chart-line-point.active").forEach(c => c.classList.remove("active"));
+  circle.classList.add("active");
+}
+
+function ocultarChartTooltip() {
+  if (chartTooltipEl) chartTooltipEl.style.display = "none";
+  document.querySelectorAll(".chart-line-point.active").forEach(c => c.classList.remove("active"));
+}
+
+document.getElementById("metric-modal-chart").addEventListener("click", (e) => {
+  const circle = e.target.closest(".chart-line-point");
+  if (circle) mostrarChartTooltip(circle);
+});
+document.getElementById("metric-modal-chart").addEventListener("mouseover", (e) => {
+  const circle = e.target.closest(".chart-line-point");
+  if (circle) mostrarChartTooltip(circle);
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".chart-line-point")) ocultarChartTooltip();
+});
 
 let metricModalKey = null;
 let metricModalPeriodo = "dia";
@@ -537,16 +626,20 @@ function abrirMetricModal(metricKey, titulo) {
   document.getElementById("metric-modal-titulo").textContent = titulo;
   document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
   document.getElementById("metric-modal").style.display = "flex";
+  setMetricModalMaximizado(false);
   renderMetricModal();
 }
 
 function cerrarMetricModal() {
   document.getElementById("metric-modal").style.display = "none";
   metricModalKey = null;
+  ocultarChartTooltip();
+  setMetricModalMaximizado(false);
 }
 
 function renderMetricModal() {
   if (!metricModalKey) return;
+  ocultarChartTooltip();
 
   let claves, grupoFn, diasEnPeriodoFn, thLabel;
   if (metricModalPeriodo === "dia") {
@@ -614,6 +707,24 @@ document.getElementById("metric-modal-cerrar").addEventListener("click", cerrarM
 document.getElementById("metric-modal").addEventListener("click", (e) => {
   if (e.target.id === "metric-modal") cerrarMetricModal();
 });
+
+// ---------- Pantalla completa del modal de métrica ----------
+// No usa la Fullscreen API del navegador (poco confiable en iOS/Safari para elementos
+// sueltos): agranda el modal a todo el viewport con CSS, que funciona igual en cualquier
+// dispositivo.
+
+let metricModalMaximizado = false;
+const metricModalCardEl = document.getElementById("metric-modal-card");
+const metricModalFullscreenBtn = document.getElementById("metric-modal-fullscreen-btn");
+
+function setMetricModalMaximizado(valor) {
+  metricModalMaximizado = valor;
+  metricModalCardEl.classList.toggle("modal-card-maximizado", valor);
+  document.getElementById("metric-modal").classList.toggle("modal-overlay-maximizado", valor);
+  metricModalFullscreenBtn.textContent = valor ? "🗗 Salir de pantalla completa" : "⛶ Pantalla completa";
+}
+
+metricModalFullscreenBtn.addEventListener("click", () => setMetricModalMaximizado(!metricModalMaximizado));
 
 // ---------- Render por período ----------
 

@@ -192,7 +192,7 @@
 </main>
 
 <div id="metric-modal" class="modal-overlay" style="display:none;">
-  <div class="card modal-card" style="max-width:720px; max-height:85vh; overflow-y:auto;">
+  <div class="card modal-card" id="metric-modal-card" style="max-width:720px; max-height:85vh; overflow-y:auto;">
     <button type="button" class="modal-cerrar" id="metric-modal-cerrar" aria-label="Cerrar">×</button>
     <h2 id="metric-modal-titulo">Métrica</h2>
     <div class="periodo-tabs" id="metric-modal-tabs">
@@ -203,6 +203,7 @@
     <div class="periodo-tabs" id="metric-modal-tipo-grafico" style="margin-top:8px;">
       <button type="button" class="periodo-tab" data-tipo="lineas">📈 Líneas</button>
       <button type="button" class="periodo-tab active" data-tipo="barras">📊 Barras</button>
+      <button type="button" class="chart-toolbar-btn" id="metric-modal-fullscreen-btn">⛶ Pantalla completa</button>
     </div>
     <div class="chart chart-tall" id="metric-modal-chart"></div>
     <div class="table-wrap">
