@@ -456,8 +456,80 @@ function renderSingleBarChart(container, entries) {
   });
 }
 
+// Formatea un valor "en crudo" (número puro) para el eje Y del gráfico de líneas,
+// con el mismo criterio que usa cada métrica en calcularValorMetrica (money, % o entero).
+function formatValorEje(metricKey, raw) {
+  if (metricKey.startsWith("pct-")) return raw.toFixed(1) + "%";
+  if (metricKey === "cant-ventas" || metricKey === "dias") return Math.round(raw).toLocaleString("es-AR");
+  return money(raw);
+}
+
+// Gráfico de línea con eje X (períodos) e Y (valor), a diferencia del de barras: se
+// entiende mejor cuando hay muchos puntos seguidos (ej. 30 días), que amontonados en
+// barras quedan ilegibles.
+function renderLineChart(container, entries, metricKey) {
+  container.innerHTML = "";
+  if (entries.length === 0) return;
+
+  const W = Math.max(entries.length * 46, 320);
+  const H = 220;
+  const padL = 64, padR = 16, padT = 16, padB = 34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const valores = entries.map(e => e.raw);
+  let maxV = Math.max(...valores, 0);
+  let minV = Math.min(...valores, 0);
+  if (maxV === minV) { maxV += 1; minV -= 1; }
+  const rango = maxV - minV;
+
+  const xFor = (i) => padL + (entries.length === 1 ? plotW / 2 : (i / (entries.length - 1)) * plotW);
+  const yFor = (v) => padT + plotH - ((v - minV) / rango) * plotH;
+
+  const numLineas = 4;
+  let gridSvg = "";
+  for (let i = 0; i <= numLineas; i++) {
+    const v = minV + (rango * i) / numLineas;
+    const y = yFor(v);
+    gridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--card-border)" stroke-width="1" />`;
+    gridSvg += `<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--text-dim)">${escapeHtml(formatValorEje(metricKey, v))}</text>`;
+  }
+  if (minV < 0 && maxV > 0) {
+    const y0 = yFor(0);
+    gridSvg += `<line x1="${padL}" y1="${y0.toFixed(1)}" x2="${W - padR}" y2="${y0.toFixed(1)}" stroke="var(--text-dim)" stroke-width="1.5" />`;
+  }
+
+  const puntos = entries.map((e, i) => `${xFor(i).toFixed(1)},${yFor(e.raw).toFixed(1)}`).join(" ");
+
+  let xLabelsSvg = "";
+  const stepLabel = Math.max(1, Math.ceil(entries.length / 10));
+  entries.forEach((e, i) => {
+    if (i % stepLabel === 0 || i === entries.length - 1) {
+      xLabelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--text-dim)">${escapeHtml(e.label)}</text>`;
+    }
+  });
+
+  const circlesSvg = entries.map((e, i) => `
+    <circle cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="3.5" fill="var(--accent)">
+      <title>${escapeHtml(e.label)}: ${escapeHtml(e.formatted)}</title>
+    </circle>
+  `).join("");
+
+  container.style.display = "block";
+  container.style.overflowX = "auto";
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;">
+      ${gridSvg}
+      <polyline points="${puntos}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
+      ${circlesSvg}
+      ${xLabelsSvg}
+    </svg>
+  `;
+}
+
 let metricModalKey = null;
 let metricModalPeriodo = "dia";
+let metricModalTipoGrafico = "barras";
 
 function abrirMetricModal(metricKey, titulo) {
   metricModalKey = metricKey;
@@ -501,7 +573,14 @@ function renderMetricModal() {
   });
 
   document.getElementById("metric-modal-th-periodo").textContent = thLabel;
-  renderSingleBarChart(document.getElementById("metric-modal-chart"), entries);
+  const chartEl = document.getElementById("metric-modal-chart");
+  if (metricModalTipoGrafico === "lineas") {
+    renderLineChart(chartEl, entries, metricModalKey);
+  } else {
+    chartEl.style.display = "";
+    chartEl.style.overflowX = "";
+    renderSingleBarChart(chartEl, entries);
+  }
 
   document.getElementById("metric-modal-body").innerHTML = [...entries].reverse().map(e => `
     <tr><td>${escapeHtml(e.label)}</td><td>${escapeHtml(e.formatted)}</td></tr>
@@ -523,6 +602,14 @@ document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(btn => {
   });
 });
 
+document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    metricModalTipoGrafico = btn.dataset.tipo;
+    document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
+    renderMetricModal();
+  });
+});
+
 document.getElementById("metric-modal-cerrar").addEventListener("click", cerrarMetricModal);
 document.getElementById("metric-modal").addEventListener("click", (e) => {
   if (e.target.id === "metric-modal") cerrarMetricModal();
@@ -532,7 +619,7 @@ document.getElementById("metric-modal").addEventListener("click", (e) => {
 
 function renderPeriodo(tipo) {
   periodoActual = tipo;
-  document.querySelectorAll(".periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === tipo));
+  document.querySelectorAll("#periodo-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === tipo));
   selectorSemana.style.display = tipo === "dia" ? "block" : "none";
   selectorMes.style.display = tipo === "semana" ? "block" : "none";
 
@@ -745,9 +832,9 @@ function renderPeriodo(tipo) {
       `).join("");
 }
 
-document.querySelectorAll(".periodo-tab").forEach(btn => {
+document.querySelectorAll("#periodo-tabs .periodo-tab").forEach(btn => {
   btn.addEventListener("click", () => renderPeriodo(btn.dataset.periodo));
 });
-document.querySelector('.periodo-tab[data-periodo="dia"]').classList.add("active");
+document.querySelector('#periodo-tabs .periodo-tab[data-periodo="dia"]').classList.add("active");
 
 checkAuth();
