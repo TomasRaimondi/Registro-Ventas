@@ -120,6 +120,16 @@
         <span class="big-number" id="stat-dias">0</span>
         <span class="metric-sub" id="label-dias"></span>
       </div>
+      <div class="card metric-card metric-card-clickable" data-metric="ingreso-clientes">
+        <span class="label">Ingreso clientes</span>
+        <span class="big-number" id="stat-ingreso-clientes" style="color:var(--green);">0</span>
+        <span class="metric-sub" id="label-ingreso-clientes"></span>
+      </div>
+      <div class="card metric-card metric-card-clickable" data-metric="ventas-perdidas">
+        <span class="label">Ventas perdidas</span>
+        <span class="big-number" id="stat-ventas-perdidas" style="color:var(--red);">0</span>
+        <span class="metric-sub" id="label-ventas-perdidas"></span>
+      </div>
     </section>
     <p class="hint">Tocá cualquier cuadro para ver su evolución por día, semana o mes.</p>
 
@@ -207,6 +217,7 @@
       <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
       <button type="button" class="periodo-tab" data-periodo="vivo">🔴 En vivo (hoy)</button>
       <button type="button" class="periodo-tab" data-periodo="comparar">🔀 Comparar rangos</button>
+      <button type="button" class="periodo-tab" data-periodo="metricas">📊 Comparar métricas</button>
     </div>
     <div class="periodo-tabs" id="metric-modal-timeframe" style="display:none; margin-top:8px;">
       <button type="button" class="periodo-tab" data-tf="15">15 min</button>
@@ -226,6 +237,20 @@
           <input type="date" id="cmp-b-desde"> al <input type="date" id="cmp-b-hasta">
         </label>
         <button type="button" class="chart-toolbar-btn" id="cmp-mes-anterior-btn">Mismo rango, mes anterior</button>
+      </div>
+    </div>
+    <div class="comparar-panel" id="metric-modal-metricas-panel" style="display:none; margin-top:8px;">
+      <div class="comparar-rango">
+        <span class="comparar-rango-dot comparar-rango-dot-a"></span>
+        <label>Rango
+          <input type="date" id="cmp-metricas-desde"> al <input type="date" id="cmp-metricas-hasta">
+        </label>
+      </div>
+      <div class="comparar-rango">
+        <span class="comparar-rango-dot comparar-rango-dot-b"></span>
+        <label>Comparar con
+          <select id="cmp-metrica-b"></select>
+        </label>
       </div>
     </div>
     <div class="periodo-tabs" id="metric-modal-comparar-canal" style="display:none; margin-top:8px;">

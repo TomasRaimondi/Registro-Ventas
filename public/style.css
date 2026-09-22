@@ -679,7 +679,6 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .chart-bar-pair .chart-bar { max-width: 12px; }
 .chart-bar-mayorista { background: linear-gradient(180deg, var(--orange), #A6740E); }
 .chart-bar-gasto { background: linear-gradient(180deg, var(--red), #A83636); }
-.chart-bar-verde { background: linear-gradient(180deg, var(--green), #1F7A54); }
 #resumen-chart .chart-bar { background: linear-gradient(180deg, var(--red), #A83636); }
 #envios-chart .chart-bar { background: linear-gradient(180deg, var(--purple), #5C3FAE); }
 .chart-bar-gasto-label {
@@ -833,6 +832,16 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
   white-space: nowrap;
 }
 .comparar-rango input[type="date"] { padding: 6px 8px; }
+.comparar-rango select {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
 .comparar-rango-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .comparar-rango-dot-a { background: var(--accent); }
 .comparar-rango-dot-b { background: var(--orange); }

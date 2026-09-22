@@ -217,6 +217,7 @@ let horaLabelActualGlobal = "00:00:00";
 let ventasGlobal = [];
 let itemsGlobal = [];
 let gastosGlobal = [];
+let ventasPerdidasGlobal = [];
 let porFechaGlobal = {};
 let costoPorProductoGlobal = {};
 let periodoActual = "dia";
@@ -231,12 +232,13 @@ const METODO_LABELS = {
 // ---------- Carga de datos ----------
 
 async function renderAll() {
-  let data, costos, hora;
+  let data, costos, hora, ventasPerdidas;
   try {
-    [data, costos, hora] = await Promise.all([
+    [data, costos, hora, ventasPerdidas] = await Promise.all([
       api("/api/reportes"),
       api("/api/costos"),
       api("/api/hora"),
+      api("/api/ventas-perdidas-todas"),
     ]);
     hoyFecha = hora.fecha;
     horaLabelActualGlobal = hora.horaLabel;
@@ -249,6 +251,7 @@ async function renderAll() {
   ventasGlobal = data.ventas;
   itemsGlobal = data.items;
   gastosGlobal = data.gastos;
+  ventasPerdidasGlobal = ventasPerdidas;
 
   const costoPorProducto = {};
   costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
@@ -256,7 +259,7 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0 };
     return porFecha[fecha];
   }
 
@@ -267,7 +270,7 @@ async function renderAll() {
     } else {
       dia.volumen += v.precio;
       if (esVentaCanalWeb(v)) dia.volumenWeb += v.precio;
-      else dia.volumenLocal += v.precio;
+      else { dia.volumenLocal += v.precio; dia.cantVentasLocales++; }
     }
     dia.cantVentas++;
   });
@@ -285,6 +288,11 @@ async function renderAll() {
   gastosGlobal.forEach(g => {
     const dia = getDia(g.fecha);
     dia.gasto += g.monto;
+  });
+
+  ventasPerdidasGlobal.forEach(vp => {
+    const dia = getDia(vp.fecha);
+    dia.cantVentasPerdidas++;
   });
 
   porFechaGlobal = porFecha;
@@ -336,7 +344,7 @@ selectorMes.addEventListener("change", () => {
 // ---------- Utilidades de agrupación ----------
 
 function grupoVacio(key, label) {
-  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
+  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
 }
 
 function sumarEnGrupo(acc, d) {
@@ -345,6 +353,8 @@ function sumarEnGrupo(acc, d) {
   acc.volumenLocal += d.volumenLocal || 0;
   acc.volumenMayorista += d.volumenMayorista;
   acc.cantVentas += d.cantVentas;
+  acc.cantVentasLocales += d.cantVentasLocales || 0;
+  acc.cantVentasPerdidas += d.cantVentasPerdidas || 0;
   acc.gananciaBruta += d.gananciaBruta;
   acc.gananciaBrutaMayorista += d.gananciaBrutaMayorista;
   acc.gasto += d.gasto;
@@ -389,6 +399,8 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
     case "cant-ventas": return { raw: g.cantVentas, formatted: String(g.cantVentas) };
     case "ticket-promedio": { const v = g.cantVentas ? g.volumen / g.cantVentas : 0; return { raw: v, formatted: money(v) }; }
     case "dias": return { raw: g.diasConDatos, formatted: `${g.diasConDatos} de ${diasEnPeriodo}` };
+    case "ventas-perdidas": return { raw: g.cantVentasPerdidas, formatted: String(g.cantVentasPerdidas) };
+    case "ingreso-clientes": { const v = g.cantVentasLocales + g.cantVentasPerdidas; return { raw: v, formatted: String(v) }; }
     default: return { raw: 0, formatted: "—" };
   }
 }
@@ -478,7 +490,7 @@ function agruparPorBucketIntradia(minutosBucket) {
     } else {
       g.volumen += v.precio;
       if (esVentaCanalWeb(v)) g.volumenWeb += v.precio;
-      else g.volumenLocal += v.precio;
+      else { g.volumenLocal += v.precio; g.cantVentasLocales++; }
     }
     g.cantVentas++;
   });
@@ -496,6 +508,11 @@ function agruparPorBucketIntradia(minutosBucket) {
   gastosGlobal.filter(g2 => g2.fecha === hoyFecha).forEach(g2 => {
     const g = getBucket(g2.horaLabel);
     g.gasto += g2.monto;
+  });
+
+  ventasPerdidasGlobal.filter(vp => vp.fecha === hoyFecha).forEach(vp => {
+    const g = getBucket(vp.horaLabel);
+    g.cantVentasPerdidas++;
   });
 
   // Se listan TODOS los bloques desde las 00:00 hasta el bloque actual (aunque estén
@@ -555,7 +572,7 @@ function renderSingleBarChart(container, entries) {
 // con el mismo criterio que usa cada métrica en calcularValorMetrica (money, % o entero).
 function formatValorEje(metricKey, raw) {
   if (metricKey.startsWith("pct-")) return raw.toFixed(1) + "%";
-  if (metricKey === "cant-ventas" || metricKey === "dias") return Math.round(raw).toLocaleString("es-AR");
+  if (metricKey === "cant-ventas" || metricKey === "dias" || metricKey === "ventas-perdidas" || metricKey === "ingreso-clientes") return Math.round(raw).toLocaleString("es-AR");
   return money(raw);
 }
 
@@ -825,7 +842,7 @@ function abrirMetricModal(metricKey, titulo) {
   document.getElementById("metric-modal").style.display = "flex";
   setMetricModalMaximizado(false);
   actualizarModoVivo();
-  actualizarModoComparar();
+  actualizarModoExtra();
   actualizarVisibilidadCanalBtn();
   renderMetricModal();
 }
@@ -852,29 +869,36 @@ function actualizarModoVivo() {
   }
 }
 
-// Muestra/oculta el panel de "Comparar rangos" y, mientras está activo, esconde el
-// selector de tipo de gráfico (esa vista siempre se dibuja en líneas, porque los dos
-// rangos elegidos a mano pueden tener distinta cantidad de días).
-function actualizarModoComparar() {
-  const comparando = metricModalKey && metricModalPeriodo === "comparar";
-  document.getElementById("metric-modal-comparar-panel").style.display = comparando ? "flex" : "none";
-  document.getElementById("metric-modal-btn-lineas").style.display = comparando ? "none" : "";
-  document.getElementById("metric-modal-btn-barras").style.display = comparando ? "none" : "";
-  const conFiltroCanal = comparando && metricModalKey === "volumen";
+// Muestra/oculta los paneles de "Comparar rangos" y "Comparar métricas" (mutuamente
+// excluyentes) y, mientras cualquiera de los dos está activo, esconde el selector de
+// tipo de gráfico: ambas vistas siempre se dibujan en líneas, la primera porque los dos
+// rangos elegidos a mano pueden tener distinta cantidad de días, la segunda porque cada
+// métrica puede tener su propia escala (eje doble).
+function actualizarModoExtra() {
+  const comparandoRangos = metricModalKey && metricModalPeriodo === "comparar";
+  const comparandoMetricas = metricModalKey && metricModalPeriodo === "metricas";
+  document.getElementById("metric-modal-comparar-panel").style.display = comparandoRangos ? "flex" : "none";
+  document.getElementById("metric-modal-metricas-panel").style.display = comparandoMetricas ? "flex" : "none";
+  document.getElementById("metric-modal-btn-lineas").style.display = (comparandoRangos || comparandoMetricas) ? "none" : "";
+  document.getElementById("metric-modal-btn-barras").style.display = (comparandoRangos || comparandoMetricas) ? "none" : "";
+
+  const conFiltroCanal = comparandoRangos && metricModalKey === "volumen";
   document.getElementById("metric-modal-comparar-canal").style.display = conFiltroCanal ? "flex" : "none";
   if (!conFiltroCanal) {
     metricModalComparCanal = "total";
     document.querySelectorAll("#metric-modal-comparar-canal .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.canal === "total"));
   }
-  if (comparando) inicializarFechasComparacion();
+
+  if (comparandoRangos) inicializarFechasComparacion();
+  if (comparandoMetricas) inicializarComparacionMetricas();
 }
 
 // El botón "Web / Local" solo tiene sentido para la métrica "Volumen" (que mezcla
-// ambos canales) y no se combina con "Comparar rangos" para no armar un gráfico de
-// cuatro series a la vez.
+// ambos canales) y no se combina con los modos de comparación, para no armar un
+// gráfico de demasiadas series a la vez.
 function actualizarVisibilidadCanalBtn() {
   const btn = document.getElementById("metric-modal-canal-btn");
-  const disponible = metricModalKey === "volumen" && metricModalPeriodo !== "comparar";
+  const disponible = metricModalKey === "volumen" && metricModalPeriodo !== "comparar" && metricModalPeriodo !== "metricas";
   btn.style.display = disponible ? "" : "none";
   if (!disponible) metricModalCanalActivo = false;
   btn.classList.toggle("active", metricModalCanalActivo);
@@ -927,12 +951,45 @@ function inicializarFechasComparacion() {
   document.getElementById("cmp-b-hasta").value = restarDias(aHasta, 7);
 }
 
+function tituloDeMetrica(key) {
+  const card = document.querySelector(`.metric-card-clickable[data-metric="${key}"]`);
+  return card ? card.querySelector(".label").textContent : key;
+}
+
+// Arma una sola vez el selector de "Comparar con" a partir de las mismas tarjetas
+// clickeables de arriba (así nunca queda desactualizado si se agrega o saca una
+// métrica), elige por defecto una distinta a la que está abierta, y precarga el rango
+// de fechas (últimos 30 días) la primera vez que se usa esta pestaña.
+function inicializarComparacionMetricas() {
+  const selectB = document.getElementById("cmp-metrica-b");
+  if (!selectB.dataset.poblado) {
+    const opciones = [...document.querySelectorAll(".metric-card-clickable")].map(card => ({
+      key: card.dataset.metric,
+      label: card.querySelector(".label").textContent,
+    }));
+    selectB.innerHTML = opciones.map(o => `<option value="${o.key}">${escapeHtml(o.label)}</option>`).join("");
+    selectB.dataset.poblado = "1";
+  }
+  const opcionDistinta = [...selectB.options].find(o => o.value !== metricModalKey);
+  if (opcionDistinta && (!selectB.value || selectB.value === metricModalKey)) selectB.value = opcionDistinta.value;
+
+  const $desde = document.getElementById("cmp-metricas-desde");
+  if (!$desde.value) {
+    $desde.value = diasRecientes(30)[0];
+    document.getElementById("cmp-metricas-hasta").value = hoyFecha;
+  }
+}
+
 function renderMetricModal() {
   if (!metricModalKey) return;
   ocultarChartTooltip();
 
   if (metricModalPeriodo === "comparar") {
     renderMetricModalComparacion();
+    return;
+  }
+  if (metricModalPeriodo === "metricas") {
+    renderMetricModalComparacionMetricas();
     return;
   }
 
@@ -1080,6 +1137,157 @@ function renderMetricModalComparacion() {
     : filas.join("");
 }
 
+// ---------- "Comparar métricas": la métrica abierta contra otra elegida, en el mismo
+// rango de fechas. A diferencia de "Comparar rangos" (mismo indicador, dos rangos),
+// acá cada serie puede tener una escala totalmente distinta (ej. "Volumen" en pesos
+// contra "Ventas perdidas" en cantidad de casos) — por eso el gráfico usa un eje Y
+// propio para cada una (izquierda para la métrica abierta, derecha para la elegida),
+// en vez de forzarlas a compartir una sola escala que las volvería ilegibles. ----------
+
+function renderDualAxisLineChart(container, seriesA, seriesB, metricKeyA, metricKeyB, labelA, labelB) {
+  ocultarChartTooltip();
+  container.innerHTML = "";
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.alignItems = "stretch";
+  container.style.overflowX = "";
+  const n = seriesA.length;
+  if (n === 0) return;
+
+  const legend = document.createElement("div");
+  legend.className = "chart-legend";
+  legend.style.margin = "0 0 8px";
+  legend.style.flex = "0 0 auto";
+  legend.innerHTML = `
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent);"></span>${escapeHtml(labelA)}</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--orange);"></span>${escapeHtml(labelB)}</span>
+  `;
+  container.appendChild(legend);
+
+  const svgWrap = document.createElement("div");
+  svgWrap.style.overflowX = "auto";
+  svgWrap.style.flex = "1 1 auto";
+  svgWrap.style.minHeight = "0";
+  container.appendChild(svgWrap);
+
+  const W = Math.max(n * 46, 320);
+  const H = 320;
+  const padL = 64, padR = 64, padT = 16, padB = 34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  function minMax(values) {
+    let maxV = Math.max(...values, 0);
+    let minV = Math.min(...values, 0);
+    if (maxV === minV) { maxV += 1; minV -= 1; }
+    return { minV, maxV };
+  }
+  const { minV: minA, maxV: maxA } = minMax(seriesA.map(e => e.raw));
+  const { minV: minB, maxV: maxB } = minMax(seriesB.map(e => e.raw));
+  const rangoA = maxA - minA, rangoB = maxB - minB;
+
+  const xFor = (i) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const yForT = (t) => padT + plotH - t * plotH; // t en [0,1], compartido por las dos escalas
+  const yForA = (v) => yForT((v - minA) / rangoA);
+  const yForB = (v) => yForT((v - minB) / rangoB);
+
+  // Un solo juego de líneas de grilla (a fracción t pareja), con la etiqueta de cada
+  // escala puesta a cada lado a la misma altura — así no hay dos grillas superpuestas
+  // ni números de una métrica pisando a los de la otra.
+  const numLineas = 4;
+  let gridSvg = "";
+  for (let i = 0; i <= numLineas; i++) {
+    const t = i / numLineas;
+    const y = yForT(t);
+    const vA = minA + t * rangoA;
+    const vB = minB + t * rangoB;
+    gridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--card-border)" stroke-width="1" />`;
+    gridSvg += `<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--accent)">${escapeHtml(formatValorEje(metricKeyA, vA))}</text>`;
+    gridSvg += `<text x="${W - padR + 8}" y="${(y + 4).toFixed(1)}" text-anchor="start" font-size="11" fill="var(--orange)">${escapeHtml(formatValorEje(metricKeyB, vB))}</text>`;
+  }
+
+  const xLabels = seriesA.map(e => e.label);
+  const indicesConEtiqueta = new Set(elegirIndicesEtiquetas(n, plotW));
+  let xLabelsSvg = "";
+  for (let i = 0; i < n; i++) {
+    if (indicesConEtiqueta.has(i)) {
+      xLabelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--text-dim)">${escapeHtml(xLabels[i])}</text>`;
+    }
+  }
+
+  function serieSvg(serie, color, yFor, dashed) {
+    const puntos = serie.map((e, i) => `${xFor(i).toFixed(1)},${yFor(e.raw).toFixed(1)}`).join(" ");
+    const circles = serie.map((e, i) => `
+      <circle
+        class="chart-line-point"
+        style="animation-delay:${Math.min(i * 15, 400)}ms;"
+        cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="4" fill="${color}"
+        data-label="${escapeHtml(e.fecha ? `${e.label} · ${nombreDiaSemana(e.fecha)}` : e.label)}" data-valor="${escapeHtml(e.formatted)}"
+      ></circle>
+    `).join("");
+    return `<polyline class="chart-line-path${dashed ? " chart-line-path-dashed" : ""}" points="${puntos}" fill="none" stroke="${color}" stroke-width="2.5"${dashed ? ' stroke-dasharray="6,4"' : ""} />${circles}`;
+  }
+
+  svgWrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="100%" style="display:block;">
+      ${gridSvg}
+      ${serieSvg(seriesA, "var(--accent)", yForA, false)}
+      ${serieSvg(seriesB, "var(--orange)", yForB, true)}
+      ${xLabelsSvg}
+    </svg>
+  `;
+
+  const pathA = svgWrap.querySelector(".chart-line-path:not(.chart-line-path-dashed)");
+  if (pathA && typeof pathA.getTotalLength === "function") {
+    const len = pathA.getTotalLength();
+    pathA.style.strokeDasharray = String(len);
+    pathA.style.strokeDashoffset = String(len);
+    pathA.getBoundingClientRect();
+    pathA.style.transition = "stroke-dashoffset .8s ease";
+    requestAnimationFrame(() => { pathA.style.strokeDashoffset = "0"; });
+  }
+}
+
+function renderMetricModalComparacionMetricas() {
+  const desde = document.getElementById("cmp-metricas-desde").value;
+  const hasta = document.getElementById("cmp-metricas-hasta").value;
+  const metricaB = document.getElementById("cmp-metrica-b").value;
+
+  const chartEl = document.getElementById("metric-modal-chart");
+  const bodyEl = document.getElementById("metric-modal-body");
+  const labelA = tituloDeMetrica(metricModalKey);
+  const labelB = tituloDeMetrica(metricaB);
+  document.getElementById("metric-modal-thead-row").innerHTML = `<th>Día</th><th>${escapeHtml(labelA)}</th><th>${escapeHtml(labelB)}</th>`;
+
+  if (!desde || !hasta || !metricaB) {
+    chartEl.innerHTML = "";
+    bodyEl.innerHTML = `<tr class="empty-row"><td colspan="3">Elegí el rango y la métrica para comparar.</td></tr>`;
+    return;
+  }
+
+  const fechas = fechasEnRangoInclusive(desde, hasta).slice(0, 90);
+  const armarSerie = (key) => fechas.map(fecha => {
+    const g = grupoDeUnDia(fecha);
+    const { raw, formatted } = calcularValorMetrica(key, g, 1);
+    return { fecha, label: formatFecha(fecha), raw, formatted };
+  });
+
+  const seriesA = armarSerie(metricModalKey);
+  const seriesB = armarSerie(metricaB);
+
+  renderDualAxisLineChart(chartEl, seriesA, seriesB, metricModalKey, metricaB, labelA, labelB);
+
+  bodyEl.innerHTML = fechas.length === 0
+    ? `<tr class="empty-row"><td colspan="3">Sin datos.</td></tr>`
+    : fechas.map((fecha, i) => `
+        <tr>
+          <td>${escapeHtml(nombreDiaSemana(fecha))}, ${escapeHtml(formatFecha(fecha))}</td>
+          <td>${escapeHtml(seriesA[i].formatted)}</td>
+          <td>${escapeHtml(seriesB[i].formatted)}</td>
+        </tr>
+      `).reverse().join("");
+}
+
 document.querySelectorAll(".metric-card-clickable").forEach(card => {
   card.addEventListener("click", () => {
     const titulo = card.querySelector(".label").textContent;
@@ -1092,7 +1300,7 @@ document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(btn => {
     metricModalPeriodo = btn.dataset.periodo;
     document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
     actualizarModoVivo();
-    actualizarModoComparar();
+    actualizarModoExtra();
     actualizarVisibilidadCanalBtn();
     renderMetricModal();
   });
@@ -1143,6 +1351,11 @@ document.getElementById("cmp-mes-anterior-btn").addEventListener("click", () => 
   document.getElementById("cmp-b-hasta").value = restarMes(aHasta);
   renderMetricModal();
 });
+
+["cmp-metricas-desde", "cmp-metricas-hasta"].forEach(id => {
+  document.getElementById(id).addEventListener("change", () => renderMetricModal());
+});
+document.getElementById("cmp-metrica-b").addEventListener("change", () => renderMetricModal());
 
 document.getElementById("metric-modal-cerrar").addEventListener("click", cerrarMetricModal);
 document.getElementById("metric-modal").addEventListener("click", (e) => {
@@ -1263,6 +1476,8 @@ function renderPeriodo(tipo) {
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-dias").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ingreso-clientes").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ventas-perdidas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
 
   document.getElementById("stat-volumen").textContent = money(actual.volumen);
   document.getElementById("stat-volumen-mayorista").textContent = money(actual.volumenMayorista);
@@ -1296,6 +1511,8 @@ function renderPeriodo(tipo) {
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
   document.getElementById("stat-dias").textContent = `${actual.diasConDatos} de ${diasEnPeriodo}`;
+  document.getElementById("stat-ingreso-clientes").textContent = actual.cantVentasLocales + actual.cantVentasPerdidas;
+  document.getElementById("stat-ventas-perdidas").textContent = actual.cantVentasPerdidas;
 
   renderDualBarChart(
     document.getElementById("chart-volumen-dia"),

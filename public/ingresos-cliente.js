@@ -289,13 +289,19 @@ function renderResumen() {
     const pair = document.createElement("div");
     pair.className = "chart-bar-pair";
 
+    // Con background inline (en vez de las clases .chart-bar-verde/.chart-bar-gasto):
+    // esta misma página usa el id "resumen-chart" que Ventas Perdidas ya pinta de rojo
+    // por CSS (selector con ID, más específico que una clase), así que sin esto las dos
+    // barras terminaban viéndose rojas.
     const barVentas = document.createElement("div");
-    barVentas.className = "chart-bar chart-bar-verde";
+    barVentas.className = "chart-bar";
+    barVentas.style.background = "linear-gradient(180deg, var(--green), #1F7A54)";
     barVentas.style.height = Math.max((e.ventas / maxVal) * 100, e.ventas > 0 ? 4 : 1) + "%";
     barVentas.title = `${e.label} — Compraron: ${e.ventas}`;
 
     const barPerdidas = document.createElement("div");
-    barPerdidas.className = "chart-bar chart-bar-gasto";
+    barPerdidas.className = "chart-bar";
+    barPerdidas.style.background = "linear-gradient(180deg, var(--red), #A83636)";
     barPerdidas.style.height = Math.max((e.perdidas / maxVal) * 100, e.perdidas > 0 ? 4 : 1) + "%";
     barPerdidas.title = `${e.label} — No compraron: ${e.perdidas}`;
 
