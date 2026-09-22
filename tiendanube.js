@@ -187,7 +187,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
       nombre: c.nombre,
       email: c.email,
       telefono: c.telefono || null,
-      whatsapp: waLink(c.telefono, `Hola ${(c.nombre || "").split(" ")[0] || ""}! Somos de Platense Fit 💪`),
+      whatsapp: waLink(c.telefono, `Hola ${(c.nombre || "").split(" ")[0] || ""}! Somos de Platense Fit`),
       compras: c.compras,
       totalGastado: Math.round(c.totalGastado * 100) / 100,
       ultimaCompra: c.ultimaCompra,

@@ -299,24 +299,29 @@ function waLinkConCupon(c, cupon) {
 
   let bloqueProducto = "";
   if (ultimoProducto) {
-    bloqueProducto += `\nVimos que tu última compra fue *${ultimoProducto.nombre}* 🛒\n`;
+    bloqueProducto += `\nVimos que tu última compra fue *${ultimoProducto.nombre}*\n`;
   }
   if (producto && producto.precio) {
-    const precioConDescuento = Math.round(producto.precio * (1 - Number(cupon.porcentaje) / 100));
-    bloqueProducto += `\n💰 Precio: ${money(producto.precio)}`;
-    bloqueProducto += `\n✅ Con el cupón, pagando por transferencia: *${money(precioConDescuento)}*\n`;
+    // producto.precio es el precio de lista (el "negro"). La web ya le aplica un % de
+    // descuento propio por pagar con transferencia (el "verde") antes de que se sume el
+    // cupón — ese % se carga a mano arriba porque no viene en la API de Tiendanube.
+    const descuentoTransferencia = Number(document.getElementById("descuento-transferencia").value) || 0;
+    const precioTransferencia = producto.precio * (1 - descuentoTransferencia / 100);
+    const precioConCupon = Math.round(precioTransferencia * (1 - Number(cupon.porcentaje) / 100));
+    bloqueProducto += `\n*Precio en transferencia : ${money(precioTransferencia)}*`;
+    bloqueProducto += `\nCon el cupón, pagando por transferencia: *${money(precioConCupon)}*\n`;
   }
   if (producto && producto.url) {
-    bloqueProducto += `\n👉 ${producto.url}\n`;
+    bloqueProducto += `\n${producto.url}\n`;
   }
 
-  const mensaje = `¡Buenas buenas! Por acá Tomi, de Platense Fit 🙌
+  const mensaje = `¡Buenas buenas! Por acá Tomi, de Platense Fit
 
 ¡Hace rato no te vemos por la web!
 
-Te queremos dejar un CUPÓN ${cupon.porcentaje}% OFF en tu próxima compra 🎉
+Te queremos dejar un CUPÓN ${cupon.porcentaje}% OFF en tu próxima compra
 ${bloqueProducto}
-Te mandamos un fuerte abrazo desde el equipo 🙌
+Te mandamos un fuerte abrazo desde el equipo
 
 CUPÓN: ${cupon.code}
 
