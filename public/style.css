@@ -776,6 +776,38 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .legend-dot-mayorista { background: var(--orange); }
 .legend-dot-gasto { background: var(--red); }
 
+/* ---------- Comparación de rangos personalizados (modal de métrica) ---------- */
+
+.comparar-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.comparar-rango {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.comparar-rango label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.comparar-rango input[type="date"] { padding: 6px 8px; }
+.comparar-rango-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.comparar-rango-dot-a { background: var(--accent); }
+.comparar-rango-dot-b { background: var(--orange); }
+
 .history-card { grid-column: 1 / -1; }
 .history-header {
   display: flex;

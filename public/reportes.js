@@ -72,6 +72,12 @@ function semanasDeMes(monthKey) {
   return [...weekStarts].sort();
 }
 
+// Una venta minorista es "Web" si el método de pago es "web" o si se despachó por
+// Uber Moto (sea cual sea el método de pago); el resto de las minoristas son "Local".
+function esVentaCanalWeb(v) {
+  return v.metodo === "web" || v.envioMetodo === "uber_moto";
+}
+
 async function api(url, options) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -244,14 +250,19 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0 };
     return porFecha[fecha];
   }
 
   ventasGlobal.forEach(v => {
     const dia = getDia(v.fecha);
-    if (v.metodo === "mayorista") dia.volumenMayorista += v.precio;
-    else dia.volumen += v.precio;
+    if (v.metodo === "mayorista") {
+      dia.volumenMayorista += v.precio;
+    } else {
+      dia.volumen += v.precio;
+      if (esVentaCanalWeb(v)) dia.volumenWeb += v.precio;
+      else dia.volumenLocal += v.precio;
+    }
     dia.cantVentas++;
   });
 
@@ -319,11 +330,13 @@ selectorMes.addEventListener("change", () => {
 // ---------- Utilidades de agrupación ----------
 
 function grupoVacio(key, label) {
-  return { key, label, volumen: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
+  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, diasConDatos: 0 };
 }
 
 function sumarEnGrupo(acc, d) {
   acc.volumen += d.volumen;
+  acc.volumenWeb += d.volumenWeb || 0;
+  acc.volumenLocal += d.volumenLocal || 0;
   acc.volumenMayorista += d.volumenMayorista;
   acc.cantVentas += d.cantVentas;
   acc.gananciaBruta += d.gananciaBruta;
@@ -454,8 +467,13 @@ function agruparPorBucketIntradia(minutosBucket) {
 
   ventasGlobal.filter(v => v.fecha === hoyFecha).forEach(v => {
     const g = getBucket(v.horaLabel);
-    if (v.metodo === "mayorista") g.volumenMayorista += v.precio;
-    else g.volumen += v.precio;
+    if (v.metodo === "mayorista") {
+      g.volumenMayorista += v.precio;
+    } else {
+      g.volumen += v.precio;
+      if (esVentaCanalWeb(v)) g.volumenWeb += v.precio;
+      else g.volumenLocal += v.precio;
+    }
     g.cantVentas++;
   });
 
@@ -635,6 +653,103 @@ function renderLineChart(container, entries, metricKey) {
   }
 }
 
+// Gráfico de dos líneas superpuestas sobre el mismo eje (una sólida, una punteada),
+// usado tanto para comparar dos rangos de fechas elegidos a mano como para segmentar
+// una métrica en dos series (ej. Web vs Local) sobre el mismo período. `opts.xLabels`
+// permite pasar una etiqueta propia por índice del eje X; si no se pasa, se usa "Día N"
+// (caso de comparar rangos de largo distinto, donde no hay una fecha en común por punto).
+function renderDualLineChart(container, seriesA, seriesB, metricKey, labelA, labelB, opts = {}) {
+  ocultarChartTooltip();
+  container.innerHTML = "";
+  container.style.display = "block";
+  container.style.overflowX = "";
+  const maxLen = Math.max(seriesA.length, seriesB.length);
+  if (maxLen === 0) return;
+
+  const legend = document.createElement("div");
+  legend.className = "chart-legend";
+  legend.innerHTML = `
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent);"></span>${escapeHtml(labelA)}</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--orange);"></span>${escapeHtml(labelB)}</span>
+  `;
+  container.appendChild(legend);
+
+  const svgWrap = document.createElement("div");
+  svgWrap.style.overflowX = "auto";
+  container.appendChild(svgWrap);
+
+  const W = Math.max(maxLen * 46, 320);
+  const H = 220;
+  const padL = 64, padR = 16, padT = 16, padB = 34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const valores = [...seriesA, ...seriesB].map(e => e.raw);
+  let maxV = Math.max(...valores, 0);
+  let minV = Math.min(...valores, 0);
+  if (maxV === minV) { maxV += 1; minV -= 1; }
+  const rango = maxV - minV;
+
+  const xFor = (i) => padL + (maxLen === 1 ? plotW / 2 : (i / (maxLen - 1)) * plotW);
+  const yFor = (v) => padT + plotH - ((v - minV) / rango) * plotH;
+
+  const numLineas = 4;
+  let gridSvg = "";
+  for (let i = 0; i <= numLineas; i++) {
+    const v = minV + (rango * i) / numLineas;
+    const y = yFor(v);
+    gridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--card-border)" stroke-width="1" />`;
+    gridSvg += `<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--text-dim)">${escapeHtml(formatValorEje(metricKey, v))}</text>`;
+  }
+  if (minV < 0 && maxV > 0) {
+    const y0 = yFor(0);
+    gridSvg += `<line x1="${padL}" y1="${y0.toFixed(1)}" x2="${W - padR}" y2="${y0.toFixed(1)}" stroke="var(--text-dim)" stroke-width="1.5" />`;
+  }
+
+  const xLabels = opts.xLabels || Array.from({ length: maxLen }, (_, i) => `Día ${i + 1}`);
+  const indicesConEtiqueta = new Set(elegirIndicesEtiquetas(maxLen, plotW));
+  let xLabelsSvg = "";
+  for (let i = 0; i < maxLen; i++) {
+    if (indicesConEtiqueta.has(i)) {
+      xLabelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--text-dim)">${escapeHtml(xLabels[i] || "")}</text>`;
+    }
+  }
+
+  function serieSvg(serie, color, dashed) {
+    const puntos = serie.map((e, i) => `${xFor(i).toFixed(1)},${yFor(e.raw).toFixed(1)}`).join(" ");
+    const circles = serie.map((e, i) => `
+      <circle
+        class="chart-line-point"
+        style="animation-delay:${Math.min(i * 15, 400)}ms;"
+        cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="4" fill="${color}"
+        data-label="${escapeHtml(xLabels[i] || e.label)}" data-valor="${escapeHtml(e.formatted)}"
+      ></circle>
+    `).join("");
+    return `<polyline class="chart-line-path${dashed ? " chart-line-path-dashed" : ""}" points="${puntos}" fill="none" stroke="${color}" stroke-width="2.5"${dashed ? ' stroke-dasharray="6,4"' : ""} />${circles}`;
+  }
+
+  svgWrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="100%" style="display:block;">
+      ${gridSvg}
+      ${serieSvg(seriesA, "var(--accent)", false)}
+      ${serieSvg(seriesB, "var(--orange)", true)}
+      ${xLabelsSvg}
+    </svg>
+  `;
+
+  // Solo la línea A (sólida) se anima dibujándose; la B (punteada) ya usa su propio
+  // stroke-dasharray para el patrón de guiones, así que se muestra directamente.
+  const pathA = svgWrap.querySelector(".chart-line-path:not(.chart-line-path-dashed)");
+  if (pathA && typeof pathA.getTotalLength === "function") {
+    const len = pathA.getTotalLength();
+    pathA.style.strokeDasharray = String(len);
+    pathA.style.strokeDashoffset = String(len);
+    pathA.getBoundingClientRect();
+    pathA.style.transition = "stroke-dashoffset .8s ease";
+    requestAnimationFrame(() => { pathA.style.strokeDashoffset = "0"; });
+  }
+}
+
 // ---------- Tooltip de los puntos del gráfico de líneas ----------
 // Un solo elemento reutilizado (no uno por punto), posicionado con position:fixed según
 // dónde haya quedado el punto tocado/clickeado en pantalla — funciona igual con scroll
@@ -683,15 +798,20 @@ let metricModalPeriodo = "dia";
 let metricModalTipoGrafico = "barras";
 let metricModalTimeframe = 60; // minutos, usado en el modo "vivo"
 let metricModalLiveInterval = null;
+let metricModalCanalActivo = false; // segmentar "Volumen" en Web vs Local
 
 function abrirMetricModal(metricKey, titulo) {
   metricModalKey = metricKey;
   metricModalPeriodo = "dia";
+  metricModalCanalActivo = false;
   document.getElementById("metric-modal-titulo").textContent = titulo;
   document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
+  document.getElementById("metric-modal-canal-btn").classList.remove("active");
   document.getElementById("metric-modal").style.display = "flex";
   setMetricModalMaximizado(false);
   actualizarModoVivo();
+  actualizarModoComparar();
+  actualizarVisibilidadCanalBtn();
   renderMetricModal();
 }
 
@@ -717,9 +837,83 @@ function actualizarModoVivo() {
   }
 }
 
+// Muestra/oculta el panel de "Comparar rangos" y, mientras está activo, esconde el
+// selector de tipo de gráfico (esa vista siempre se dibuja en líneas, porque los dos
+// rangos elegidos a mano pueden tener distinta cantidad de días).
+function actualizarModoComparar() {
+  const comparando = metricModalKey && metricModalPeriodo === "comparar";
+  document.getElementById("metric-modal-comparar-panel").style.display = comparando ? "flex" : "none";
+  document.getElementById("metric-modal-btn-lineas").style.display = comparando ? "none" : "";
+  document.getElementById("metric-modal-btn-barras").style.display = comparando ? "none" : "";
+  if (comparando) inicializarFechasComparacion();
+}
+
+// El botón "Web / Local" solo tiene sentido para la métrica "Volumen" (que mezcla
+// ambos canales) y no se combina con "Comparar rangos" para no armar un gráfico de
+// cuatro series a la vez.
+function actualizarVisibilidadCanalBtn() {
+  const btn = document.getElementById("metric-modal-canal-btn");
+  const disponible = metricModalKey === "volumen" && metricModalPeriodo !== "comparar";
+  btn.style.display = disponible ? "" : "none";
+  if (!disponible) metricModalCanalActivo = false;
+  btn.classList.toggle("active", metricModalCanalActivo);
+}
+
+function fechasEnRangoInclusive(desdeStr, hastaStr) {
+  const [y1, m1, d1] = desdeStr.split("-").map(Number);
+  const [y2, m2, d2] = hastaStr.split("-").map(Number);
+  let cur = new Date(Date.UTC(y1, m1 - 1, d1));
+  const fin = new Date(Date.UTC(y2, m2 - 1, d2));
+  const out = [];
+  let guard = 0;
+  while (cur <= fin && guard < 366) {
+    out.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    guard++;
+  }
+  return out;
+}
+
+function restarDias(fechaStr, n) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() - n);
+  return date.toISOString().slice(0, 10);
+}
+
+// Retrocede un mes calendario manteniendo el día (ej. 30/09 -> 30/08), acotando al
+// último día del mes de destino si este es más corto (ej. 31/03 -> 28 o 29/02).
+function restarMes(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  let yy = y, mm = m - 1;
+  if (mm === 0) { mm = 12; yy -= 1; }
+  const diasEnMesDestino = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const dd = Math.min(d, diasEnMesDestino);
+  return `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+// Precarga los cuatro campos de fecha con un default útil (esta semana vs. la semana
+// anterior) la primera vez que se abre "Comparar rangos" — si ya tienen algo cargado
+// (el usuario los tocó antes en esta misma sesión del modal), no los pisa.
+function inicializarFechasComparacion() {
+  const $aDesde = document.getElementById("cmp-a-desde");
+  if ($aDesde.value) return;
+  const aDesde = diasRecientes(7)[0];
+  const aHasta = hoyFecha;
+  document.getElementById("cmp-a-desde").value = aDesde;
+  document.getElementById("cmp-a-hasta").value = aHasta;
+  document.getElementById("cmp-b-desde").value = restarDias(aDesde, 7);
+  document.getElementById("cmp-b-hasta").value = restarDias(aHasta, 7);
+}
+
 function renderMetricModal() {
   if (!metricModalKey) return;
   ocultarChartTooltip();
+
+  if (metricModalPeriodo === "comparar") {
+    renderMetricModalComparacion();
+    return;
+  }
 
   let grupos, thLabel;
   if (metricModalPeriodo === "dia") {
@@ -742,13 +936,44 @@ function renderMetricModal() {
     return 1;
   };
 
+  const chartEl = document.getElementById("metric-modal-chart");
+  const segmentarCanal = metricModalCanalActivo && metricModalKey === "volumen";
+
+  if (segmentarCanal) {
+    document.getElementById("metric-modal-thead-row").innerHTML = `<th>${escapeHtml(thLabel)}</th><th>Web</th><th>Local</th><th>Total</th>`;
+    const seriesWeb = grupos.map(g => ({ label: g.label, raw: g.volumenWeb || 0, formatted: money(g.volumenWeb || 0) }));
+    const seriesLocal = grupos.map(g => ({ label: g.label, raw: g.volumenLocal || 0, formatted: money(g.volumenLocal || 0) }));
+
+    if (metricModalTipoGrafico === "lineas") {
+      renderDualLineChart(chartEl, seriesWeb, seriesLocal, metricModalKey, "Web", "Local", { xLabels: grupos.map(g => g.label) });
+    } else {
+      chartEl.style.display = "";
+      chartEl.style.overflowX = "";
+      renderDualBarChart(
+        chartEl,
+        grupos.map(g => ({ label: g.label, valueA: g.volumenWeb || 0, valueB: g.volumenLocal || 0 })),
+        { labelA: "Web", labelB: "Local" }
+      );
+    }
+
+    document.getElementById("metric-modal-body").innerHTML = [...grupos].reverse().map(g => `
+      <tr>
+        <td>${escapeHtml(g.label)}</td>
+        <td>${money(g.volumenWeb || 0)}</td>
+        <td>${money(g.volumenLocal || 0)}</td>
+        <td>${money((g.volumenWeb || 0) + (g.volumenLocal || 0))}</td>
+      </tr>
+    `).join("");
+    return;
+  }
+
+  document.getElementById("metric-modal-thead-row").innerHTML = `<th>${escapeHtml(thLabel)}</th><th>Valor</th>`;
+
   const entries = grupos.map(g => {
     const { raw, formatted } = calcularValorMetrica(metricModalKey, g, diasEnPeriodoDe(g));
     return { label: g.label, raw, formatted };
   });
 
-  document.getElementById("metric-modal-th-periodo").textContent = thLabel;
-  const chartEl = document.getElementById("metric-modal-chart");
   if (metricModalTipoGrafico === "lineas") {
     renderLineChart(chartEl, entries, metricModalKey);
   } else {
@@ -760,6 +985,69 @@ function renderMetricModal() {
   document.getElementById("metric-modal-body").innerHTML = [...entries].reverse().map(e => `
     <tr><td>${escapeHtml(e.label)}</td><td>${escapeHtml(e.formatted)}</td></tr>
   `).join("");
+}
+
+// ---------- "Comparar rangos": dos rangos de fechas elegidos a mano, alineados por
+// índice de día (Día 1, Día 2, ...) para poder poner uno al lado del otro aunque sean
+// de meses distintos — el caso pedido es justamente ese: mismos días del mes pasado
+// contra los de este mes. ----------
+
+function renderMetricModalComparacion() {
+  const aDesde = document.getElementById("cmp-a-desde").value;
+  const aHasta = document.getElementById("cmp-a-hasta").value;
+  const bDesde = document.getElementById("cmp-b-desde").value;
+  const bHasta = document.getElementById("cmp-b-hasta").value;
+
+  const chartEl = document.getElementById("metric-modal-chart");
+  const bodyEl = document.getElementById("metric-modal-body");
+  document.getElementById("metric-modal-thead-row").innerHTML = `<th>Día</th><th>Rango A</th><th>Rango B</th><th>Variación</th>`;
+
+  if (!aDesde || !aHasta || !bDesde || !bHasta) {
+    chartEl.innerHTML = "";
+    bodyEl.innerHTML = `<tr class="empty-row"><td colspan="4">Elegí las dos fechas de cada rango para comparar.</td></tr>`;
+    return;
+  }
+
+  const fechasA = fechasEnRangoInclusive(aDesde, aHasta).slice(0, 90);
+  const fechasB = fechasEnRangoInclusive(bDesde, bHasta).slice(0, 90);
+
+  const armarSerie = (fechas) => fechas.map(fecha => {
+    const g = grupoDeUnDia(fecha);
+    const { raw, formatted } = calcularValorMetrica(metricModalKey, g, 1);
+    return { fecha, label: formatFecha(fecha), raw, formatted };
+  });
+
+  const seriesA = armarSerie(fechasA);
+  const seriesB = armarSerie(fechasB);
+  const labelA = `Rango A: ${formatFecha(aDesde)} al ${formatFecha(aHasta)}`;
+  const labelB = `Rango B: ${formatFecha(bDesde)} al ${formatFecha(bHasta)}`;
+
+  renderDualLineChart(chartEl, seriesA, seriesB, metricModalKey, labelA, labelB);
+
+  const maxLen = Math.max(seriesA.length, seriesB.length);
+  const filas = [];
+  for (let i = 0; i < maxLen; i++) {
+    const ea = seriesA[i];
+    const eb = seriesB[i];
+    let variacion = "—";
+    let colorVariacion = "";
+    if (ea && eb && ea.raw) {
+      const pct = ((eb.raw - ea.raw) / Math.abs(ea.raw)) * 100;
+      variacion = (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
+      colorVariacion = pct >= 0 ? "color:var(--green);" : "color:#e15b5b;";
+    }
+    filas.push(`
+      <tr>
+        <td>Día ${i + 1}</td>
+        <td>${ea ? `${escapeHtml(ea.label)} — ${escapeHtml(ea.formatted)}` : "—"}</td>
+        <td>${eb ? `${escapeHtml(eb.label)} — ${escapeHtml(eb.formatted)}` : "—"}</td>
+        <td style="${colorVariacion}">${variacion}</td>
+      </tr>
+    `);
+  }
+  bodyEl.innerHTML = maxLen === 0
+    ? `<tr class="empty-row"><td colspan="4">Sin datos.</td></tr>`
+    : filas.join("");
 }
 
 document.querySelectorAll(".metric-card-clickable").forEach(card => {
@@ -774,16 +1062,27 @@ document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(btn => {
     metricModalPeriodo = btn.dataset.periodo;
     document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
     actualizarModoVivo();
+    actualizarModoComparar();
+    actualizarVisibilidadCanalBtn();
     renderMetricModal();
   });
 });
 
-document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab").forEach(btn => {
+// Los botones Líneas/Barras/Web-Local están agrupados en la misma barra, pero solo los
+// dos primeros son mutuamente excluyentes (tipo de gráfico); "Web / Local" es un toggle
+// aparte que se puede combinar con cualquiera de los dos.
+document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab[data-tipo]").forEach(btn => {
   btn.addEventListener("click", () => {
     metricModalTipoGrafico = btn.dataset.tipo;
-    document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll("#metric-modal-tipo-grafico .periodo-tab[data-tipo]").forEach(b => b.classList.toggle("active", b === btn));
     renderMetricModal();
   });
+});
+
+document.getElementById("metric-modal-canal-btn").addEventListener("click", () => {
+  metricModalCanalActivo = !metricModalCanalActivo;
+  document.getElementById("metric-modal-canal-btn").classList.toggle("active", metricModalCanalActivo);
+  renderMetricModal();
 });
 
 document.querySelectorAll("#metric-modal-timeframe .periodo-tab").forEach(btn => {
@@ -792,6 +1091,19 @@ document.querySelectorAll("#metric-modal-timeframe .periodo-tab").forEach(btn =>
     document.querySelectorAll("#metric-modal-timeframe .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
     renderMetricModal();
   });
+});
+
+["cmp-a-desde", "cmp-a-hasta", "cmp-b-desde", "cmp-b-hasta"].forEach(id => {
+  document.getElementById(id).addEventListener("change", () => renderMetricModal());
+});
+
+document.getElementById("cmp-mes-anterior-btn").addEventListener("click", () => {
+  const aDesde = document.getElementById("cmp-a-desde").value;
+  const aHasta = document.getElementById("cmp-a-hasta").value;
+  if (!aDesde || !aHasta) return;
+  document.getElementById("cmp-b-desde").value = restarMes(aDesde);
+  document.getElementById("cmp-b-hasta").value = restarMes(aHasta);
+  renderMetricModal();
 });
 
 document.getElementById("metric-modal-cerrar").addEventListener("click", cerrarMetricModal);

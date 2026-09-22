@@ -206,21 +206,38 @@
       <button type="button" class="periodo-tab" data-periodo="semana">Semana</button>
       <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
       <button type="button" class="periodo-tab" data-periodo="vivo">🔴 En vivo (hoy)</button>
+      <button type="button" class="periodo-tab" data-periodo="comparar">🔀 Comparar rangos</button>
     </div>
     <div class="periodo-tabs" id="metric-modal-timeframe" style="display:none; margin-top:8px;">
       <button type="button" class="periodo-tab" data-tf="15">15 min</button>
       <button type="button" class="periodo-tab active" data-tf="60">1 hora</button>
       <button type="button" class="periodo-tab" data-tf="240">4 horas</button>
     </div>
+    <div class="comparar-panel" id="metric-modal-comparar-panel" style="display:none; margin-top:8px;">
+      <div class="comparar-rango">
+        <span class="comparar-rango-dot comparar-rango-dot-a"></span>
+        <label>Rango A
+          <input type="date" id="cmp-a-desde"> al <input type="date" id="cmp-a-hasta">
+        </label>
+      </div>
+      <div class="comparar-rango">
+        <span class="comparar-rango-dot comparar-rango-dot-b"></span>
+        <label>Rango B
+          <input type="date" id="cmp-b-desde"> al <input type="date" id="cmp-b-hasta">
+        </label>
+        <button type="button" class="chart-toolbar-btn" id="cmp-mes-anterior-btn">Mismo rango, mes anterior</button>
+      </div>
+    </div>
     <div class="periodo-tabs" id="metric-modal-tipo-grafico" style="margin-top:8px;">
-      <button type="button" class="periodo-tab" data-tipo="lineas">📈 Líneas</button>
-      <button type="button" class="periodo-tab active" data-tipo="barras">📊 Barras</button>
+      <button type="button" class="periodo-tab" data-tipo="lineas" id="metric-modal-btn-lineas">📈 Líneas</button>
+      <button type="button" class="periodo-tab active" data-tipo="barras" id="metric-modal-btn-barras">📊 Barras</button>
+      <button type="button" class="periodo-tab" id="metric-modal-canal-btn" style="display:none;">🌐 Web / Local</button>
       <button type="button" class="chart-toolbar-btn" id="metric-modal-fullscreen-btn">⛶ Pantalla completa</button>
     </div>
     <div class="chart chart-tall" id="metric-modal-chart"></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th id="metric-modal-th-periodo">Día</th><th>Valor</th></tr></thead>
+        <thead><tr id="metric-modal-thead-row"><th>Día</th><th>Valor</th></tr></thead>
         <tbody id="metric-modal-body"></tbody>
       </table>
     </div>
