@@ -19,6 +19,12 @@ function formatFecha(fecha) {
   return `${d}/${m}`;
 }
 
+const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+function nombreDiaSemana(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  return DIAS_SEMANA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 function getWeekStart(fechaStr) {
@@ -582,7 +588,7 @@ function renderLineChart(container, entries, metricKey) {
   if (entries.length === 0) return;
 
   const W = Math.max(entries.length * 46, 320);
-  const H = 220;
+  const H = 320;
   const padL = 64, padR = 16, padT = 16, padB = 34;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -624,7 +630,7 @@ function renderLineChart(container, entries, metricKey) {
       class="chart-line-point"
       style="animation-delay:${Math.min(i * 15, 400)}ms;"
       cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="4" fill="var(--accent)"
-      data-label="${escapeHtml(e.label)}" data-valor="${escapeHtml(e.formatted)}"
+      data-label="${escapeHtml(e.fecha ? `${e.label} · ${nombreDiaSemana(e.fecha)}` : e.label)}" data-valor="${escapeHtml(e.formatted)}"
     ></circle>
   `).join("");
 
@@ -661,13 +667,17 @@ function renderLineChart(container, entries, metricKey) {
 function renderDualLineChart(container, seriesA, seriesB, metricKey, labelA, labelB, opts = {}) {
   ocultarChartTooltip();
   container.innerHTML = "";
-  container.style.display = "block";
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.alignItems = "stretch";
   container.style.overflowX = "";
   const maxLen = Math.max(seriesA.length, seriesB.length);
   if (maxLen === 0) return;
 
   const legend = document.createElement("div");
   legend.className = "chart-legend";
+  legend.style.margin = "0 0 8px";
+  legend.style.flex = "0 0 auto";
   legend.innerHTML = `
     <span class="legend-item"><span class="legend-dot" style="background:var(--accent);"></span>${escapeHtml(labelA)}</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--orange);"></span>${escapeHtml(labelB)}</span>
@@ -676,10 +686,12 @@ function renderDualLineChart(container, seriesA, seriesB, metricKey, labelA, lab
 
   const svgWrap = document.createElement("div");
   svgWrap.style.overflowX = "auto";
+  svgWrap.style.flex = "1 1 auto";
+  svgWrap.style.minHeight = "0";
   container.appendChild(svgWrap);
 
   const W = Math.max(maxLen * 46, 320);
-  const H = 220;
+  const H = 320;
   const padL = 64, padR = 16, padT = 16, padB = 34;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -722,7 +734,7 @@ function renderDualLineChart(container, seriesA, seriesB, metricKey, labelA, lab
         class="chart-line-point"
         style="animation-delay:${Math.min(i * 15, 400)}ms;"
         cx="${xFor(i).toFixed(1)}" cy="${yFor(e.raw).toFixed(1)}" r="4" fill="${color}"
-        data-label="${escapeHtml(xLabels[i] || e.label)}" data-valor="${escapeHtml(e.formatted)}"
+        data-label="${escapeHtml(e.fecha ? `${xLabels[i] || e.label} · ${nombreDiaSemana(e.fecha)}` : (xLabels[i] || e.label))}" data-valor="${escapeHtml(e.formatted)}"
       ></circle>
     `).join("");
     return `<polyline class="chart-line-path${dashed ? " chart-line-path-dashed" : ""}" points="${puntos}" fill="none" stroke="${color}" stroke-width="2.5"${dashed ? ' stroke-dasharray="6,4"' : ""} />${circles}`;
@@ -941,8 +953,9 @@ function renderMetricModal() {
 
   if (segmentarCanal) {
     document.getElementById("metric-modal-thead-row").innerHTML = `<th>${escapeHtml(thLabel)}</th><th>Web</th><th>Local</th><th>Total</th>`;
-    const seriesWeb = grupos.map(g => ({ label: g.label, raw: g.volumenWeb || 0, formatted: money(g.volumenWeb || 0) }));
-    const seriesLocal = grupos.map(g => ({ label: g.label, raw: g.volumenLocal || 0, formatted: money(g.volumenLocal || 0) }));
+    const fechaDe = (g) => (metricModalPeriodo === "dia" ? g.key : undefined);
+    const seriesWeb = grupos.map(g => ({ label: g.label, fecha: fechaDe(g), raw: g.volumenWeb || 0, formatted: money(g.volumenWeb || 0) }));
+    const seriesLocal = grupos.map(g => ({ label: g.label, fecha: fechaDe(g), raw: g.volumenLocal || 0, formatted: money(g.volumenLocal || 0) }));
 
     if (metricModalTipoGrafico === "lineas") {
       renderDualLineChart(chartEl, seriesWeb, seriesLocal, metricModalKey, "Web", "Local", { xLabels: grupos.map(g => g.label) });
@@ -971,7 +984,7 @@ function renderMetricModal() {
 
   const entries = grupos.map(g => {
     const { raw, formatted } = calcularValorMetrica(metricModalKey, g, diasEnPeriodoDe(g));
-    return { label: g.label, raw, formatted };
+    return { label: g.label, fecha: metricModalPeriodo === "dia" ? g.key : undefined, raw, formatted };
   });
 
   if (metricModalTipoGrafico === "lineas") {
