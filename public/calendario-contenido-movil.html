@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Calendario de Contenido</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0A101C">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Contenido">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<link rel="stylesheet" href="movil-shared.css">
+<style>
+  .chips-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-top:8px}
+  .chips-scroll::-webkit-scrollbar{display:none}
+  .chip-mini{flex:0 0 auto;min-width:170px;max-width:170px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left}
+  .chip-mini .cd{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;margin-bottom:3px}
+  .chip-mini .cl{font-size:13px;font-weight:600;margin-bottom:3px}
+  .chip-mini .ci{font-size:11.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+  .tipo-badge{flex:0 0 auto;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.02em}
+  .tipo-reel{background:rgba(124,139,255,.15);color:var(--accent)}
+  .tipo-post{background:rgba(61,220,151,.15);color:var(--mint)}
+  .tipo-story{background:rgba(245,185,66,.15);color:var(--gold)}
+  .tipo-oferta{background:rgba(61,220,151,.15);color:var(--mint)}
+
+  .cont-row{display:flex;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+  .cont-row:first-child{border-top:0}
+  .cont-date{flex:0 0 40px;text-align:center;padding-top:1px}
+  .cont-date .wd{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase}
+  .cont-date .dn{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+  .cont-date.nofecha{color:var(--muted)}
+  .cont-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+  .cont-top{display:flex;align-items:center;gap:8px}
+  .cont-tema{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .cont-bottom{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  select.estado-select{font-family:inherit;font-size:11.5px;font-weight:700;border-radius:999px;border:1px solid var(--line);padding:4px 22px 4px 10px;background-color:var(--bg);color:var(--text);-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="5"><path d="M1 1l3 3 3-3" stroke="%239aa0b4" stroke-width="1.3" fill="none"/></svg>');background-repeat:no-repeat;background-position:right 8px center}
+  .est-idea{color:var(--muted)}
+  .est-grabando{color:var(--gold)}
+  .est-editando{color:var(--accent)}
+  .est-publicado{color:var(--mint)}
+  .cont-notas{font-size:11.5px;color:var(--muted);flex:1;min-width:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cont-del{flex:0 0 auto;width:28px;height:28px;border:0;border-radius:10px;background:var(--bg);color:var(--coral);font-size:15px}
+  .cont-del:active{background:rgba(255,107,107,.15)}
+
+  .month-lbl{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 4px 2px}
+
+  /* ---------- modal alta/edición ---------- */
+  .modal-scrim{position:fixed;inset:0;z-index:90;background:rgba(4,8,16,.7);backdrop-filter:blur(3px)}
+  .modal{
+    position:fixed;z-index:91;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(92vw,420px);max-height:85vh;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px 20px;
+  }
+  .modal h2{margin:0 0 12px;font-size:18px;font-weight:700}
+  .modal-close{position:absolute;top:14px;right:14px;width:32px;height:32px;border:0;border-radius:10px;background:var(--raised);color:var(--text);font-size:18px}
+  .m-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .m-field label{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .m-field input,.m-field select,.m-field textarea{font-family:inherit;font-size:15px;padding:10px 11px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);outline:none}
+  .m-field input:focus,.m-field select:focus,.m-field textarea:focus{border-color:var(--accent)}
+  .m-field textarea{resize:vertical;min-height:60px}
+  .m-two-col{display:flex;gap:10px}
+  .m-two-col .m-field{flex:1}
+  .m-actions{display:flex;gap:10px;margin-top:4px}
+  .m-actions .submit{flex:1;margin:0}
+  .m-actions .ghost-btn{flex:1;margin:0}
+  .m-delete{display:block;width:100%;text-align:center;font-size:12.5px;color:var(--coral);background:none;border:0;font-family:inherit;padding:10px 4px 0;text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="icon-btn" id="open" aria-label="Abrir menú">
+    <span class="burger"><i></i><i></i><i></i></span>
+  </button>
+  <h1>Calendario de contenido</h1>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer">
+  <header>
+    <p>Platense Fit</p>
+    <small>Calendario de contenido</small>
+  </header>
+  <a class="nav-item" href="/"><span class="em">🧾</span>Cargar venta</a>
+  <a class="nav-item" href="/tablero.html"><span class="em">📊</span>Tablero</a>
+  <a class="nav-item" href="/ganancias.html"><span class="em">💰</span>Panel de ganancias</a>
+  <a class="nav-item" href="/clientes.html"><span class="em">🔁</span>Recompra de clientes</a>
+  <a class="nav-item" href="/ventas-perdidas.html"><span class="em">📉</span>Ventas perdidas</a>
+  <a class="nav-item" href="/envios.html"><span class="em">🛵</span>Envíos Uber Moto</a>
+  <a class="nav-item" href="/pagos.html"><span class="em">💳</span>Pagos recibidos</a>
+  <a class="nav-item" href="/comisiones-minoristas.html"><span class="em">💰</span>Comisiones Minoristas</a>
+  <a class="nav-item" href="/salario.html"><span class="em">💼</span>Mi salario</a>
+  <a class="nav-item" href="/calendario-contenido-movil.html" aria-current="page"><span class="em">🗓️</span>Calendario de Contenido</a>
+  <hr class="nav-sep">
+  <button type="button" class="nav-item" id="navDesktop"><span class="em">🖥️</span>Ver versión de escritorio</button>
+  <button type="button" class="nav-item" id="logout-btn" style="display:none;"><span class="em">🚪</span>Cerrar sesión</button>
+</nav>
+
+<!-- Login -->
+<div class="login-wrap" id="login-card">
+  <div class="card login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <label class="lbl" for="password">Contraseña</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required>
+      <button type="submit" class="submit">Entrar</button>
+      <p class="error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </div>
+</div>
+
+<main id="app-content" style="display:none;">
+
+  <div class="card">
+    <div class="card-head">
+      <span class="lbl" style="margin:0;">Instagram — Platense Fit</span>
+      <button type="button" class="submit" style="width:auto;margin:0;padding:10px 18px;" id="btn-new">+ Nuevo</button>
+    </div>
+  </div>
+
+  <div class="card" id="fechas-card" style="display:none;">
+    <span class="lbl">Fechas para tener en cuenta</span>
+    <div class="chips-scroll" id="chips-scroll"></div>
+  </div>
+
+  <div class="card" id="sinfecha-card" style="display:none;">
+    <span class="lbl">Ideas sin fecha</span>
+    <div id="sinfecha-list"></div>
+  </div>
+
+  <div id="meses-container"></div>
+
+  <div class="card" id="empty-card" style="display:none;">
+    <p class="empty">Todavía no hay contenido planeado. Tocá "+ Nuevo" para cargar la primera idea.</p>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"><span id="toastIcon">✓</span><span id="toastText"></span></div>
+
+<script src="movil-shared.js"></script>
+<script src="calendario-contenido-movil.js"></script>
+</body>
+</html>
