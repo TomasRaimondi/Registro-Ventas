@@ -1398,22 +1398,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, precios);
     }
 
-    // TEMPORAL: diagnóstico de qué fuente de precios cripto responde desde Render.
-    if (pathname === "/api/inversiones/debug-binance" && req.method === "GET") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
-      const diag = {};
-      try {
-        const resp = await fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", { signal: AbortSignal.timeout(8000) });
-        diag.status = resp.status;
-        diag.ok = resp.ok;
-        diag.body = (await resp.text()).slice(0, 500);
-      } catch (e) {
-        diag.error = e.message;
-        diag.errorName = e.name;
-      }
-      return sendJson(res, 200, diag);
-    }
-
     if (pathname === "/api/inversiones/portafolio" && req.method === "GET") {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getAllInversionesPortafolio();
@@ -1980,11 +1964,14 @@ function getLocalIps() {
   return ips;
 }
 
-// ---------- Inversiones: precios en vivo (cripto vía CoinGecko, acciones vía Yahoo Finance) ----------
+// ---------- Inversiones: precios en vivo (cripto vía Coinbase, acciones vía Yahoo Finance) ----------
 // Ninguna de las dos requiere API key. Se cachean por 60s para no golpear estas APIs
 // públicas en cada carga de la página. Si una fuente falla (o no hay conexión), se cae
 // al precio manual que haya cargado el usuario para ese activo, y si tampoco hay eso,
 // el activo simplemente no aparece con precio (el front lo muestra como "—").
+// Nota: se probaron CoinGecko (bloquea IPs de hosting compartido) y Binance (devuelve
+// 451, bloqueado por región para IPs de EE.UU. como Render) antes de asentarse en
+// Coinbase, que al ser un exchange de EE.UU. sí responde bien desde ahí.
 
 let preciosInversionesCache = null;
 let preciosInversionesCacheEn = 0;
@@ -1999,32 +1986,23 @@ async function obtenerPreciosInversiones() {
   const activos = await db.getAllInversionesActivos();
   const resultado = {};
 
-  // Cripto vía Binance: CoinGecko empezó a fallar (bloquea/limita IPs de hosting
-  // compartido como Render), Binance no tuvo ese problema en la práctica.
-  const cripto = activos.filter((a) => a.tipoFuente === "binance" && a.fuenteId);
-  if (cripto.length) {
+  const cripto = activos.filter((a) => a.tipoFuente === "coinbase" && a.fuenteId);
+  await Promise.all(cripto.map(async (a) => {
     try {
-      const symbols = JSON.stringify(cripto.map((a) => a.fuenteId));
       const resp = await fetch(
-        `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbols)}`,
+        `https://api.coinbase.com/v2/prices/${encodeURIComponent(a.fuenteId)}/spot`,
         { signal: AbortSignal.timeout(8000) }
       );
-      if (resp.ok) {
-        const data = await resp.json();
-        const nowIso = new Date().toISOString();
-        const precioPorSimbolo = {};
-        (Array.isArray(data) ? data : [data]).forEach((d) => { precioPorSimbolo[d.symbol] = Number(d.price); });
-        cripto.forEach((a) => {
-          const precio = precioPorSimbolo[a.fuenteId];
-          if (Number.isFinite(precio) && precio > 0) {
-            resultado[a.id] = { precio, fuente: "live", actualizadoEn: nowIso };
-          }
-        });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const precio = Number(data?.data?.amount);
+      if (Number.isFinite(precio) && precio > 0) {
+        resultado[a.id] = { precio, fuente: "live", actualizadoEn: new Date().toISOString() };
       }
     } catch (e) {
-      console.error("Error obteniendo precios cripto (Binance):", e.message);
+      console.error(`Error obteniendo precio de ${a.simbolo} (Coinbase):`, e.message);
     }
-  }
+  }));
 
   const acciones = activos.filter((a) => a.tipoFuente === "yahoo" && a.fuenteId);
   await Promise.all(acciones.map(async (a) => {

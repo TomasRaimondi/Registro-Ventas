@@ -214,9 +214,9 @@ const SCHEMA = `
 // inserta una sola vez, solo si la tabla está vacía (no pisa lo que el usuario haya
 // agregado o borrado después).
 const INVERSIONES_ACTIVOS_SEED = [
-  { simbolo: "BTC", nombre: "Bitcoin", categoria: "cripto", tipoFuente: "binance", fuenteId: "BTCUSDT" },
-  { simbolo: "SOL", nombre: "Solana", categoria: "cripto", tipoFuente: "binance", fuenteId: "SOLUSDT" },
-  { simbolo: "XRP", nombre: "XRP", categoria: "cripto", tipoFuente: "binance", fuenteId: "XRPUSDT" },
+  { simbolo: "BTC", nombre: "Bitcoin", categoria: "cripto", tipoFuente: "coinbase", fuenteId: "BTC-USD" },
+  { simbolo: "SOL", nombre: "Solana", categoria: "cripto", tipoFuente: "coinbase", fuenteId: "SOL-USD" },
+  { simbolo: "XRP", nombre: "XRP", categoria: "cripto", tipoFuente: "coinbase", fuenteId: "XRP-USD" },
   { simbolo: "YPF", nombre: "YPF S.A.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "YPF" },
   { simbolo: "AAPL", nombre: "Apple Inc.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "AAPL" },
   { simbolo: "TSLA", nombre: "Tesla Inc.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "TSLA" },
@@ -251,25 +251,26 @@ async function sembrarInversionesActivos(getAllFn, insertFn) {
   }
 }
 
-// CoinGecko empezó a fallar en Render (bloquea/limita IPs de hosting compartido) así que
-// se pasó cripto a la API de Binance. Esto corrige las filas que ya se habían sembrado
-// con la fuente vieja antes del cambio, para no dejarlas sin precio.
-const INVERSIONES_COINGECKO_A_BINANCE = {
-  bitcoin: "BTCUSDT",
-  solana: "SOLUSDT",
-  ripple: "XRPUSDT",
+// Se probaron CoinGecko (bloquea IPs de hosting compartido) y Binance (devuelve 451,
+// bloqueado por region para IPs de EE.UU. como las de Render) antes de asentarse en
+// Coinbase, que sí responde bien desde ahí. Esto corrige las filas que ya se habían
+// sembrado con alguna fuente vieja, para no dejarlas sin precio.
+const INVERSIONES_FUENTE_VIEJA_A_COINBASE = {
+  coingecko: { bitcoin: "BTC-USD", solana: "SOL-USD", ripple: "XRP-USD" },
+  binance: { BTCUSDT: "BTC-USD", SOLUSDT: "SOL-USD", XRPUSDT: "XRP-USD" },
 };
 
 async function migrarInversionesCoinGeckoABinance(getAllFn, updateFuenteFn) {
   try {
     const existentes = await getAllFn();
     for (const a of existentes) {
-      if (a.tipoFuente === "coingecko" && INVERSIONES_COINGECKO_A_BINANCE[a.fuenteId]) {
-        await updateFuenteFn(a.id, "binance", INVERSIONES_COINGECKO_A_BINANCE[a.fuenteId]);
+      const mapa = INVERSIONES_FUENTE_VIEJA_A_COINBASE[a.tipoFuente];
+      if (mapa && mapa[a.fuenteId]) {
+        await updateFuenteFn(a.id, "coinbase", mapa[a.fuenteId]);
       }
     }
   } catch (e) {
-    console.error("Error migrando activos de CoinGecko a Binance:", e);
+    console.error("Error migrando activos a Coinbase:", e);
   }
 }
 
