@@ -214,9 +214,9 @@ const SCHEMA = `
 // inserta una sola vez, solo si la tabla está vacía (no pisa lo que el usuario haya
 // agregado o borrado después).
 const INVERSIONES_ACTIVOS_SEED = [
-  { simbolo: "BTC", nombre: "Bitcoin", categoria: "cripto", tipoFuente: "coingecko", fuenteId: "bitcoin" },
-  { simbolo: "SOL", nombre: "Solana", categoria: "cripto", tipoFuente: "coingecko", fuenteId: "solana" },
-  { simbolo: "XRP", nombre: "XRP", categoria: "cripto", tipoFuente: "coingecko", fuenteId: "ripple" },
+  { simbolo: "BTC", nombre: "Bitcoin", categoria: "cripto", tipoFuente: "binance", fuenteId: "BTCUSDT" },
+  { simbolo: "SOL", nombre: "Solana", categoria: "cripto", tipoFuente: "binance", fuenteId: "SOLUSDT" },
+  { simbolo: "XRP", nombre: "XRP", categoria: "cripto", tipoFuente: "binance", fuenteId: "XRPUSDT" },
   { simbolo: "YPF", nombre: "YPF S.A.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "YPF" },
   { simbolo: "AAPL", nombre: "Apple Inc.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "AAPL" },
   { simbolo: "TSLA", nombre: "Tesla Inc.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "TSLA" },
@@ -248,6 +248,28 @@ async function sembrarInversionesActivos(getAllFn, insertFn) {
     }
   } catch (e) {
     console.error("Error sembrando activos de inversiones:", e);
+  }
+}
+
+// CoinGecko empezó a fallar en Render (bloquea/limita IPs de hosting compartido) así que
+// se pasó cripto a la API de Binance. Esto corrige las filas que ya se habían sembrado
+// con la fuente vieja antes del cambio, para no dejarlas sin precio.
+const INVERSIONES_COINGECKO_A_BINANCE = {
+  bitcoin: "BTCUSDT",
+  solana: "SOLUSDT",
+  ripple: "XRPUSDT",
+};
+
+async function migrarInversionesCoinGeckoABinance(getAllFn, updateFuenteFn) {
+  try {
+    const existentes = await getAllFn();
+    for (const a of existentes) {
+      if (a.tipoFuente === "coingecko" && INVERSIONES_COINGECKO_A_BINANCE[a.fuenteId]) {
+        await updateFuenteFn(a.id, "binance", INVERSIONES_COINGECKO_A_BINANCE[a.fuenteId]);
+      }
+    }
+  } catch (e) {
+    console.error("Error migrando activos de CoinGecko a Binance:", e);
   }
 }
 
@@ -354,6 +376,7 @@ if (USE_TURSO) {
       await migrarBonoMinoristaManual((sql) => client.execute(sql));
       await migrarBonoMayoristaAutoManual((sql) => client.execute(sql));
       await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
+      await migrarInversionesCoinGeckoABinance(() => impl.getAllInversionesActivos(), (id, tf, fid) => impl.updateInversionActivoFuente(id, tf, fid));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -805,6 +828,12 @@ if (USE_TURSO) {
         args: [precio, actualizadoEn, id],
       });
     },
+    async updateInversionActivoFuente(id, tipoFuente, fuenteId) {
+      await client.execute({
+        sql: "UPDATE inversiones_activos SET tipoFuente = ?, fuenteId = ? WHERE id = ?",
+        args: [tipoFuente, fuenteId, id],
+      });
+    },
     async deleteInversionActivo(id) {
       await client.execute({ sql: "DELETE FROM inversiones_activos WHERE id = ?", args: [id] });
     },
@@ -856,6 +885,7 @@ if (USE_TURSO) {
       await migrarBonoMinoristaManual(async (sql) => db.exec(sql));
       await migrarBonoMayoristaAutoManual(async (sql) => db.exec(sql));
       await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
+      await migrarInversionesCoinGeckoABinance(() => impl.getAllInversionesActivos(), (id, tf, fid) => impl.updateInversionActivoFuente(id, tf, fid));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -1230,6 +1260,9 @@ if (USE_TURSO) {
     },
     async updateInversionActivoPrecioManual(id, precio, actualizadoEn) {
       db.prepare("UPDATE inversiones_activos SET precioManual = ?, actualizadoManualEn = ? WHERE id = ?").run(precio, actualizadoEn, id);
+    },
+    async updateInversionActivoFuente(id, tipoFuente, fuenteId) {
+      db.prepare("UPDATE inversiones_activos SET tipoFuente = ?, fuenteId = ? WHERE id = ?").run(tipoFuente, fuenteId, id);
     },
     async deleteInversionActivo(id) {
       db.prepare("DELETE FROM inversiones_activos WHERE id = ?").run(id);

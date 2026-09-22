@@ -1983,26 +1983,30 @@ async function obtenerPreciosInversiones() {
   const activos = await db.getAllInversionesActivos();
   const resultado = {};
 
-  const cripto = activos.filter((a) => a.tipoFuente === "coingecko" && a.fuenteId);
+  // Cripto vía Binance: CoinGecko empezó a fallar (bloquea/limita IPs de hosting
+  // compartido como Render), Binance no tuvo ese problema en la práctica.
+  const cripto = activos.filter((a) => a.tipoFuente === "binance" && a.fuenteId);
   if (cripto.length) {
     try {
-      const ids = cripto.map((a) => a.fuenteId).join(",");
+      const symbols = JSON.stringify(cripto.map((a) => a.fuenteId));
       const resp = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd`,
+        `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbols)}`,
         { signal: AbortSignal.timeout(8000) }
       );
       if (resp.ok) {
         const data = await resp.json();
         const nowIso = new Date().toISOString();
+        const precioPorSimbolo = {};
+        (Array.isArray(data) ? data : [data]).forEach((d) => { precioPorSimbolo[d.symbol] = Number(d.price); });
         cripto.forEach((a) => {
-          const p = data[a.fuenteId];
-          if (p && typeof p.usd === "number") {
-            resultado[a.id] = { precio: p.usd, fuente: "live", actualizadoEn: nowIso };
+          const precio = precioPorSimbolo[a.fuenteId];
+          if (Number.isFinite(precio) && precio > 0) {
+            resultado[a.id] = { precio, fuente: "live", actualizadoEn: nowIso };
           }
         });
       }
     } catch (e) {
-      console.error("Error obteniendo precios cripto (CoinGecko):", e.message);
+      console.error("Error obteniendo precios cripto (Binance):", e.message);
     }
   }
 
