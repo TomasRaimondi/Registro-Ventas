@@ -54,6 +54,7 @@
       <div class="card metric-card">
         <span class="label">Ingresos de clientes ese día</span>
         <span class="big-number" id="stat-total" style="color:var(--green);">0</span>
+        <span class="metric-sub" id="stat-total-sub"></span>
       </div>
     </section>
 
@@ -64,11 +65,15 @@
         <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
       </div>
       <h2 id="resumen-titulo">Ingresos de clientes por semana</h2>
+      <div class="chart-legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--green);"></span>Compraron</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--red);"></span>No compraron (venta perdida)</span>
+      </div>
       <div class="chart chart-tall" id="resumen-chart"></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th id="th-periodo">Semana</th><th>Cantidad</th></tr></thead>
-          <tbody id="resumen-body"><tr class="empty-row"><td colspan="2">Cargando...</td></tr></tbody>
+          <thead><tr><th id="th-periodo">Semana</th><th>Compraron</th><th>No compraron</th><th>Total</th></tr></thead>
+          <tbody id="resumen-body"><tr class="empty-row"><td colspan="4">Cargando...</td></tr></tbody>
         </table>
       </div>
     </section>

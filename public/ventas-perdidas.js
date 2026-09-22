@@ -21,6 +21,19 @@ function formatFechaCorta(fechaStr) {
   return `${d}/${m}`;
 }
 
+const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+function nombreDiaSemana(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  return DIAS_SEMANA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+// Fecha larga con el día de la semana adelante (ej. "Martes, 22 de septiembre de 2026"),
+// para los lugares donde vale la pena mostrarlo (una fila de tabla, un tooltip) sin
+// saturar las etiquetas chicas del gráfico, que se quedan como "22/09".
+function formatFechaLargaConDia(fechaStr) {
+  return `${nombreDiaSemana(fechaStr)}, ${formatFechaLarga(fechaStr)}`;
+}
+
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 function getWeekStart(fechaStr) {
@@ -134,7 +147,7 @@ async function cargar() {
   const fechaActiva = fechaSeleccionada || hoyFecha;
   fechaInput.value = fechaActiva;
   hoyBtn.style.display = fechaActiva === hoyFecha ? "none" : "inline-block";
-  document.getElementById("fecha-label").textContent = fechaActiva === hoyFecha ? "hoy" : formatFechaLarga(fechaActiva);
+  document.getElementById("fecha-label").textContent = fechaActiva === hoyFecha ? "hoy" : formatFechaLargaConDia(fechaActiva);
 
   const tbody = document.getElementById("lista-body");
   tbody.innerHTML = `<tr class="empty-row"><td colspan="3">Cargando...</td></tr>`;
@@ -225,7 +238,7 @@ function entradasPorDia() {
     date.setUTCDate(date.getUTCDate() - i);
     const fecha = date.toISOString().slice(0, 10);
     const rows = porFecha.get(fecha) || [];
-    dias.push({ key: fecha, label: formatFechaLarga(fecha), cantidad: rows.length, motivoTop: motivoMasComun(rows) });
+    dias.push({ key: fecha, label: formatFechaLargaConDia(fecha), cantidad: rows.length, motivoTop: motivoMasComun(rows) });
   }
   return dias;
 }

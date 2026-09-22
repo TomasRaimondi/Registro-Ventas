@@ -21,6 +21,19 @@ function formatFechaCorta(fechaStr) {
   return `${d}/${m}`;
 }
 
+const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+function nombreDiaSemana(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  return DIAS_SEMANA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+// Fecha larga con el día de la semana adelante (ej. "Martes, 22 de septiembre de 2026"),
+// para los lugares donde vale la pena mostrarlo (una fila de tabla, un tooltip) sin
+// saturar las etiquetas chicas del gráfico, que se quedan como "22/09".
+function formatFechaLargaConDia(fechaStr) {
+  return `${nombreDiaSemana(fechaStr)}, ${formatFechaLarga(fechaStr)}`;
+}
+
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 function getWeekStart(fechaStr) {
@@ -160,15 +173,14 @@ async function cargarTodosLosIngresos() {
 
 async function cargarTodo() {
   document.getElementById("lista-body").innerHTML = `<tr class="empty-row"><td colspan="2">Cargando...</td></tr>`;
-  document.getElementById("resumen-body").innerHTML = `<tr class="empty-row"><td colspan="2">Cargando...</td></tr>`;
+  document.getElementById("resumen-body").innerHTML = `<tr class="empty-row"><td colspan="4">Cargando...</td></tr>`;
   try {
     await cargarTodosLosIngresos();
     renderResumen();
     renderListaDia();
   } catch (err) {
-    const msg = `<tr class="empty-row"><td colspan="2">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
-    document.getElementById("lista-body").innerHTML = msg;
-    document.getElementById("resumen-body").innerHTML = msg;
+    document.getElementById("lista-body").innerHTML = `<tr class="empty-row"><td colspan="2">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
+    document.getElementById("resumen-body").innerHTML = `<tr class="empty-row"><td colspan="4">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -179,12 +191,16 @@ function renderListaDia() {
   const fechaActiva = fechaSeleccionada || hoyFecha;
   fechaInput.value = fechaActiva;
   hoyBtn.style.display = fechaActiva === hoyFecha ? "none" : "inline-block";
-  document.getElementById("fecha-label").textContent = fechaActiva === hoyFecha ? "hoy" : formatFechaLarga(fechaActiva);
+  document.getElementById("fecha-label").textContent = fechaActiva === hoyFecha ? "hoy" : formatFechaLargaConDia(fechaActiva);
 
   const rows = todosIngresos
     .filter((r) => r.fecha === fechaActiva)
     .sort((a, b) => (a.horaLabel || "").localeCompare(b.horaLabel || ""));
   document.getElementById("stat-total").textContent = rows.length;
+  const { perdidas, ventas } = contarTipos(rows);
+  document.getElementById("stat-total-sub").textContent = rows.length
+    ? `${ventas} compraron, ${perdidas} no compraron`
+    : "";
 
   const tbody = document.getElementById("lista-body");
   tbody.innerHTML = !rows.length
@@ -197,9 +213,17 @@ function renderListaDia() {
       `).join("");
 }
 
-// ---------- Resumen por semana / mes ----------
+// ---------- Resumen por semana / mes, comparado contra ventas perdidas ----------
+// Cada ingreso ya viene con su tipo ("perdida" o "venta"): acá se separan para poder
+// comparar, período a período, cuántos de los que entraron compraron y cuántos no.
 
 let resumenPeriodo = "semana";
+
+function contarTipos(rows) {
+  let perdidas = 0, ventas = 0;
+  rows.forEach((r) => { if (r.tipo === "perdida") perdidas++; else ventas++; });
+  return { perdidas, ventas, cantidad: perdidas + ventas };
+}
 
 // Para "día" se arman los últimos 30 días de corrido (con 0 en los que no hubo
 // ninguno), a diferencia de semana/mes que solo muestran períodos con datos: en una
@@ -207,7 +231,8 @@ let resumenPeriodo = "semana";
 function entradasPorDia() {
   const porFecha = new Map();
   todosIngresos.forEach((r) => {
-    porFecha.set(r.fecha, (porFecha.get(r.fecha) || 0) + 1);
+    if (!porFecha.has(r.fecha)) porFecha.set(r.fecha, []);
+    porFecha.get(r.fecha).push(r);
   });
 
   const [y, m, d] = getHoyFechaArgentina().split("-").map(Number);
@@ -216,7 +241,7 @@ function entradasPorDia() {
     const date = new Date(Date.UTC(y, m - 1, d));
     date.setUTCDate(date.getUTCDate() - i);
     const fecha = date.toISOString().slice(0, 10);
-    dias.push({ key: fecha, label: formatFechaLarga(fecha), cantidad: porFecha.get(fecha) || 0 });
+    dias.push({ key: fecha, label: formatFechaLargaConDia(fecha), ...contarTipos(porFecha.get(fecha) || []) });
   }
   return dias;
 }
@@ -229,47 +254,74 @@ function renderResumen() {
     etiquetaCortaDe = (e) => formatFechaCorta(e.key);
     cantidadEnGrafico = 30;
   } else {
-    const grupos = new Map(); // clave del período -> cantidad de ingresos de ese período
+    const grupos = new Map(); // clave del período -> filas de ese período
     todosIngresos.forEach((r) => {
       const key = resumenPeriodo === "semana" ? getWeekStart(r.fecha) : getMonthKey(r.fecha);
-      grupos.set(key, (grupos.get(key) || 0) + 1);
+      if (!grupos.has(key)) grupos.set(key, []);
+      grupos.get(key).push(r);
     });
     entradas = [...grupos.keys()].sort().map((key) => {
       const label = resumenPeriodo === "semana"
         ? `${formatFechaCorta(key)} al ${formatFechaCorta(getWeekEnd(key))}`
         : getMonthLabel(key);
-      return { key, label, cantidad: grupos.get(key) };
+      return { key, label, ...contarTipos(grupos.get(key)) };
     });
     etiquetaCortaDe = (e) => (resumenPeriodo === "semana" ? formatFechaCorta(e.key) : e.key.slice(5));
     cantidadEnGrafico = 12;
   }
 
-  // Gráfico: las últimas N, de más vieja a más nueva.
+  // Gráfico: las últimas N, de más vieja a más nueva. Cada período muestra dos barras
+  // lado a lado (compraron / no compraron), escaladas contra el total del período más
+  // activo para que se puedan comparar entre sí.
   const ultimas = entradas.slice(-cantidadEnGrafico);
   const chart = document.getElementById("resumen-chart");
   chart.innerHTML = "";
   const maxVal = Math.max(...ultimas.map((e) => e.cantidad), 1);
   ultimas.forEach((e) => {
-    const heightPct = e.cantidad > 0 ? Math.max((e.cantidad / maxVal) * 100, 4) : 2;
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
-    wrap.innerHTML = `
-      <span class="chart-bar-value">${e.cantidad || ""}</span>
-      <div class="chart-bar" style="height:${heightPct}%; background:linear-gradient(180deg, var(--green), #1F7A54);" title="${escapeHtml(e.label)}: ${e.cantidad}"></div>
-      <span class="chart-bar-label">${escapeHtml(etiquetaCortaDe(e))}</span>
-    `;
+
+    const totalLabel = document.createElement("span");
+    totalLabel.className = "chart-bar-value";
+    totalLabel.textContent = e.cantidad || "";
+    wrap.appendChild(totalLabel);
+
+    const pair = document.createElement("div");
+    pair.className = "chart-bar-pair";
+
+    const barVentas = document.createElement("div");
+    barVentas.className = "chart-bar chart-bar-verde";
+    barVentas.style.height = Math.max((e.ventas / maxVal) * 100, e.ventas > 0 ? 4 : 1) + "%";
+    barVentas.title = `${e.label} — Compraron: ${e.ventas}`;
+
+    const barPerdidas = document.createElement("div");
+    barPerdidas.className = "chart-bar chart-bar-gasto";
+    barPerdidas.style.height = Math.max((e.perdidas / maxVal) * 100, e.perdidas > 0 ? 4 : 1) + "%";
+    barPerdidas.title = `${e.label} — No compraron: ${e.perdidas}`;
+
+    pair.appendChild(barVentas);
+    pair.appendChild(barPerdidas);
+    wrap.appendChild(pair);
+
+    const hLabel = document.createElement("span");
+    hLabel.className = "chart-bar-label";
+    hLabel.textContent = etiquetaCortaDe(e);
+    wrap.appendChild(hLabel);
+
     chart.appendChild(wrap);
   });
 
   // Tabla: más reciente primero.
   const tbody = document.getElementById("resumen-body");
   if (!entradas.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="2">Todavía no hay ingresos registrados.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no hay ingresos registrados.</td></tr>`;
     return;
   }
   tbody.innerHTML = [...entradas].reverse().map((e) => `
     <tr>
       <td>${escapeHtml(e.label)}</td>
+      <td style="color:var(--green);">${e.ventas}</td>
+      <td style="color:var(--red);">${e.perdidas}</td>
       <td>${e.cantidad}</td>
     </tr>
   `).join("");
