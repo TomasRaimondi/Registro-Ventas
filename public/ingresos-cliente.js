@@ -69,8 +69,7 @@ function showApp() {
   loginCard.style.display = "none";
   appContent.style.display = "block";
   logoutBtn.style.display = "inline-block";
-  cargar();
-  cargarResumen();
+  cargarTodo();
 }
 
 function showLogin() {
@@ -118,83 +117,89 @@ const hoyBtn = document.getElementById("hoy-btn");
 fechaInput.addEventListener("change", () => {
   if (!fechaInput.value) return;
   fechaSeleccionada = fechaInput.value;
-  cargar();
+  renderListaDia();
 });
 
 hoyBtn.addEventListener("click", () => {
   fechaSeleccionada = null;
   fechaInput.value = getHoyFechaArgentina();
-  cargar();
+  renderListaDia();
 });
 
-// ---------- Carga y render ----------
+// ---------- Datos: se derivan de Ventas Perdidas + Ventas (no de una tabla propia) ----------
+// "Ingreso de cliente" ya no se carga a mano: es cada venta perdida (entró y no compró)
+// más cada venta local (entró y compró), sin mayorista ni web. Se trae todo una sola vez
+// en una lista combinada, y el resumen por período y el detalle del día son filtros
+// locales sobre esa lista (no hace falta volver a pedirle nada al servidor).
 
-async function cargar() {
+function esVentaLocal(s) {
+  return s.metodo !== "mayorista" && s.metodo !== "web" && s.envioMetodo !== "uber_moto";
+}
+
+let todosIngresos = []; // [{ fecha, horaLabel, tipo: "perdida" | "venta", detalle }]
+
+async function cargarTodosLosIngresos() {
+  const [perdidas, reportes] = await Promise.all([
+    api("/api/ventas-perdidas-todas"),
+    api("/api/reportes"),
+  ]);
+  const deVentasPerdidas = perdidas.map((r) => ({
+    fecha: r.fecha,
+    horaLabel: r.horaLabel,
+    tipo: "perdida",
+    detalle: `No compró: ${r.motivo}`,
+  }));
+  const deVentas = reportes.ventas.filter(esVentaLocal).map((v) => ({
+    fecha: v.fecha,
+    horaLabel: v.horaLabel,
+    tipo: "venta",
+    detalle: `Compró: ${v.producto}`,
+  }));
+  todosIngresos = [...deVentasPerdidas, ...deVentas];
+}
+
+async function cargarTodo() {
+  document.getElementById("lista-body").innerHTML = `<tr class="empty-row"><td colspan="2">Cargando...</td></tr>`;
+  document.getElementById("resumen-body").innerHTML = `<tr class="empty-row"><td colspan="2">Cargando...</td></tr>`;
+  try {
+    await cargarTodosLosIngresos();
+    renderResumen();
+    renderListaDia();
+  } catch (err) {
+    const msg = `<tr class="empty-row"><td colspan="2">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
+    document.getElementById("lista-body").innerHTML = msg;
+    document.getElementById("resumen-body").innerHTML = msg;
+  }
+}
+
+// ---------- Detalle del día elegido ----------
+
+function renderListaDia() {
   const hoyFecha = getHoyFechaArgentina();
   const fechaActiva = fechaSeleccionada || hoyFecha;
   fechaInput.value = fechaActiva;
   hoyBtn.style.display = fechaActiva === hoyFecha ? "none" : "inline-block";
   document.getElementById("fecha-label").textContent = fechaActiva === hoyFecha ? "hoy" : formatFechaLarga(fechaActiva);
 
+  const rows = todosIngresos
+    .filter((r) => r.fecha === fechaActiva)
+    .sort((a, b) => (a.horaLabel || "").localeCompare(b.horaLabel || ""));
+  document.getElementById("stat-total").textContent = rows.length;
+
   const tbody = document.getElementById("lista-body");
-  tbody.innerHTML = `<tr class="empty-row"><td colspan="2">Cargando...</td></tr>`;
-
-  try {
-    const rows = await api("/api/ingresos-cliente?fecha=" + encodeURIComponent(fechaActiva));
-    document.getElementById("stat-total").textContent = rows.length;
-
-    if (!rows.length) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="2">No se registró ningún ingreso ese día.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = "";
-    rows.forEach((r) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(r.horaLabel.slice(0, 5))}</td>
-        <td></td>
-      `;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "clear-btn";
-      btn.textContent = "Borrar";
-      btn.addEventListener("click", () => borrar(r.id, btn));
-      tr.lastElementChild.appendChild(btn);
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="2">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
-  }
-}
-
-async function borrar(id, btn) {
-  if (!confirm("¿Borrar este ingreso?")) return;
-  btn.disabled = true;
-  try {
-    await api("/api/ingresos-cliente/" + encodeURIComponent(id), { method: "DELETE" });
-    await cargar();
-    await cargarResumen();
-  } catch (err) {
-    btn.disabled = false;
-    alert("No se pudo borrar: " + err.message);
-  }
+  tbody.innerHTML = !rows.length
+    ? `<tr class="empty-row"><td colspan="2">No se registró ningún ingreso ese día.</td></tr>`
+    : rows.map((r) => `
+        <tr>
+          <td>${escapeHtml((r.horaLabel || "").slice(0, 5))}</td>
+          <td style="${r.tipo === "venta" ? "color:var(--green);" : "color:var(--red);"}">${escapeHtml(r.detalle)}</td>
+        </tr>
+      `).join("");
 }
 
 // ---------- Resumen por semana / mes ----------
 
-let todosIngresos = [];
 let resumenPeriodo = "semana";
-
-async function cargarResumen() {
-  try {
-    todosIngresos = await api("/api/ingresos-cliente-todas");
-    renderResumen();
-  } catch (err) {
-    document.getElementById("resumen-body").innerHTML =
-      `<tr class="empty-row"><td colspan="2">Error al cargar el resumen: ${escapeHtml(err.message)}</td></tr>`;
-  }
-}
 
 // Para "día" se arman los últimos 30 días de corrido (con 0 en los que no hubo
 // ninguno), a diferencia de semana/mes que solo muestran períodos con datos: en una

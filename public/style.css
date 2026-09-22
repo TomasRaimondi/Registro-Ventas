@@ -309,9 +309,9 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .vp-btn-texto small { font-size: 11px; opacity: 0.9; }
 
 /* ---------- Ingreso de cliente ---------- */
-/* Mismo look & feel que "Venta perdida" (glow permanente + pop al guardar) pero en
-   verde, para que el tap sea igual de inmediato y satisfactorio. Sin modal: un solo
-   toque ya carga el ingreso. */
+/* Ya no es un botón para tocar: es un indicador que se calcula solo (ventas perdidas +
+   ventas locales de hoy), por eso no tiene cursor de mano ni respuesta al hover/click.
+   Conserva el glow verde y el "pop" (ahora disparado cuando el número sube solo). */
 
 .ingreso-cliente-btn {
   display: flex;
@@ -323,17 +323,11 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
   border: 2px solid var(--green);
   background: var(--green);
   color: #fff;
-  cursor: pointer;
+  cursor: default;
   font-family: inherit;
   text-align: center;
   animation: ic-glow 2.2s ease-in-out infinite;
-  transition: transform .12s ease, filter .12s ease;
 }
-.ingreso-cliente-btn:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-}
-.ingreso-cliente-btn:active { transform: translateY(0) scale(0.96); }
 .ingreso-cliente-btn.vp-pop { animation: vp-pop .4s ease; }
 
 @keyframes ic-glow {

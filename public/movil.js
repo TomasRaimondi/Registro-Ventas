@@ -374,43 +374,31 @@ document.getElementById("vpForm").addEventListener("submit", (e) => {
 });
 
 // ---------- Ingreso de cliente ----------
-// Sin modal: a diferencia de venta perdida, acá es un solo toque de principio a fin
-// (vibración + toast como confirmación), para que se pueda cargar apenas alguien entra.
+// Ya no se toca a mano: se calcula solo, sumando quiénes entraron al local hoy según
+// lo que ya se carga en el sistema — una venta perdida (entró y no compró) o una venta
+// local (entró y compró). No cuenta mayorista (no es un cliente que entra al local) ni
+// web (no entró físicamente).
 
-let icGuardando = false;
+let icUltimoValor = null;
 
-async function cargarContadorIngresos() {
+function esVentaLocal(s) {
+  return s.metodo !== "mayorista" && s.metodo !== "web" && s.envioMetodo !== "uber_moto";
+}
+
+async function cargarContadorIngresos(ventasHoy) {
   try {
-    const rows = await api("/api/ingresos-cliente");
-    document.getElementById("enterCount").textContent = rows.length;
-    document.getElementById("badgeIngresos").textContent = rows.length;
+    const [perdidas, sales] = await Promise.all([
+      api("/api/ventas-perdidas"),
+      ventasHoy ? Promise.resolve(ventasHoy) : api("/api/ventas"),
+    ]);
+    const total = perdidas.length + sales.filter(esVentaLocal).length;
+    document.getElementById("enterCount").textContent = total;
+    document.getElementById("badgeIngresos").textContent = total;
+    if (icUltimoValor !== null && total > icUltimoValor) buzz(15);
+    icUltimoValor = total;
   } catch (e) {}
 }
 // (cargarContadorIngresos() arranca desde iniciarApp(), después del login)
-
-async function registrarIngreso() {
-  // Solo bloquea mientras el pedido anterior está en vuelo (evita contar dos veces un
-  // mismo toque que rebota); apenas termina, vuelve a estar listo para el siguiente
-  // cliente que entre, así se puede tocar varias veces seguidas sin perder ninguna.
-  if (icGuardando) return;
-  icGuardando = true;
-  buzz(15);
-  try {
-    await api("/api/ingresos-cliente", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await cargarContadorIngresos();
-    toast("Ingreso registrado");
-  } catch (err) {
-    toast(err.message || "No se pudo registrar", false);
-  } finally {
-    icGuardando = false;
-  }
-}
-
-document.getElementById("enterBtn").onclick = registrarIngreso;
 
 // ---------- Pagos recientes (transferencias) ----------
 
@@ -599,6 +587,7 @@ async function refresh() {
     const sales = await api("/api/ventas");
     render(sales, totalPrevio);
     totalPrevio = sales.filter((s) => s.metodo !== "mayorista").reduce((acc, s) => acc + s.precio, 0);
+    cargarContadorIngresos(sales);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
     console.error("No se pudo cargar el estado del servidor:", err);

@@ -791,36 +791,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
-    // Ingreso de cliente: contador de gente que entra al local, sin fricción (un solo
-    // tap, sin login ni datos) para que se pueda tocar apenas alguien cruza la puerta.
-    // Mismo criterio de permisos que Ventas Perdidas: el día de hoy y el alta son
-    // públicos (se usan desde el punto de venta), el historial y el borrado son del dueño.
-    if (pathname === "/api/ingresos-cliente" && req.method === "GET") {
-      const fecha = query.get("fecha") || getArgentinaNow().fecha;
-      const rows = await db.getIngresosClienteByFecha(fecha);
-      return sendJson(res, 200, rows);
-    }
-
-    if (pathname === "/api/ingresos-cliente-todas" && req.method === "GET") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
-      const rows = await db.getAllIngresosCliente();
-      return sendJson(res, 200, rows);
-    }
-
-    if (pathname === "/api/ingresos-cliente" && req.method === "POST") {
-      const { fecha, horaLabel } = getArgentinaNow();
-      const row = { id: crypto.randomUUID(), fecha, horaLabel, creadoEn: new Date().toISOString() };
-      await db.insertIngresoCliente(row);
-      return sendJson(res, 201, row);
-    }
-
-    if (pathname.startsWith("/api/ingresos-cliente/") && req.method === "DELETE") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
-      const id = decodeURIComponent(pathname.slice("/api/ingresos-cliente/".length));
-      await db.deleteIngresoCliente(id);
-      return sendJson(res, 200, { ok: true });
-    }
-
     if (pathname === "/api/hora" && req.method === "GET") {
       return sendJson(res, 200, getArgentinaNow());
     }

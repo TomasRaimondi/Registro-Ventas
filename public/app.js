@@ -166,6 +166,7 @@ async function guardarVentaPerdida(motivo, botonQueDisparo) {
     });
     cerrarModalVentaPerdida();
     await cargarContadorVentasPerdidas();
+    await cargarContadorIngresosCliente(); // una venta perdida también es un ingreso al local
     // El "pop" en el botón es el feedback de que quedó guardado. Se saca la clase
     // apenas termina la animación para que el pulso de fondo (vp-glow) siga andando.
     vpBtn.classList.remove("vp-pop");
@@ -213,48 +214,40 @@ vpForm.addEventListener("submit", (e) => {
 // (cargarContadorVentasPerdidas() se llama desde iniciarApp(), después del login)
 
 // ---------- Ingreso de cliente ----------
-// A diferencia de "Venta perdida", acá no hay modal ni motivo: es un contador de gente
-// que entra al local, así que tiene que ser un solo toque de principio a fin.
+// Ya no se toca a mano: se calcula solo, sumando quiénes entraron al local hoy según
+// lo que ya se carga en el sistema — una venta perdida (entró y no compró) o una venta
+// local (entró y compró). No cuenta mayorista (no es un cliente que entra al local) ni
+// web (no entró físicamente).
 
 const icBtn = document.getElementById("ingreso-cliente-btn");
 const icContador = document.getElementById("ic-contador-hoy");
-let icGuardando = false;
+let icUltimoValor = null;
+
+function esVentaLocal(s) {
+  return s.metodo !== "mayorista" && s.metodo !== "web" && s.envioMetodo !== "uber_moto";
+}
 
 async function cargarContadorIngresosCliente() {
   try {
-    const rows = await api("/api/ingresos-cliente");
-    icContador.textContent = rows.length;
+    const [perdidas, ventasHoy] = await Promise.all([
+      api("/api/ventas-perdidas"),
+      fetchTodaySales(),
+    ]);
+    const total = perdidas.length + ventasHoy.filter(esVentaLocal).length;
+    icContador.textContent = total;
+    // Si subió desde la última vez que se calculó, se repite el mismo "pop" que tenía
+    // el botón al tocarlo, para no perder ese feedback aunque ahora sea automático.
+    if (icUltimoValor !== null && total > icUltimoValor) {
+      icBtn.classList.remove("vp-pop");
+      void icBtn.offsetWidth;
+      icBtn.classList.add("vp-pop");
+      setTimeout(() => icBtn.classList.remove("vp-pop"), 400);
+    }
+    icUltimoValor = total;
   } catch (e) {
     // No es crítico: si falla, se queda con el número anterior.
   }
 }
-
-async function registrarIngresoCliente() {
-  // Solo bloquea mientras el pedido anterior está en vuelo (evita contar dos veces un
-  // mismo toque que rebota); apenas termina, vuelve a estar listo para el siguiente
-  // cliente que entre, así se puede tocar varias veces seguidas sin perder ninguna.
-  if (icGuardando) return;
-  icGuardando = true;
-  icBtn.classList.remove("vp-pop");
-  void icBtn.offsetWidth;
-  icBtn.classList.add("vp-pop");
-  try {
-    await api("/api/ingresos-cliente", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await cargarContadorIngresosCliente();
-  } catch (err) {
-    // Silencioso a propósito: el flujo es de un solo toque y no hay dónde mostrar un
-    // error sin frenar al empleado. Si falla, el contador simplemente no sube.
-  } finally {
-    icGuardando = false;
-    setTimeout(() => icBtn.classList.remove("vp-pop"), 400);
-  }
-}
-
-icBtn.addEventListener("click", registrarIngresoCliente);
 
 // (cargarContadorIngresosCliente() se llama desde iniciarApp(), después del login)
 
@@ -824,6 +817,7 @@ async function refresh() {
 
   renderMetrics(sales);
   renderHistory(sales, fechaActiva, hoyFecha);
+  cargarContadorIngresosCliente();
 }
 
 // ---------- Desglose por producto de una venta ----------
