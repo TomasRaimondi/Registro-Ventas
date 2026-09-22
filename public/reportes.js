@@ -811,14 +811,17 @@ let metricModalTipoGrafico = "barras";
 let metricModalTimeframe = 60; // minutos, usado en el modo "vivo"
 let metricModalLiveInterval = null;
 let metricModalCanalActivo = false; // segmentar "Volumen" en Web vs Local
+let metricModalComparCanal = "total"; // filtro de canal en "Comparar rangos": total | web | local
 
 function abrirMetricModal(metricKey, titulo) {
   metricModalKey = metricKey;
   metricModalPeriodo = "dia";
   metricModalCanalActivo = false;
+  metricModalComparCanal = "total";
   document.getElementById("metric-modal-titulo").textContent = titulo;
   document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
   document.getElementById("metric-modal-canal-btn").classList.remove("active");
+  document.querySelectorAll("#metric-modal-comparar-canal .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.canal === "total"));
   document.getElementById("metric-modal").style.display = "flex";
   setMetricModalMaximizado(false);
   actualizarModoVivo();
@@ -857,6 +860,12 @@ function actualizarModoComparar() {
   document.getElementById("metric-modal-comparar-panel").style.display = comparando ? "flex" : "none";
   document.getElementById("metric-modal-btn-lineas").style.display = comparando ? "none" : "";
   document.getElementById("metric-modal-btn-barras").style.display = comparando ? "none" : "";
+  const conFiltroCanal = comparando && metricModalKey === "volumen";
+  document.getElementById("metric-modal-comparar-canal").style.display = conFiltroCanal ? "flex" : "none";
+  if (!conFiltroCanal) {
+    metricModalComparCanal = "total";
+    document.querySelectorAll("#metric-modal-comparar-canal .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.canal === "total"));
+  }
   if (comparando) inicializarFechasComparacion();
 }
 
@@ -1024,16 +1033,24 @@ function renderMetricModalComparacion() {
   const fechasA = fechasEnRangoInclusive(aDesde, aHasta).slice(0, 90);
   const fechasB = fechasEnRangoInclusive(bDesde, bHasta).slice(0, 90);
 
+  const conFiltroCanal = metricModalKey === "volumen" && metricModalComparCanal !== "total";
   const armarSerie = (fechas) => fechas.map(fecha => {
     const g = grupoDeUnDia(fecha);
-    const { raw, formatted } = calcularValorMetrica(metricModalKey, g, 1);
+    let raw, formatted;
+    if (conFiltroCanal) {
+      raw = metricModalComparCanal === "web" ? (g.volumenWeb || 0) : (g.volumenLocal || 0);
+      formatted = money(raw);
+    } else {
+      ({ raw, formatted } = calcularValorMetrica(metricModalKey, g, 1));
+    }
     return { fecha, label: formatFecha(fecha), raw, formatted };
   });
 
   const seriesA = armarSerie(fechasA);
   const seriesB = armarSerie(fechasB);
-  const labelA = `Rango A: ${formatFecha(aDesde)} al ${formatFecha(aHasta)}`;
-  const labelB = `Rango B: ${formatFecha(bDesde)} al ${formatFecha(bHasta)}`;
+  const sufijoCanal = conFiltroCanal ? (metricModalComparCanal === "web" ? " (Web)" : " (Local)") : "";
+  const labelA = `Rango A${sufijoCanal}: ${formatFecha(aDesde)} al ${formatFecha(aHasta)}`;
+  const labelB = `Rango B${sufijoCanal}: ${formatFecha(bDesde)} al ${formatFecha(bHasta)}`;
 
   renderDualLineChart(chartEl, seriesA, seriesB, metricModalKey, labelA, labelB);
 
@@ -1108,6 +1125,14 @@ document.querySelectorAll("#metric-modal-timeframe .periodo-tab").forEach(btn =>
 
 ["cmp-a-desde", "cmp-a-hasta", "cmp-b-desde", "cmp-b-hasta"].forEach(id => {
   document.getElementById(id).addEventListener("change", () => renderMetricModal());
+});
+
+document.querySelectorAll("#metric-modal-comparar-canal .periodo-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    metricModalComparCanal = btn.dataset.canal;
+    document.querySelectorAll("#metric-modal-comparar-canal .periodo-tab").forEach(b => b.classList.toggle("active", b === btn));
+    renderMetricModal();
+  });
 });
 
 document.getElementById("cmp-mes-anterior-btn").addEventListener("click", () => {
