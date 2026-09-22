@@ -1728,6 +1728,9 @@ const server = http.createServer(async (req, res) => {
       try {
         const body = await readJsonBody(req);
         const cupon = await tiendanube.generarCupon({ porcentaje: body.porcentaje, nota: body.nota });
+        // Si se pasó el producto de la última compra, se intenta traer su link y precio
+        // vigente para armar el mensaje de WhatsApp. Si falla, no corta la creación del cupón.
+        cupon.producto = body.productId ? await tiendanube.resolverProducto(body.productId) : null;
         return sendJson(res, 201, cupon);
       } catch (e) {
         console.error("Error creando cupón en Tiendanube:", e);

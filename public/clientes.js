@@ -269,10 +269,11 @@ function renderCuponCelda(celda, c, cuponPrevio) {
     btn.textContent = "Generando...";
     try {
       const porcentaje = document.getElementById("porcentaje-cupon").value;
+      const productId = ultimoProductoComprado(c)?.productId || null;
       const cupon = await api("/api/clientes-recompra/cupon", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ porcentaje, nota: c.nombre }),
+        body: JSON.stringify({ porcentaje, nota: c.nombre, productId }),
       });
       cuponesGenerados.set(claveCliente(c), cupon);
       renderCuponCelda(celda, c, cupon);
@@ -285,20 +286,42 @@ function renderCuponCelda(celda, c, cuponPrevio) {
   celda.appendChild(btn);
 }
 
+// El producto de la compra más reciente (c.pedidos ya viene ordenado del más nuevo
+// al más viejo, y cada pedido trae sus productos en el orden que llegó de Tiendanube).
+function ultimoProductoComprado(c) {
+  const ultimoPedido = c.pedidos && c.pedidos[0];
+  return (ultimoPedido && ultimoPedido.productos && ultimoPedido.productos[0]) || null;
+}
+
 function waLinkConCupon(c, cupon) {
-  const mensaje = `CUPON ${cupon.porcentaje}% OFF EN TODA LA WEB
+  const ultimoProducto = ultimoProductoComprado(c);
+  const producto = cupon.producto || null; // { nombre, url, precio } — resuelto en el servidor, puede no venir
 
-Buenas! Por acá Tomi, del equipo!
+  let bloqueProducto = "";
+  if (ultimoProducto) {
+    bloqueProducto += `\nVimos que tu última compra fue *${ultimoProducto.nombre}* 🛒\n`;
+  }
+  if (producto && producto.precio) {
+    const precioConDescuento = Math.round(producto.precio * (1 - Number(cupon.porcentaje) / 100));
+    bloqueProducto += `\n💰 Precio: ${money(producto.precio)}`;
+    bloqueProducto += `\n✅ Con el cupón, pagando por transferencia: *${money(precioConDescuento)}*\n`;
+  }
+  if (producto && producto.url) {
+    bloqueProducto += `\n👉 ${producto.url}\n`;
+  }
 
-Vi que hace tiempo no pasas por la web!
+  const mensaje = `¡Buenas buenas! Por acá Tomi, de Platense Fit 🙌
 
-Te queríamos dejar un ${cupon.porcentaje}% de descuento para que aproveches las promos que tenemos disponibles!
+¡Hace rato no te vemos por la web!
 
-Te mandamos un fuerte abrazo desde el equipo!
+Te queremos dejar un CUPÓN ${cupon.porcentaje}% OFF en tu próxima compra 🎉
+${bloqueProducto}
+Te mandamos un fuerte abrazo desde el equipo 🙌
 
-CUPON : ${cupon.code}
+CUPÓN: ${cupon.code}
 
 platensefit.com`;
+
   const numero = c.whatsapp.match(/wa\.me\/(\d+)/)?.[1];
   return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 }

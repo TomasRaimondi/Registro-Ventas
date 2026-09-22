@@ -163,6 +163,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
       nombre: nombreProducto(p),
       cantidad: Number(p.quantity) || 1,
       precio: Number(p.price) || 0,
+      productId: p.product_id || null,
     }));
     for (const it of items) {
       c.productos.set(it.nombre, (c.productos.get(it.nombre) || 0) + it.cantidad);
@@ -205,6 +206,36 @@ async function getClientesRecompra({ forzar = false } = {}) {
   return { clientes, sincronizadoEn: ahora, deCache: false };
 }
 
+// Multi-idioma como "name": {es:"...", ...} o directamente un string, según el campo.
+function valorMultiIdioma(v) {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") return v.es || v.pt || v.en || Object.values(v)[0] || null;
+  return null;
+}
+
+// Resuelve el link a la tienda y el precio actual de un producto puntual, para armar
+// el mensaje de recompra con el link directo y el precio vigente (no el que pagó la
+// última vez, que puede estar desactualizado). Si algo falla, se devuelve null y el
+// mensaje de WhatsApp simplemente sale sin esa parte, no se corta el flujo del cupón.
+async function resolverProducto(productId) {
+  if (!productId) return null;
+  try {
+    const p = await tnFetch(`/products/${productId}`);
+    const handle = valorMultiIdioma(p.handle);
+    const variante = (p.variants && p.variants[0]) || {};
+    const promo = Number(variante.promotional_price);
+    const precio = promo > 0 ? promo : (Number(variante.price) || null);
+    return {
+      nombre: nombreProducto(p),
+      url: handle ? `https://platensefit.com/productos/${handle}/` : null,
+      precio,
+    };
+  } catch (e) {
+    console.error(`No se pudo resolver el producto ${productId}:`, e.message);
+    return null;
+  }
+}
+
 // Crea un cupón de descuento de un solo uso en Tiendanube para reenganchar a un cliente puntual.
 async function generarCupon({ porcentaje, nota }) {
   if (!isConfigured()) throw new Error("Tienda no conectada");
@@ -223,4 +254,4 @@ async function generarCupon({ porcentaje, nota }) {
   return { code: cupon.code || codigo, id: cupon.id, porcentaje: pct, nota: nota || null };
 }
 
-module.exports = { isConfigured, getClientesRecompra, generarCupon, waLink, normalizarTelefono };
+module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono };
