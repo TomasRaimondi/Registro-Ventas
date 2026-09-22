@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendario de Contenido</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#EEF2F0">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Contenido">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF2F0;--surface:#FFFFFF;--surface-2:#F5F7F5;--ink:#1A2420;--ink-dim:#5B6A64;--border:#D9E1DD;--accent:#E2572B;--accent-ink:#FFFFFF;--accent-soft:#FDEAE3;--success:#2F9E6E;--success-soft:#E3F5EC;--warn:#C98A1F;--warn-soft:#FBF0DC;--info:#3B6FD1;--info-soft:#E7EEFC;--idea:#8A8478;--idea-soft:#EFEDE7;--shadow:0 1px 2px rgba(20,30,26,.06),0 8px 24px rgba(20,30,26,.08);--radius:16px;--radius-sm:11px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141B18;--surface:#1E2925;--surface-2:#232F2A;--ink:#EDF3EF;--ink-dim:#9FB0A8;--border:#2C3A34;--accent:#FF8258;--accent-ink:#1A1008;--accent-soft:#3A2620;--success:#49C08C;--success-soft:#1B3A2C;--warn:#E8B04C;--warn-soft:#3A2E13;--info:#7DA0EC;--info-soft:#1E2C44;--idea:#A9A296;--idea-soft:#2A2A24}}
+:root[data-theme="dark"]{--bg:#141B18;--surface:#1E2925;--surface-2:#232F2A;--ink:#EDF3EF;--ink-dim:#9FB0A8;--border:#2C3A34;--accent:#FF8258;--accent-ink:#1A1008;--accent-soft:#3A2620;--success:#49C08C;--success-soft:#1B3A2C;--warn:#E8B04C;--warn-soft:#3A2E13;--info:#7DA0EC;--info-soft:#1E2C44;--idea:#A9A296;--idea-soft:#2A2A24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Work Sans",system-ui,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+#root{max-width:760px;margin:0 auto;padding:20px 16px calc(48px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:22px}
+h1,h2{font-family:"Bricolage Grotesque",system-ui,sans-serif;margin:0}
+.header{display:flex;flex-direction:column;gap:4px}
+.header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.header h1{font-size:22px;font-weight:700;letter-spacing:-0.01em}
+.header p{margin:0;color:var(--ink-dim);font-size:13.5px}
+.btn{font-family:inherit;font-size:14px;font-weight:600;border-radius:999px;border:1px solid transparent;padding:10px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-accent{background:var(--accent);color:var(--accent-ink)}
+.btn-ghost{background:var(--surface);color:var(--ink);border-color:var(--border)}
+.btn:active{transform:scale(0.97)}
+.chips{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 13px;min-width:168px;cursor:pointer;text-align:left;font-family:inherit;color:var(--ink)}
+.chip:active{transform:scale(0.98)}
+.chip-date{font-size:11.5px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px;font-variant-numeric:tabular-nums}
+.chip-label{font-weight:600;font-size:13.5px;margin-bottom:3px}
+.chip-idea{font-size:12px;color:var(--ink-dim)}
+.section-title{font-size:12.5px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;margin:0 0 10px 2px}
+.month-group{display:flex;flex-direction:column;gap:10px}
+.month-label{font-size:14px;font-weight:700;color:var(--ink-dim);margin:2px 0 -2px 2px}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px;box-shadow:var(--shadow)}
+.row-date{flex:0 0 46px;text-align:center;padding-top:1px}
+.row-date .wd{font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase}
+.row-date .dn{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.row-date.nofecha{color:var(--idea)}
+.row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.row-top{display:flex;align-items:center;gap:8px;cursor:pointer}
+.badge{flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.02em}
+.badge-reel{background:var(--accent-soft);color:var(--accent)}
+.badge-post{background:var(--info-soft);color:var(--info)}
+.badge-story{background:var(--warn-soft);color:var(--warn)}
+.badge-oferta{background:var(--success-soft);color:var(--success)}
+.tema{font-weight:600;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.row-bottom{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+select.estado{font-family:inherit;font-size:12.5px;font-weight:700;border-radius:999px;border:1px solid var(--border);padding:5px 24px 5px 11px;background:var(--surface-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M1 1l4 4 4-4" stroke="%235B6A64" stroke-width="1.5" fill="none"/></svg>') no-repeat right 9px center;-webkit-appearance:none;appearance:none;color:var(--ink);cursor:pointer}
+.est-idea{background-color:var(--idea-soft)!important;color:var(--idea)!important}
+.est-grabando{background-color:var(--warn-soft)!important;color:var(--warn)!important}
+.est-editando{background-color:var(--info-soft)!important;color:var(--info)!important}
+.est-publicado{background-color:var(--success-soft)!important;color:var(--success)!important}
+.notas-hint{font-size:12px;color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:40px}
+.icon-btn{flex:0 0 auto;width:30px;height:30px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1}
+.icon-btn.danger-armed{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-soft);font-size:11px;font-weight:700;width:auto;padding:0 10px}
+.empty{background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--radius);padding:22px;text-align:center;color:var(--ink-dim);font-size:13.5px}
+.overlay{position:fixed;inset:0;background:rgba(15,20,18,.4);display:flex;align-items:flex-end;justify-content:center;z-index:40;padding:0}
+@media (min-width:640px){.overlay{align-items:center;padding:20px}}
+.modal{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow-y:auto}
+@media (min-width:640px){.modal{border-radius:18px}}
+.modal h2{font-size:17px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.03em}
+.field input,.field select,.field textarea{font-family:inherit;font-size:15px;padding:10px 11px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink)}
+.field textarea{resize:vertical;min-height:60px}
+.two-col{display:flex;gap:10px}
+.two-col .field{flex:1}
+.modal-actions{display:flex;gap:10px;margin-top:4px}
+.modal-actions .btn{flex:1;justify-content:center}
+.modal-delete{text-align:center;font-size:12.5px;color:var(--accent);background:none;border:none;font-family:inherit;cursor:pointer;padding:4px;text-decoration:underline}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:10px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:60;max-width:88vw;text-align:center}
+[hidden]{display:none!important}
+.login-wrap{max-width:380px;margin:64px auto;padding:0 16px}
+.login-wrap .row{flex-direction:column;gap:14px}
+.login-wrap h2{font-size:19px}
+.error-hint{color:var(--accent);font-size:12.5px;margin:0}
+.topnav{display:flex;justify-content:flex-end;gap:10px;max-width:760px;margin:0 auto;padding:14px 16px 0}
+</style>
+</head>
+<body>
+
+<div class="topnav" id="topnav" hidden>
+  <a href="/ganancias.html" class="btn btn-ghost">Panel de Ganancias</a>
+  <button type="button" class="btn btn-ghost" id="logout-btn">Cerrar sesión</button>
+</div>
+
+<div class="login-wrap" id="login-screen">
+  <div class="row">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn btn-accent">Entrar</button>
+      <p class="error-hint" id="login-error" hidden>Contraseña incorrecta.</p>
+    </form>
+  </div>
+</div>
+
+<div id="root" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="calendario-contenido.js"></script>
+</body>
+</html>

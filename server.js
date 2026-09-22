@@ -1300,6 +1300,44 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Calendario de contenido (Instagram) ----------
+
+    if (pathname === "/api/calendario-contenido" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllCalendarioContenido();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/calendario-contenido" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const tema = String(body.tema || "").trim();
+      if (!tema) return sendJson(res, 400, { error: "Falta el tema" });
+      const tipo = String(body.tipo || "Reel");
+      const estado = String(body.estado || "Idea");
+      const fecha = body.fecha ? String(body.fecha) : null;
+      const notas = body.notas ? String(body.notas).trim() : null;
+      const id = body.id ? String(body.id) : crypto.randomUUID();
+      const ahora = new Date().toISOString();
+
+      const existentes = await db.getAllCalendarioContenido();
+      const previo = existentes.find((p) => p.id === id);
+      const row = {
+        id, fecha, tipo, tema, estado, notas,
+        creadoEn: previo ? previo.creadoEn : ahora,
+        actualizadoEn: ahora,
+      };
+      await db.upsertCalendarioContenido(row);
+      return sendJson(res, previo ? 200 : 201, row);
+    }
+
+    if (pathname.startsWith("/api/calendario-contenido/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/calendario-contenido/".length));
+      await db.deleteCalendarioContenido(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Anuncios (Meta): medir si una campaña fue rentable ----------
 
     if (pathname === "/api/anuncios" && req.method === "GET") {

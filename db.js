@@ -170,6 +170,16 @@ const SCHEMA = `
     horaLabel TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS calendario_contenido (
+    id TEXT PRIMARY KEY,
+    fecha TEXT,
+    tipo TEXT NOT NULL,
+    tema TEXT NOT NULL,
+    estado TEXT NOT NULL,
+    notas TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
 `;
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
@@ -688,6 +698,24 @@ if (USE_TURSO) {
     async deleteBonosMayoristasByVentaId(ventaId) {
       await client.execute({ sql: "DELETE FROM bonos_mayoristas WHERE ventaId = ?", args: [ventaId] });
     },
+
+    async getAllCalendarioContenido() {
+      const res = await client.execute("SELECT * FROM calendario_contenido ORDER BY (fecha IS NULL), fecha ASC, creadoEn ASC");
+      return res.rows;
+    },
+    async upsertCalendarioContenido(row) {
+      await client.execute({
+        sql: `INSERT INTO calendario_contenido (id, fecha, tipo, tema, estado, notas, creadoEn, actualizadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                fecha = excluded.fecha, tipo = excluded.tipo, tema = excluded.tema,
+                estado = excluded.estado, notas = excluded.notas, actualizadoEn = excluded.actualizadoEn`,
+        args: [row.id, row.fecha || null, row.tipo, row.tema, row.estado, row.notas || null, row.creadoEn, row.actualizadoEn],
+      });
+    },
+    async deleteCalendarioContenido(id) {
+      await client.execute({ sql: "DELETE FROM calendario_contenido WHERE id = ?", args: [id] });
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -1049,6 +1077,22 @@ if (USE_TURSO) {
     },
     async deleteBonosMayoristasByVentaId(ventaId) {
       db.prepare("DELETE FROM bonos_mayoristas WHERE ventaId = ?").run(ventaId);
+    },
+
+    async getAllCalendarioContenido() {
+      return db.prepare("SELECT * FROM calendario_contenido ORDER BY (fecha IS NULL), fecha ASC, creadoEn ASC").all();
+    },
+    async upsertCalendarioContenido(row) {
+      db.prepare(
+        `INSERT INTO calendario_contenido (id, fecha, tipo, tema, estado, notas, creadoEn, actualizadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           fecha = excluded.fecha, tipo = excluded.tipo, tema = excluded.tema,
+           estado = excluded.estado, notas = excluded.notas, actualizadoEn = excluded.actualizadoEn`
+      ).run(row.id, row.fecha || null, row.tipo, row.tema, row.estado, row.notas || null, row.creadoEn, row.actualizadoEn);
+    },
+    async deleteCalendarioContenido(id) {
+      db.prepare("DELETE FROM calendario_contenido WHERE id = ?").run(id);
     },
   };
 }
