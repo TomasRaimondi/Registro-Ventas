@@ -228,6 +228,12 @@
   }
   .lost:active{transform:scale(.95)}
   .lost b{display:block;font-size:17px}
+  .enter{
+    width:66px;min-height:58px;border-radius:16px;border:1.5px solid rgba(47,158,110,.4);
+    background:rgba(47,158,110,.12);color:var(--mint);font-size:12px;font-weight:700;line-height:1.15;
+  }
+  .enter:active{transform:scale(.95)}
+  .enter b{display:block;font-size:17px}
 
   /* ---------- resumen ---------- */
   .total{font-size:40px;font-weight:800;letter-spacing:-1.6px;margin:2px 0 0}
@@ -330,6 +336,7 @@
   <a class="nav-item" href="/ganancias.html"><span class="em">💰</span>Panel de ganancias</a>
   <a class="nav-item" href="/clientes.html"><span class="em">🔁</span>Recompra de clientes</a>
   <a class="nav-item" href="/ventas-perdidas.html"><span class="em">📉</span>Ventas perdidas<span class="badge" id="badgePerdidas">0</span></a>
+  <a class="nav-item" href="/ingresos-cliente.html"><span class="em">🚪</span>Ingresos de clientes<span class="badge" id="badgeIngresos">0</span></a>
   <a class="nav-item" href="/envios.html"><span class="em">🛵</span>Envíos Uber Moto</a>
   <a class="nav-item" href="/pagos.html"><span class="em">💳</span>Pagos recibidos</a>
   <a class="nav-item" href="/comisiones-minoristas.html"><span class="em">💰</span>Comisiones Minoristas</a>
@@ -438,6 +445,7 @@
 <div class="actionbar" id="actionbar" style="display:none;">
   <button type="button" class="submit" id="save">Registrar venta</button>
   <button type="button" class="lost" id="lostBtn"><b id="lostCount">0</b>perdida</button>
+  <button type="button" class="enter" id="enterBtn"><b id="enterCount">0</b>ingreso</button>
 </div>
 
 <div class="toast" id="toast"><span id="toastIcon">✓</span><span id="toastText">Venta registrada</span></div>

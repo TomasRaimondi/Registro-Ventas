@@ -118,6 +118,12 @@ const SCHEMA = `
     horaLabel TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS ingresos_cliente (
+    id TEXT PRIMARY KEY,
+    fecha TEXT NOT NULL,
+    horaLabel TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS clientes_mayoristas (
     id TEXT PRIMARY KEY,
     nombreNormalizado TEXT NOT NULL UNIQUE,
@@ -615,6 +621,24 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM ventas_perdidas WHERE id = ?", args: [id] });
     },
 
+    async getIngresosClienteByFecha(fecha) {
+      const res = await client.execute({ sql: "SELECT * FROM ingresos_cliente WHERE fecha = ? ORDER BY creadoEn ASC", args: [fecha] });
+      return res.rows;
+    },
+    async getAllIngresosCliente() {
+      const res = await client.execute("SELECT * FROM ingresos_cliente ORDER BY fecha ASC, creadoEn ASC");
+      return res.rows;
+    },
+    async insertIngresoCliente(row) {
+      await client.execute({
+        sql: `INSERT INTO ingresos_cliente (id, fecha, horaLabel, creadoEn) VALUES (?, ?, ?, ?)`,
+        args: [row.id, row.fecha, row.horaLabel, row.creadoEn],
+      });
+    },
+    async deleteIngresoCliente(id) {
+      await client.execute({ sql: "DELETE FROM ingresos_cliente WHERE id = ?", args: [id] });
+    },
+
     async getAllClientesMayoristas() {
       const res = await client.execute("SELECT * FROM clientes_mayoristas ORDER BY nombre ASC");
       return res.rows;
@@ -1081,6 +1105,21 @@ if (USE_TURSO) {
     },
     async deleteVentaPerdida(id) {
       db.prepare("DELETE FROM ventas_perdidas WHERE id = ?").run(id);
+    },
+
+    async getIngresosClienteByFecha(fecha) {
+      return db.prepare("SELECT * FROM ingresos_cliente WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
+    },
+    async getAllIngresosCliente() {
+      return db.prepare("SELECT * FROM ingresos_cliente ORDER BY fecha ASC, creadoEn ASC").all();
+    },
+    async insertIngresoCliente(row) {
+      db.prepare(
+        `INSERT INTO ingresos_cliente (id, fecha, horaLabel, creadoEn) VALUES (?, ?, ?, ?)`
+      ).run(row.id, row.fecha, row.horaLabel, row.creadoEn);
+    },
+    async deleteIngresoCliente(id) {
+      db.prepare("DELETE FROM ingresos_cliente WHERE id = ?").run(id);
     },
 
     async getAllClientesMayoristas() {

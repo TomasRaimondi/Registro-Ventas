@@ -12,6 +12,7 @@
         { href: "/carga-historica.html", label: "Cargar Ventas Pasadas" },
         { href: "/tablero.html", label: "Tablero" },
         { href: "/ventas-perdidas.html", label: "Ventas Perdidas" },
+        { href: "/ingresos-cliente.html", label: "Ingresos de Clientes" },
       ],
     },
     {

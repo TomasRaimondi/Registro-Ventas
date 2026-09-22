@@ -373,6 +373,45 @@ document.getElementById("vpForm").addEventListener("submit", (e) => {
   guardarVp(motivo, null);
 });
 
+// ---------- Ingreso de cliente ----------
+// Sin modal: a diferencia de venta perdida, acá es un solo toque de principio a fin
+// (vibración + toast como confirmación), para que se pueda cargar apenas alguien entra.
+
+let icGuardando = false;
+
+async function cargarContadorIngresos() {
+  try {
+    const rows = await api("/api/ingresos-cliente");
+    document.getElementById("enterCount").textContent = rows.length;
+    document.getElementById("badgeIngresos").textContent = rows.length;
+  } catch (e) {}
+}
+// (cargarContadorIngresos() arranca desde iniciarApp(), después del login)
+
+async function registrarIngreso() {
+  // Solo bloquea mientras el pedido anterior está en vuelo (evita contar dos veces un
+  // mismo toque que rebota); apenas termina, vuelve a estar listo para el siguiente
+  // cliente que entre, así se puede tocar varias veces seguidas sin perder ninguna.
+  if (icGuardando) return;
+  icGuardando = true;
+  buzz(15);
+  try {
+    await api("/api/ingresos-cliente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await cargarContadorIngresos();
+    toast("Ingreso registrado");
+  } catch (err) {
+    toast(err.message || "No se pudo registrar", false);
+  } finally {
+    icGuardando = false;
+  }
+}
+
+document.getElementById("enterBtn").onclick = registrarIngreso;
+
 // ---------- Pagos recientes (transferencias) ----------
 
 const pagosFeed = document.getElementById("pagosFeed");
@@ -573,6 +612,7 @@ function iniciarApp() {
   setInterval(cargarProductos, 30000);
 
   cargarContadorPerdidas();
+  cargarContadorIngresos();
 
   cargarPagosRecientes();
   setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);

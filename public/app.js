@@ -212,6 +212,52 @@ vpForm.addEventListener("submit", (e) => {
 
 // (cargarContadorVentasPerdidas() se llama desde iniciarApp(), después del login)
 
+// ---------- Ingreso de cliente ----------
+// A diferencia de "Venta perdida", acá no hay modal ni motivo: es un contador de gente
+// que entra al local, así que tiene que ser un solo toque de principio a fin.
+
+const icBtn = document.getElementById("ingreso-cliente-btn");
+const icContador = document.getElementById("ic-contador-hoy");
+let icGuardando = false;
+
+async function cargarContadorIngresosCliente() {
+  try {
+    const rows = await api("/api/ingresos-cliente");
+    icContador.textContent = rows.length;
+  } catch (e) {
+    // No es crítico: si falla, se queda con el número anterior.
+  }
+}
+
+async function registrarIngresoCliente() {
+  // Solo bloquea mientras el pedido anterior está en vuelo (evita contar dos veces un
+  // mismo toque que rebota); apenas termina, vuelve a estar listo para el siguiente
+  // cliente que entre, así se puede tocar varias veces seguidas sin perder ninguna.
+  if (icGuardando) return;
+  icGuardando = true;
+  icBtn.classList.remove("vp-pop");
+  void icBtn.offsetWidth;
+  icBtn.classList.add("vp-pop");
+  try {
+    await api("/api/ingresos-cliente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await cargarContadorIngresosCliente();
+  } catch (err) {
+    // Silencioso a propósito: el flujo es de un solo toque y no hay dónde mostrar un
+    // error sin frenar al empleado. Si falla, el contador simplemente no sube.
+  } finally {
+    icGuardando = false;
+    setTimeout(() => icBtn.classList.remove("vp-pop"), 400);
+  }
+}
+
+icBtn.addEventListener("click", registrarIngresoCliente);
+
+// (cargarContadorIngresosCliente() se llama desde iniciarApp(), después del login)
+
 // ---------- Pagos recientes (transferencias) ----------
 // Público, sin login: es para que el empleado vea qué transferencias entraron y cargue
 // la venta al toque tocando la fila (llena el precio y enfoca el producto).
@@ -832,6 +878,7 @@ function escapeHtml(str) {
 
 function iniciarApp() {
   cargarContadorVentasPerdidas();
+  cargarContadorIngresosCliente();
 
   cargarPagosRecientes();
   setInterval(() => { if (!document.hidden) cargarPagosRecientes(); }, 15000);
