@@ -47,6 +47,7 @@
         { href: "/anuncios.html", label: "Anuncios" },
         { href: "/compras-stock.html", label: "Compras de Stock" },
         { href: "/calendario-contenido.html", label: "Calendario de Contenido" },
+        { href: "/inversiones.html", label: "Inversiones" },
       ],
     },
   ];

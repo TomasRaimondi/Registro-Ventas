@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inversiones</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#EEF2F0">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Platense Fit">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<script src="nav-menu.js"></script>
+<style>
+  .fuente-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 100px; text-transform: uppercase; letter-spacing: .03em; }
+  .fuente-live { background: var(--green-soft); color: var(--green); }
+  .fuente-manual { background: var(--orange-soft); color: var(--orange); }
+  .fuente-sin { background: var(--card-border); color: var(--text-dim); }
+  .categoria-titulo { font-size: 13px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
+  .categoria-titulo:first-child { margin-top: 0; }
+  .precio-manual-input { width: 100px; padding: 6px 8px; font-size: 13px; }
+  .disclaimer { font-size: 12.5px; color: var(--text-dim); background: var(--bg); border: 1px dashed var(--card-border); border-radius: 10px; padding: 10px 14px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Inversiones</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">Registro de Ventas</a>
+    <a href="/ganancias.html" class="link-btn">Panel de Ganancias</a>
+    <div id="app-nav"></div>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <p class="disclaimer">Esta pestaña muestra tu cartera y precios de mercado (en vivo cuando hay fuente disponible). No es una recomendación de inversión ni predice el mercado — las notas y decisiones las cargás vos.</p>
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+      <div class="card total-card">
+        <span class="label">Valor actual de la cartera</span>
+        <span class="big-number" id="stat-valor-actual">US$0</span>
+        <span class="sub" id="stat-actualizado">—</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Total invertido</span>
+        <span class="big-number" id="stat-invertido">US$0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Ganancia / pérdida</span>
+        <span class="big-number" id="stat-ganancia">US$0</span>
+        <span class="sub" id="stat-ganancia-pct">0%</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 style="margin:0;">Activos seguidos</h2>
+        <button type="button" class="secondary-btn" id="btn-toggle-nuevo-activo">+ Agregar activo</button>
+      </div>
+      <form id="nuevo-activo-form" class="inline-form" style="display:none; margin-top:14px;">
+        <input type="text" id="na-simbolo" placeholder="Símbolo (ej: ETH)" required style="max-width:120px;">
+        <input type="text" id="na-nombre" placeholder="Nombre (ej: Ethereum)" required>
+        <select id="na-categoria" required>
+          <option value="cripto">Cripto</option>
+          <option value="accion">Acción</option>
+          <option value="ia">Empresa de IA</option>
+          <option value="energia-ia">Energía para IA</option>
+        </select>
+        <div class="input-prefix">
+          <span>US$</span>
+          <input type="number" id="na-precio" placeholder="Precio manual (opcional)" min="0" step="0.01">
+        </div>
+        <button type="submit" class="submit-btn">Agregar</button>
+      </form>
+      <div id="activos-container" style="margin-top:14px;"></div>
+    </section>
+
+    <section class="card">
+      <h2>Mi portafolio</h2>
+      <p class="hint" style="text-align:left;">Cargá tus tenencias reales para ver el valor actual y la ganancia/pérdida contra tu precio de compra.</p>
+      <form id="portafolio-form" class="inline-form">
+        <select id="pf-activo" required></select>
+        <input type="number" id="pf-cantidad" placeholder="Cantidad" min="0" step="any" required style="max-width:130px;">
+        <div class="input-prefix">
+          <span>US$</span>
+          <input type="number" id="pf-precio-compra" placeholder="Precio de compra" min="0" step="0.01" required>
+        </div>
+        <input type="date" id="pf-fecha" required>
+        <input type="text" id="pf-nota" placeholder="Nota (opcional)">
+        <button type="submit" class="submit-btn">Agregar posición</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Activo</th><th>Cantidad</th><th>Precio compra</th><th>Precio actual</th><th>Valor actual</th><th>Ganancia/pérdida</th><th>Fecha</th><th></th></tr>
+          </thead>
+          <tbody id="portafolio-body">
+            <tr class="empty-row"><td colspan="8">Todavía no cargaste ninguna posición.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Notas y decisiones</h2>
+      <p class="hint" style="text-align:left;">Anotá noticias, movimientos del mercado o tus propias decisiones. Es tu bitácora, no se genera sola.</p>
+      <form id="nota-form" class="inline-form">
+        <input type="date" id="nota-fecha" required>
+        <select id="nota-activo">
+          <option value="">General (sin activo)</option>
+        </select>
+        <input type="text" id="nota-texto" placeholder="Ej: La Fed bajó tasas, subí BTC 5%" required style="flex:2; min-width:220px;">
+        <button type="submit" class="submit-btn">Agregar nota</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Activo</th><th>Nota</th><th></th></tr>
+          </thead>
+          <tbody id="notas-body">
+            <tr class="empty-row"><td colspan="4">Todavía no cargaste ninguna nota.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="inversiones.js"></script>
+</body>
+</html>

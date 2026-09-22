@@ -1,4 +1,5 @@
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS ventas (
@@ -180,7 +181,75 @@ const SCHEMA = `
     creadoEn TEXT NOT NULL,
     actualizadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS inversiones_activos (
+    id TEXT PRIMARY KEY,
+    simbolo TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    categoria TEXT NOT NULL,
+    tipoFuente TEXT NOT NULL,
+    fuenteId TEXT,
+    precioManual REAL,
+    actualizadoManualEn TEXT,
+    creadoEn TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS inversiones_portafolio (
+    id TEXT PRIMARY KEY,
+    activoId TEXT NOT NULL,
+    cantidad REAL NOT NULL,
+    precioCompra REAL NOT NULL,
+    fecha TEXT NOT NULL,
+    nota TEXT,
+    creadoEn TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS inversiones_notas (
+    id TEXT PRIMARY KEY,
+    fecha TEXT NOT NULL,
+    activoId TEXT,
+    texto TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
 `;
+
+// Semilla inicial de activos seguidos (cripto, acciones, IA, energía para IA). Se
+// inserta una sola vez, solo si la tabla está vacía (no pisa lo que el usuario haya
+// agregado o borrado después).
+const INVERSIONES_ACTIVOS_SEED = [
+  { simbolo: "BTC", nombre: "Bitcoin", categoria: "cripto", tipoFuente: "coingecko", fuenteId: "bitcoin" },
+  { simbolo: "SOL", nombre: "Solana", categoria: "cripto", tipoFuente: "coingecko", fuenteId: "solana" },
+  { simbolo: "XRP", nombre: "XRP", categoria: "cripto", tipoFuente: "coingecko", fuenteId: "ripple" },
+  { simbolo: "YPF", nombre: "YPF S.A.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "YPF" },
+  { simbolo: "AAPL", nombre: "Apple Inc.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "AAPL" },
+  { simbolo: "TSLA", nombre: "Tesla Inc.", categoria: "accion", tipoFuente: "yahoo", fuenteId: "TSLA" },
+  { simbolo: "NVDA", nombre: "NVIDIA Corp.", categoria: "ia", tipoFuente: "yahoo", fuenteId: "NVDA" },
+  { simbolo: "MSFT", nombre: "Microsoft Corp.", categoria: "ia", tipoFuente: "yahoo", fuenteId: "MSFT" },
+  { simbolo: "GOOGL", nombre: "Alphabet Inc.", categoria: "ia", tipoFuente: "yahoo", fuenteId: "GOOGL" },
+  { simbolo: "CEG", nombre: "Constellation Energy", categoria: "energia-ia", tipoFuente: "yahoo", fuenteId: "CEG" },
+  { simbolo: "VST", nombre: "Vistra Corp.", categoria: "energia-ia", tipoFuente: "yahoo", fuenteId: "VST" },
+  { simbolo: "NEE", nombre: "NextEra Energy", categoria: "energia-ia", tipoFuente: "yahoo", fuenteId: "NEE" },
+];
+
+async function sembrarInversionesActivos(getAllFn, insertFn) {
+  try {
+    const existentes = await getAllFn();
+    if (existentes.length > 0) return;
+    const ahora = new Date().toISOString();
+    for (const a of INVERSIONES_ACTIVOS_SEED) {
+      await insertFn({
+        id: crypto.randomUUID(),
+        simbolo: a.simbolo,
+        nombre: a.nombre,
+        categoria: a.categoria,
+        tipoFuente: a.tipoFuente,
+        fuenteId: a.fuenteId,
+        precioManual: null,
+        actualizadoManualEn: null,
+        creadoEn: ahora,
+      });
+    }
+  } catch (e) {
+    console.error("Error sembrando activos de inversiones:", e);
+  }
+}
 
 // Migración aditiva: agrega la columna "stock" a costos si todavía no existe
 // (las instalaciones viejas no la tienen; ALTER TABLE falla si ya está, por eso el try/catch).
@@ -284,6 +353,7 @@ if (USE_TURSO) {
       await migrarVendedor((sql) => client.execute(sql));
       await migrarBonoMinoristaManual((sql) => client.execute(sql));
       await migrarBonoMayoristaAutoManual((sql) => client.execute(sql));
+      await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
     },
     async getByFecha(fecha) {
       const res = await client.execute({
@@ -716,6 +786,58 @@ if (USE_TURSO) {
     async deleteCalendarioContenido(id) {
       await client.execute({ sql: "DELETE FROM calendario_contenido WHERE id = ?", args: [id] });
     },
+
+    // ---------- Inversiones ----------
+    async getAllInversionesActivos() {
+      const res = await client.execute("SELECT * FROM inversiones_activos ORDER BY categoria ASC, simbolo ASC");
+      return res.rows;
+    },
+    async insertInversionActivo(row) {
+      await client.execute({
+        sql: `INSERT INTO inversiones_activos (id, simbolo, nombre, categoria, tipoFuente, fuenteId, precioManual, actualizadoManualEn, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.simbolo, row.nombre, row.categoria, row.tipoFuente, row.fuenteId || null, row.precioManual ?? null, row.actualizadoManualEn || null, row.creadoEn],
+      });
+    },
+    async updateInversionActivoPrecioManual(id, precio, actualizadoEn) {
+      await client.execute({
+        sql: "UPDATE inversiones_activos SET precioManual = ?, actualizadoManualEn = ? WHERE id = ?",
+        args: [precio, actualizadoEn, id],
+      });
+    },
+    async deleteInversionActivo(id) {
+      await client.execute({ sql: "DELETE FROM inversiones_activos WHERE id = ?", args: [id] });
+    },
+
+    async getAllInversionesPortafolio() {
+      const res = await client.execute("SELECT * FROM inversiones_portafolio ORDER BY fecha DESC, creadoEn DESC");
+      return res.rows;
+    },
+    async insertInversionPortafolio(row) {
+      await client.execute({
+        sql: `INSERT INTO inversiones_portafolio (id, activoId, cantidad, precioCompra, fecha, nota, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.activoId, row.cantidad, row.precioCompra, row.fecha, row.nota || null, row.creadoEn],
+      });
+    },
+    async deleteInversionPortafolio(id) {
+      await client.execute({ sql: "DELETE FROM inversiones_portafolio WHERE id = ?", args: [id] });
+    },
+
+    async getAllInversionesNotas() {
+      const res = await client.execute("SELECT * FROM inversiones_notas ORDER BY fecha DESC, creadoEn DESC");
+      return res.rows;
+    },
+    async insertInversionNota(row) {
+      await client.execute({
+        sql: `INSERT INTO inversiones_notas (id, fecha, activoId, texto, creadoEn)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [row.id, row.fecha, row.activoId || null, row.texto, row.creadoEn],
+      });
+    },
+    async deleteInversionNota(id) {
+      await client.execute({ sql: "DELETE FROM inversiones_notas WHERE id = ?", args: [id] });
+    },
   };
 } else {
   // ---------- Modo local: archivo SQLite en esta PC ----------
@@ -733,6 +855,7 @@ if (USE_TURSO) {
       await migrarVendedor(async (sql) => db.exec(sql));
       await migrarBonoMinoristaManual(async (sql) => db.exec(sql));
       await migrarBonoMayoristaAutoManual(async (sql) => db.exec(sql));
+      await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
     },
     async getByFecha(fecha) {
       return db.prepare("SELECT * FROM ventas WHERE fecha = ? ORDER BY creadoEn ASC").all(fecha);
@@ -1093,6 +1216,49 @@ if (USE_TURSO) {
     },
     async deleteCalendarioContenido(id) {
       db.prepare("DELETE FROM calendario_contenido WHERE id = ?").run(id);
+    },
+
+    // ---------- Inversiones ----------
+    async getAllInversionesActivos() {
+      return db.prepare("SELECT * FROM inversiones_activos ORDER BY categoria ASC, simbolo ASC").all();
+    },
+    async insertInversionActivo(row) {
+      db.prepare(
+        `INSERT INTO inversiones_activos (id, simbolo, nombre, categoria, tipoFuente, fuenteId, precioManual, actualizadoManualEn, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.simbolo, row.nombre, row.categoria, row.tipoFuente, row.fuenteId || null, row.precioManual ?? null, row.actualizadoManualEn || null, row.creadoEn);
+    },
+    async updateInversionActivoPrecioManual(id, precio, actualizadoEn) {
+      db.prepare("UPDATE inversiones_activos SET precioManual = ?, actualizadoManualEn = ? WHERE id = ?").run(precio, actualizadoEn, id);
+    },
+    async deleteInversionActivo(id) {
+      db.prepare("DELETE FROM inversiones_activos WHERE id = ?").run(id);
+    },
+
+    async getAllInversionesPortafolio() {
+      return db.prepare("SELECT * FROM inversiones_portafolio ORDER BY fecha DESC, creadoEn DESC").all();
+    },
+    async insertInversionPortafolio(row) {
+      db.prepare(
+        `INSERT INTO inversiones_portafolio (id, activoId, cantidad, precioCompra, fecha, nota, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.activoId, row.cantidad, row.precioCompra, row.fecha, row.nota || null, row.creadoEn);
+    },
+    async deleteInversionPortafolio(id) {
+      db.prepare("DELETE FROM inversiones_portafolio WHERE id = ?").run(id);
+    },
+
+    async getAllInversionesNotas() {
+      return db.prepare("SELECT * FROM inversiones_notas ORDER BY fecha DESC, creadoEn DESC").all();
+    },
+    async insertInversionNota(row) {
+      db.prepare(
+        `INSERT INTO inversiones_notas (id, fecha, activoId, texto, creadoEn)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(row.id, row.fecha, row.activoId || null, row.texto, row.creadoEn);
+    },
+    async deleteInversionNota(id) {
+      db.prepare("DELETE FROM inversiones_notas WHERE id = ?").run(id);
     },
   };
 }

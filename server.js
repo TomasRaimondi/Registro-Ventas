@@ -1338,6 +1338,133 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Inversiones (cartera personal: cripto, acciones, IA, energía) ----------
+
+    if (pathname === "/api/inversiones/activos" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllInversionesActivos();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/inversiones/activos" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const simbolo = String(body.simbolo || "").trim().toUpperCase();
+      const nombre = String(body.nombre || "").trim();
+      const categoria = String(body.categoria || "").trim();
+      if (!simbolo || !nombre || !categoria) return sendJson(res, 400, { error: "Faltan datos del activo" });
+      const precioManual = body.precioManual !== undefined && body.precioManual !== null && body.precioManual !== ""
+        ? Number(body.precioManual) : null;
+      if (precioManual !== null && (!Number.isFinite(precioManual) || precioManual < 0)) {
+        return sendJson(res, 400, { error: "Precio inválido" });
+      }
+      const ahora = new Date().toISOString();
+      const row = {
+        id: crypto.randomUUID(),
+        simbolo,
+        nombre,
+        categoria,
+        tipoFuente: "manual",
+        fuenteId: null,
+        precioManual,
+        actualizadoManualEn: precioManual !== null ? ahora : null,
+        creadoEn: ahora,
+      };
+      await db.insertInversionActivo(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/inversiones/activos/") && pathname.endsWith("/precio-manual") && req.method === "PUT") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/inversiones/activos/".length, -"/precio-manual".length));
+      const body = await readJsonBody(req);
+      const precio = Number(body.precio);
+      if (!Number.isFinite(precio) || precio < 0) return sendJson(res, 400, { error: "Precio inválido" });
+      await db.updateInversionActivoPrecioManual(id, precio, new Date().toISOString());
+      preciosInversionesCache = null; // invalida el cache para que se vea el cambio ya
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname.startsWith("/api/inversiones/activos/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/inversiones/activos/".length));
+      await db.deleteInversionActivo(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/inversiones/precios" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const precios = await obtenerPreciosInversiones();
+      return sendJson(res, 200, precios);
+    }
+
+    if (pathname === "/api/inversiones/portafolio" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllInversionesPortafolio();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/inversiones/portafolio" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const activoId = String(body.activoId || "").trim();
+      const cantidad = Number(body.cantidad);
+      const precioCompra = Number(body.precioCompra);
+      const fecha = String(body.fecha || "").trim();
+      if (!activoId) return sendJson(res, 400, { error: "Falta el activo" });
+      if (!Number.isFinite(cantidad) || cantidad <= 0) return sendJson(res, 400, { error: "Cantidad inválida" });
+      if (!Number.isFinite(precioCompra) || precioCompra < 0) return sendJson(res, 400, { error: "Precio de compra inválido" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return sendJson(res, 400, { error: "Fecha inválida" });
+      const row = {
+        id: crypto.randomUUID(),
+        activoId,
+        cantidad,
+        precioCompra,
+        fecha,
+        nota: body.nota ? String(body.nota).trim() : null,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertInversionPortafolio(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/inversiones/portafolio/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/inversiones/portafolio/".length));
+      await db.deleteInversionPortafolio(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/inversiones/notas" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllInversionesNotas();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/inversiones/notas" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const texto = String(body.texto || "").trim();
+      const fecha = String(body.fecha || "").trim() || getArgentinaNow().fecha;
+      if (!texto) return sendJson(res, 400, { error: "Falta el texto de la nota" });
+      const row = {
+        id: crypto.randomUUID(),
+        fecha,
+        activoId: body.activoId ? String(body.activoId) : null,
+        texto,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertInversionNota(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/inversiones/notas/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/inversiones/notas/".length));
+      await db.deleteInversionNota(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Anuncios (Meta): medir si una campaña fue rentable ----------
 
     if (pathname === "/api/anuncios" && req.method === "GET") {
@@ -1835,6 +1962,78 @@ function getLocalIps() {
     }
   }
   return ips;
+}
+
+// ---------- Inversiones: precios en vivo (cripto vía CoinGecko, acciones vía Yahoo Finance) ----------
+// Ninguna de las dos requiere API key. Se cachean por 60s para no golpear estas APIs
+// públicas en cada carga de la página. Si una fuente falla (o no hay conexión), se cae
+// al precio manual que haya cargado el usuario para ese activo, y si tampoco hay eso,
+// el activo simplemente no aparece con precio (el front lo muestra como "—").
+
+let preciosInversionesCache = null;
+let preciosInversionesCacheEn = 0;
+const PRECIOS_INVERSIONES_CACHE_MS = 60 * 1000;
+
+async function obtenerPreciosInversiones() {
+  const ahora = Date.now();
+  if (preciosInversionesCache && (ahora - preciosInversionesCacheEn) < PRECIOS_INVERSIONES_CACHE_MS) {
+    return preciosInversionesCache;
+  }
+
+  const activos = await db.getAllInversionesActivos();
+  const resultado = {};
+
+  const cripto = activos.filter((a) => a.tipoFuente === "coingecko" && a.fuenteId);
+  if (cripto.length) {
+    try {
+      const ids = cripto.map((a) => a.fuenteId).join(",");
+      const resp = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const nowIso = new Date().toISOString();
+        cripto.forEach((a) => {
+          const p = data[a.fuenteId];
+          if (p && typeof p.usd === "number") {
+            resultado[a.id] = { precio: p.usd, fuente: "live", actualizadoEn: nowIso };
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Error obteniendo precios cripto (CoinGecko):", e.message);
+    }
+  }
+
+  const acciones = activos.filter((a) => a.tipoFuente === "yahoo" && a.fuenteId);
+  await Promise.all(acciones.map(async (a) => {
+    try {
+      const resp = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(a.fuenteId)}?interval=1d&range=1d`,
+        { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } }
+      );
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const precio = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (Number.isFinite(precio) && precio > 0) {
+        resultado[a.id] = { precio, fuente: "live", actualizadoEn: new Date().toISOString() };
+      }
+    } catch (e) {
+      console.error(`Error obteniendo precio de ${a.simbolo} (Yahoo Finance):`, e.message);
+    }
+  }));
+
+  // Lo que no se pudo traer en vivo cae al precio manual (si existe).
+  activos.forEach((a) => {
+    if (!resultado[a.id] && a.precioManual !== null && a.precioManual !== undefined) {
+      resultado[a.id] = { precio: a.precioManual, fuente: "manual", actualizadoEn: a.actualizadoManualEn };
+    }
+  });
+
+  preciosInversionesCache = resultado;
+  preciosInversionesCacheEn = ahora;
+  return resultado;
 }
 
 // ---------- Sueldo automático: $30.000 de lunes a viernes a las 20:00 ----------
