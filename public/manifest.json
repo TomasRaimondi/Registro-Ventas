@@ -4,8 +4,8 @@
   "start_url": "/movil.html",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0A101C",
-  "theme_color": "#0A101C",
+  "background_color": "#EEF2F0",
+  "theme_color": "#EEF2F0",
   "lang": "es-AR",
   "icons": [
     { "src": "/logo-platense-fit.png", "sizes": "480x480", "type": "image/png" }

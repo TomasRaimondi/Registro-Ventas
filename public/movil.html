@@ -5,36 +5,53 @@
 <title>Registro de Ventas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0A101C">
+<meta name="theme-color" content="#EEF2F0">
 <link rel="apple-touch-icon" href="/logo-platense-fit.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Ventas">
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
 <style>
   :root{
-    --bg:#0A101C;
-    --surface:#131D31;
-    --raised:#1C2942;
-    --line:#26344F;
-    --text:#E9EEF9;
-    --muted:#8496B8;
-    --accent:#7C8BFF;
-    --accent-deep:#5A68E8;
-    --mint:#3DDC97;
-    --coral:#FF6B6B;
+    --bg:#EEF2F0;
+    --surface:#FFFFFF;
+    --raised:#F5F7F5;
+    --line:#D9E1DD;
+    --text:#1A2420;
+    --muted:#5B6A64;
+    --accent:#E2572B;
+    --accent-deep:#B8431E;
+    --mint:#2F9E6E;
+    --coral:#D64545;
+    --gold:#C98A1F;
     --r:16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#141B18;
+      --surface:#1E2925;
+      --raised:#232F2A;
+      --line:#2C3A34;
+      --text:#EDF3EF;
+      --muted:#9FB0A8;
+      --accent:#FF8258;
+      --accent-deep:#E8703F;
+      --mint:#49C08C;
+      --coral:#E8716B;
+      --gold:#E8B04C;
+    }
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
   body{
     background:var(--bg);
     color:var(--text);
-    font:400 16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    font:400 16px/1.4 "Work Sans",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
     font-variant-numeric:tabular-nums;
     padding-bottom:calc(96px + env(safe-area-inset-bottom));
   }
+  h1,h2,h3{font-family:"Bricolage Grotesque","Work Sans",-apple-system,BlinkMacSystemFont,sans-serif}
   button,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
   /* ---------- barra superior ---------- */
@@ -42,7 +59,7 @@
     position:sticky;top:0;z-index:40;
     display:flex;align-items:center;gap:12px;
     height:58px;padding:0 8px 0 4px;
-    background:rgba(10,16,28,.86);
+    background:rgba(255,255,255,.86);
     backdrop-filter:saturate(160%) blur(14px);
     -webkit-backdrop-filter:saturate(160%) blur(14px);
     border-bottom:1px solid var(--line);
@@ -75,7 +92,7 @@
   .today-pill b{font-size:15px;font-weight:700;letter-spacing:-.4px}
   .today-pill small{font-size:10px;color:var(--muted)}
   .today-pill.bump{animation:bump .5s cubic-bezier(.2,1.4,.4,1)}
-  @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.14);background:#1d3a2f;border-color:var(--mint)}100%{transform:scale(1)}}
+  @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.14);background:rgba(47,158,110,.18);border-color:var(--mint)}100%{transform:scale(1)}}
 
   /* ---------- panel lateral ---------- */
   .scrim{
@@ -103,11 +120,11 @@
   }
   .nav-item .em{font-size:19px;width:26px;text-align:center}
   .nav-item:active{background:var(--raised)}
-  .nav-item[aria-current="page"]{color:var(--accent);background:linear-gradient(90deg,rgba(124,139,255,.16),transparent)}
+  .nav-item[aria-current="page"]{color:var(--accent);background:linear-gradient(90deg,rgba(226,87,43,.16),transparent)}
   .nav-item[aria-current="page"]::before{content:"";position:absolute;left:0;width:3px;height:28px;border-radius:0 3px 3px 0;background:var(--accent)}
   .nav-sep{border:0;border-top:1px solid var(--line);margin:10px 20px}
   .badge{margin-left:auto;min-width:24px;height:24px;padding:0 7px;border-radius:12px;
-    display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--coral);color:#2a0a0a}
+    display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--coral);color:#fff}
 
   /* ---------- contenido ---------- */
   main{padding:16px 14px 0;max-width:560px;margin:0 auto}
@@ -118,7 +135,7 @@
   .suggestions{
     position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;display:none;
     background:var(--raised);border:1px solid var(--line);border-radius:14px;overflow:hidden;
-    box-shadow:0 14px 30px -10px rgba(0,0,0,.55);
+    box-shadow:0 14px 30px -10px rgba(20,30,26,.18);
   }
   .suggestions.open{display:block}
   .suggestion-item{padding:12px 16px;font-size:15px;border-top:1px solid var(--line)}
@@ -131,8 +148,8 @@
     font-size:17px;font-weight:500;outline:none;
     transition:border-color .15s,background .15s;
   }
-  input:focus{border-color:var(--accent);background:#0d1526}
-  input::placeholder{color:#5b6b8c}
+  input:focus{border-color:var(--accent)}
+  input::placeholder{color:var(--muted)}
   .row{display:flex;gap:10px}
   .row .f-price{flex:1.6}
   .row .f-qty{flex:1;min-width:96px}
@@ -156,7 +173,7 @@
   .cart-item-nombre{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cart-item-precio{font-size:12px;color:var(--muted)}
   .cart-item-remove{width:32px;height:32px;flex:0 0 32px;border:0;border-radius:10px;background:var(--bg);color:var(--coral);font-size:15px}
-  .cart-item-remove:active{background:rgba(255,107,107,.15)}
+  .cart-item-remove:active{background:rgba(214,69,69,.15)}
   .cart-subtotal{display:flex;justify-content:space-between;padding-top:10px;margin-top:4px;border-top:1px dashed var(--line);font-size:13px;font-weight:700}
 
   .pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -171,7 +188,7 @@
   .pay[aria-pressed="true"]{
     background:linear-gradient(140deg,var(--accent),var(--accent-deep));
     border-color:var(--accent);color:#fff;font-weight:600;
-    box-shadow:0 6px 18px -6px rgba(124,139,255,.6);
+    box-shadow:0 6px 18px -6px rgba(226,87,43,.6);
   }
   .pay.wide{grid-column:span 2}
 
@@ -184,30 +201,30 @@
   .switch{margin-left:auto;width:52px;height:31px;border-radius:16px;background:var(--line);position:relative;transition:background .2s;flex:0 0 52px}
   .switch::after{content:"";position:absolute;top:2.5px;left:2.5px;width:26px;height:26px;border-radius:50%;background:#fff;
     transition:transform .24s cubic-bezier(.2,1.2,.3,1)}
-  .toggle[aria-pressed="true"]{border-color:#8b5cf6;background:rgba(139,92,246,.12)}
-  .toggle[aria-pressed="true"] .switch{background:#8b5cf6}
+  .toggle[aria-pressed="true"]{border-color:#7C5CD6;background:rgba(124,92,214,.12)}
+  .toggle[aria-pressed="true"] .switch{background:#7C5CD6}
   .toggle[aria-pressed="true"] .switch::after{transform:translateX(21px)}
   .envio-costo-row{margin-top:10px}
-  .envio-costo-row input{border-color:#8b5cf6}
+  .envio-costo-row input{border-color:#7C5CD6}
 
   /* ---------- barra de acción fija ---------- */
   .actionbar{
     position:fixed;left:0;right:0;bottom:0;z-index:35;
     display:flex;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));
-    background:linear-gradient(to top,var(--bg) 62%,rgba(10,16,28,0));
+    background:linear-gradient(to top,var(--bg) 62%,rgba(255,255,255,0));
   }
   .submit{
     flex:1;min-height:58px;border:0;border-radius:16px;
     background:linear-gradient(140deg,var(--accent),var(--accent-deep));
     color:#fff;font-size:17px;font-weight:700;letter-spacing:-.2px;
-    box-shadow:0 10px 26px -10px rgba(124,139,255,.85);
+    box-shadow:0 10px 26px -10px rgba(226,87,43,.85);
     transition:transform .12s;
   }
   .submit:active{transform:scale(.97)}
-  .submit.done{background:linear-gradient(140deg,#3DDC97,#17b877);box-shadow:0 10px 26px -10px rgba(61,220,151,.8)}
+  .submit.done{background:linear-gradient(140deg,#2F9E6E,#1F7A54);box-shadow:0 10px 26px -10px rgba(47,158,110,.5)}
   .lost{
-    width:66px;min-height:58px;border-radius:16px;border:1.5px solid rgba(255,107,107,.4);
-    background:rgba(255,107,107,.12);color:var(--coral);font-size:12px;font-weight:700;line-height:1.15;
+    width:66px;min-height:58px;border-radius:16px;border:1.5px solid rgba(214,69,69,.4);
+    background:rgba(214,69,69,.12);color:var(--coral);font-size:12px;font-weight:700;line-height:1.15;
   }
   .lost:active{transform:scale(.95)}
   .lost b{display:block;font-size:17px}
@@ -259,12 +276,12 @@
     transform:translate(-50%,20px);opacity:0;pointer-events:none;
     display:flex;align-items:center;gap:9px;
     padding:12px 18px;border-radius:999px;
-    background:var(--mint);color:#062a1c;font-weight:700;font-size:15px;
-    box-shadow:0 12px 30px -8px rgba(0,0,0,.6);
+    background:var(--mint);color:#fff;font-weight:700;font-size:15px;
+    box-shadow:0 12px 30px -8px rgba(20,30,26,.28);
     transition:opacity .22s,transform .28s cubic-bezier(.2,1.3,.4,1);
   }
   .toast.show{opacity:1;transform:translate(-50%,0)}
-  .toast.bad{background:var(--coral);color:#2a0a0a}
+  .toast.bad{background:var(--coral);color:#fff}
   .empty{color:var(--muted);font-size:14px;padding:14px 0 2px;margin:0}
 
   /* ---------- modal venta perdida ---------- */

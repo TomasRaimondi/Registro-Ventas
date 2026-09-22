@@ -1,26 +1,42 @@
 /* Base compartida por todas las páginas "app" para celular (movil.html y sucesoras). */
 :root{
-  --bg:#0A101C;
-  --surface:#131D31;
-  --raised:#1C2942;
-  --line:#26344F;
-  --text:#E9EEF9;
-  --muted:#8496B8;
-  --accent:#7C8BFF;
-  --accent-deep:#5A68E8;
-  --mint:#3DDC97;
-  --coral:#FF6B6B;
-  --gold:#F5B942;
+  --bg:#EEF2F0;
+  --surface:#FFFFFF;
+  --raised:#F5F7F5;
+  --line:#D9E1DD;
+  --text:#1A2420;
+  --muted:#5B6A64;
+  --accent:#E2572B;
+  --accent-deep:#B8431E;
+  --mint:#2F9E6E;
+  --coral:#D64545;
+  --gold:#C98A1F;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#141B18;
+    --surface:#1E2925;
+    --raised:#232F2A;
+    --line:#2C3A34;
+    --text:#EDF3EF;
+    --muted:#9FB0A8;
+    --accent:#FF8258;
+    --accent-deep:#E8703F;
+    --mint:#49C08C;
+    --coral:#E8716B;
+    --gold:#E8B04C;
+  }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
   background:var(--bg);
   color:var(--text);
-  font:400 16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  font:400 16px/1.4 "Work Sans",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
   font-variant-numeric:tabular-nums;
   padding-bottom:calc(28px + env(safe-area-inset-bottom));
 }
+h1,h2,h3{font-family:"Bricolage Grotesque","Work Sans",-apple-system,BlinkMacSystemFont,sans-serif}
 button,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 a{color:inherit}
 
@@ -81,11 +97,11 @@ body.nav-open .drawer{transform:none}
 }
 .nav-item .em{font-size:19px;width:26px;text-align:center}
 .nav-item:active{background:var(--raised)}
-.nav-item[aria-current="page"]{color:var(--accent);background:linear-gradient(90deg,rgba(124,139,255,.16),transparent)}
+.nav-item[aria-current="page"]{color:var(--accent);background:linear-gradient(90deg,rgba(226,87,43,.16),transparent)}
 .nav-item[aria-current="page"]::before{content:"";position:absolute;left:0;width:3px;height:28px;border-radius:0 3px 3px 0;background:var(--accent)}
 .nav-sep{border:0;border-top:1px solid var(--line);margin:10px 20px}
 .badge{margin-left:auto;min-width:24px;height:24px;padding:0 7px;border-radius:12px;
-  display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--coral);color:#2a0a0a}
+  display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--coral);color:#fff}
 
 /* ---------- contenido ---------- */
 main{padding:16px 14px 0;max-width:560px;margin:0 auto}
@@ -103,8 +119,8 @@ input[type=text],input[type=tel],input[type=number],input[type=date],input[type=
   transition:border-color .15s,background .15s;
 }
 textarea{height:auto;padding:12px 16px;resize:vertical}
-input:focus,textarea:focus{border-color:var(--accent);background:#0d1526}
-input::placeholder,textarea::placeholder{color:#5b6b8c}
+input:focus,textarea:focus{border-color:var(--accent)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
 
 .ghost-btn{
   width:100%;min-height:50px;margin-top:10px;
@@ -117,7 +133,7 @@ input::placeholder,textarea::placeholder{color:#5b6b8c}
   width:100%;min-height:54px;border:0;border-radius:16px;margin-top:10px;
   background:linear-gradient(140deg,var(--accent),var(--accent-deep));
   color:#fff;font-size:16px;font-weight:700;letter-spacing:-.2px;
-  box-shadow:0 10px 26px -10px rgba(124,139,255,.85);
+  box-shadow:0 10px 26px -10px rgba(226,87,43,.85);
   transition:transform .12s;
 }
 .submit:active{transform:scale(.97)}
@@ -148,7 +164,7 @@ input::placeholder,textarea::placeholder{color:#5b6b8c}
 .list-row-sub{font-size:12px;color:var(--muted)}
 .list-row-valor{font-weight:700;white-space:nowrap}
 .list-row-del{width:32px;height:32px;flex:0 0 32px;border:0;border-radius:10px;background:var(--bg);color:var(--coral);font-size:15px}
-.list-row-del:active{background:rgba(255,107,107,.15)}
+.list-row-del:active{background:rgba(214,69,69,.15)}
 .empty{color:var(--muted);font-size:14px;padding:10px 0 2px;margin:0}
 
 /* ---------- acordeón (pedidos, ventas) ---------- */
@@ -182,15 +198,15 @@ input::placeholder,textarea::placeholder{color:#5b6b8c}
 
 /* ---------- badges de segmento ---------- */
 .badge-seg{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
-.badge-seg.recompro{background:rgba(61,220,151,.15);color:var(--mint)}
-.badge-seg.inactivo{background:rgba(255,107,107,.15);color:var(--coral)}
-.badge-seg.unico{background:rgba(124,139,255,.15);color:var(--accent)}
+.badge-seg.recompro{background:rgba(47,158,110,.15);color:var(--mint)}
+.badge-seg.inactivo{background:rgba(214,69,69,.15);color:var(--coral)}
+.badge-seg.unico{background:rgba(226,87,43,.15);color:var(--accent)}
 
 /* ---------- WhatsApp / cupón ---------- */
-.wa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;background:rgba(61,220,151,.15);color:var(--mint);font-size:13px;font-weight:700;text-decoration:none;border:0}
-.wa-btn:active{background:rgba(61,220,151,.28)}
-.cupon-btn{padding:8px 14px;border-radius:12px;border:1.5px solid var(--gold);background:rgba(245,185,66,.12);color:var(--gold);font-size:13px;font-weight:700}
-.cupon-btn:active{background:rgba(245,185,66,.25)}
+.wa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;background:rgba(47,158,110,.15);color:var(--mint);font-size:13px;font-weight:700;text-decoration:none;border:0}
+.wa-btn:active{background:rgba(47,158,110,.28)}
+.cupon-btn{padding:8px 14px;border-radius:12px;border:1.5px solid var(--gold);background:rgba(201,138,31,.12);color:var(--gold);font-size:13px;font-weight:700}
+.cupon-btn:active{background:rgba(201,138,31,.25)}
 .cupon-btn:disabled{opacity:.5}
 .cupon-codigo{font-family:ui-monospace,monospace;font-weight:700;background:var(--raised);padding:4px 8px;border-radius:8px;font-size:13px}
 
@@ -206,12 +222,12 @@ input::placeholder,textarea::placeholder{color:#5b6b8c}
   transform:translate(-50%,20px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:9px;
   padding:12px 18px;border-radius:999px;
-  background:var(--mint);color:#062a1c;font-weight:700;font-size:15px;
-  box-shadow:0 12px 30px -8px rgba(0,0,0,.6);
+  background:var(--mint);color:#fff;font-weight:700;font-size:15px;
+  box-shadow:0 12px 30px -8px rgba(0,0,0,.35);
   transition:opacity .22s,transform .28s cubic-bezier(.2,1.3,.4,1);
 }
 .toast.show{opacity:1;transform:translate(-50%,0)}
-.toast.bad{background:var(--coral);color:#2a0a0a}
+.toast.bad{background:var(--coral);color:#fff}
 
 @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .fresh{animation:slidein .4s cubic-bezier(.2,.9,.25,1)}
