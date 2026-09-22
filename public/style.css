@@ -799,6 +799,23 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 .modal-card-maximizado #metric-modal-chart {
   height: 56vh !important;
 }
+
+/* ---------- Pantalla completa de un gráfico "de siempre" (fuera del modal) ---------- */
+
+.card-chart-maximizada {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  margin: 0;
+  max-width: 100%;
+  border-radius: 0;
+  overflow-y: auto;
+}
+.card-chart-maximizada .chart {
+  height: 62vh !important;
+}
+body.chart-maximizado-activo { overflow: hidden; }
+
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .legend-dot-minorista { background: var(--accent); }
 .legend-dot-mayorista { background: var(--orange); }

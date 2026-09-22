@@ -1606,4 +1606,35 @@ document.querySelectorAll("#periodo-tabs .periodo-tab").forEach(btn => {
 });
 document.querySelector('#periodo-tabs .periodo-tab[data-periodo="dia"]').classList.add("active");
 
+// ---------- Pantalla completa de los gráficos "de siempre" (Volumen, Ganancia bruta,
+// Ganancia neta) ---------- Agranda la tarjeta entera del gráfico a todo el viewport con
+// CSS, igual que el modal de métrica — no la Fullscreen API del navegador, poco
+// confiable en iOS/Safari.
+
+function salirDeTodosLosGraficosMaximizados() {
+  document.querySelectorAll(".card-chart-maximizada").forEach(card => {
+    card.classList.remove("card-chart-maximizada");
+    const btn = card.querySelector(".chart-zoom-btn");
+    if (btn) btn.textContent = "⛶ Pantalla completa";
+  });
+  document.body.classList.remove("chart-maximizado-activo");
+}
+
+document.querySelectorAll(".chart-zoom-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const card = btn.closest(".card");
+    const yaMaximizada = card.classList.contains("card-chart-maximizada");
+    salirDeTodosLosGraficosMaximizados(); // solo uno a la vez
+    if (!yaMaximizada) {
+      card.classList.add("card-chart-maximizada");
+      btn.textContent = "🗗 Salir de pantalla completa";
+      document.body.classList.add("chart-maximizado-activo");
+    }
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") salirDeTodosLosGraficosMaximizados();
+});
+
 checkAuth();
