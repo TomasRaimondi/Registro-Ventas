@@ -1398,6 +1398,22 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, precios);
     }
 
+    // TEMPORAL: diagnóstico de por qué Binance no responde desde Render.
+    if (pathname === "/api/inversiones/debug-binance" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const diag = {};
+      try {
+        const resp = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", { signal: AbortSignal.timeout(8000) });
+        diag.status = resp.status;
+        diag.ok = resp.ok;
+        diag.body = (await resp.text()).slice(0, 500);
+      } catch (e) {
+        diag.error = e.message;
+        diag.errorName = e.name;
+      }
+      return sendJson(res, 200, diag);
+    }
+
     if (pathname === "/api/inversiones/portafolio" && req.method === "GET") {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const rows = await db.getAllInversionesPortafolio();
