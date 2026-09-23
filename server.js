@@ -115,20 +115,26 @@ async function construirIndiceCostoHistorico() {
     db.getComposicion(),
   ]);
 
+  // Las claves se normalizan (sin importar mayúsculas/espacios) porque el nombre del
+  // producto en una venta vieja puede no coincidir letra por letra con el que está
+  // cargado hoy en Costos — con clave exacta, esa diferencia hacía que el costo diera
+  // null y esa ganancia se excluyera en silencio de todos los cálculos.
   const costoPorProductoActual = {};
-  costos.forEach((c) => { costoPorProductoActual[c.producto] = c.costo; });
+  costos.forEach((c) => { costoPorProductoActual[normalizeNombre(c.producto)] = c.costo; });
 
   const historialPorProducto = {};
   historial.forEach((h) => {
-    if (!historialPorProducto[h.producto]) historialPorProducto[h.producto] = [];
-    historialPorProducto[h.producto].push(h);
+    const key = normalizeNombre(h.producto);
+    if (!historialPorProducto[key]) historialPorProducto[key] = [];
+    historialPorProducto[key].push(h);
   });
   // getCostosHistorial ya viene ordenado por vigenteDesde ASC.
 
   const componentesPorCombo = {};
   composicion.forEach((c) => {
-    if (!componentesPorCombo[c.comboProducto]) componentesPorCombo[c.comboProducto] = [];
-    componentesPorCombo[c.comboProducto].push({ componente: c.componenteProducto, cantidad: c.cantidad });
+    const key = normalizeNombre(c.comboProducto);
+    if (!componentesPorCombo[key]) componentesPorCombo[key] = [];
+    componentesPorCombo[key].push({ componente: c.componenteProducto, cantidad: c.cantidad });
   });
 
   return { costoPorProductoActual, historialPorProducto, componentesPorCombo };
@@ -137,10 +143,11 @@ async function construirIndiceCostoHistorico() {
 // Costo de "producto" vigente en "fecha" (YYYY-MM-DD). null si no se puede determinar
 // (el producto, o alguno de los componentes de un combo, todavía no tiene costo cargado).
 function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) {
-  if (visitados.has(producto)) return null; // evita un ciclo de combos que se contienen entre sí
-  visitados.add(producto);
+  const key = normalizeNombre(producto);
+  if (visitados.has(key)) return null; // evita un ciclo de combos que se contienen entre sí
+  visitados.add(key);
 
-  const componentes = indice.componentesPorCombo[producto];
+  const componentes = indice.componentesPorCombo[key];
   if (componentes) {
     let total = 0;
     for (const { componente, cantidad } of componentes) {
@@ -151,7 +158,7 @@ function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) 
     return total;
   }
 
-  const historial = indice.historialPorProducto[producto];
+  const historial = indice.historialPorProducto[key];
   if (historial && historial.length) {
     let resultado = null;
     for (const h of historial) {
@@ -163,7 +170,7 @@ function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) 
 
   // Sin historial que aplique a esa fecha (producto que nunca cambió de costo desde que
   // existe este historial): se usa el costo actual como mejor aproximación disponible.
-  const actual = indice.costoPorProductoActual[producto];
+  const actual = indice.costoPorProductoActual[key];
   return actual === undefined ? null : actual;
 }
 
