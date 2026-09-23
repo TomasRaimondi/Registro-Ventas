@@ -266,7 +266,7 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0 };
     return porFecha[fecha];
   }
 
@@ -296,6 +296,26 @@ async function renderAll() {
     const dia = getDia(g.fecha);
     dia.gasto += g.monto;
     if (esGastoPublicidad(g)) dia.gastoPublicidad += g.monto;
+  });
+
+  // La publicidad se anota como un pago único el día que Meta lo cobra, no repartida
+  // día a día — comparada tal cual contra métricas diarias se ve como picos aislados
+  // en vez de un gasto real. Se prorratea cada pago entre los días desde el pago
+  // anterior (o un solo día si es el primero cargado), para poder dimensionar cuánto
+  // se gastó por día en promedio.
+  const pagosPublicidad = gastosGlobal
+    .filter(esGastoPublicidad)
+    .map(g => ({ fecha: g.fecha, monto: g.monto }))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  let fechaPagoAnterior = null;
+  pagosPublicidad.forEach(({ fecha, monto }) => {
+    let desde = fechaPagoAnterior ? restarDias(fechaPagoAnterior, -1) : fecha;
+    if (desde > fecha) desde = fecha; // dos pagos el mismo día: cada uno cubre solo ese día
+    const dias = fechasEnRangoInclusive(desde, fecha);
+    const porDia = monto / dias.length;
+    dias.forEach(d => { getDia(d).gastoPublicidadSuavizado += porDia; });
+    fechaPagoAnterior = fecha;
   });
 
   ventasPerdidasGlobal.forEach(vp => {
@@ -352,7 +372,7 @@ selectorMes.addEventListener("change", () => {
 // ---------- Utilidades de agrupación ----------
 
 function grupoVacio(key, label) {
-  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, diasConDatos: 0 };
+  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0, diasConDatos: 0 };
 }
 
 function sumarEnGrupo(acc, d) {
@@ -367,6 +387,7 @@ function sumarEnGrupo(acc, d) {
   acc.gananciaBrutaMayorista += d.gananciaBrutaMayorista;
   acc.gasto += d.gasto;
   acc.gastoPublicidad += d.gastoPublicidad || 0;
+  acc.gastoPublicidadSuavizado += d.gastoPublicidadSuavizado || 0;
   acc.diasConDatos += d.diasConDatos || 0;
   return acc;
 }
@@ -406,6 +427,7 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
     case "pct-retorno-neto": { const v = pct(neta, volumenTotal); return { raw: v || 0, formatted: pctFmt(v) }; }
     case "gasto": return { raw: g.gasto, formatted: money(g.gasto) };
     case "gasto-publicidad": return { raw: g.gastoPublicidad, formatted: money(g.gastoPublicidad) };
+    case "gasto-publicidad-diario": return { raw: g.gastoPublicidadSuavizado, formatted: money(g.gastoPublicidadSuavizado) };
     case "cant-ventas": return { raw: g.cantVentas, formatted: String(g.cantVentas) };
     case "ticket-promedio": { const v = g.cantVentas ? g.volumen / g.cantVentas : 0; return { raw: v, formatted: money(v) }; }
     case "dias": return { raw: g.diasConDatos, formatted: `${g.diasConDatos} de ${diasEnPeriodo}` };
@@ -1645,6 +1667,7 @@ function renderPeriodo(tipo) {
   document.getElementById("label-pct-retorno-neto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto-publicidad").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-gasto-publicidad-diario").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-dias").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ingreso-clientes").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -1680,6 +1703,7 @@ function renderPeriodo(tipo) {
   statPctRetornoNeto.classList.toggle("value-negative", pctRetornoNeto !== null && pctRetornoNeto < 0);
   document.getElementById("stat-gasto").textContent = money(actual.gasto);
   document.getElementById("stat-gasto-publicidad").textContent = money(actual.gastoPublicidad);
+  document.getElementById("stat-gasto-publicidad-diario").textContent = money(actual.gastoPublicidadSuavizado);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
   document.getElementById("stat-dias").textContent = `${actual.diasConDatos} de ${diasEnPeriodo}`;
