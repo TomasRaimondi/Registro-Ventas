@@ -269,6 +269,13 @@ async function renderAll() {
       if (esVentaCanalWeb(v)) dia.volumenWeb += v.precio;
       else { dia.volumenLocal += v.precio; dia.cantVentasLocales++; }
     }
+    // El costo del viaje de Uber Moto es un costo directo de esa venta (como el costo
+    // del producto), así que se resta de la ganancia bruta igual que el margen de los
+    // items: el precio del item no trae el envío descontado, por eso se hace acá.
+    if (v.envioMetodo === "uber_moto" && v.envioCosto) {
+      dia.gananciaBruta -= v.envioCosto;
+      dia.gananciaBrutaWeb -= v.envioCosto;
+    }
     dia.cantVentas++;
   });
 
@@ -537,6 +544,10 @@ function agruparPorBucketIntradia(minutosBucket) {
       g.volumen += v.precio;
       if (esVentaCanalWeb(v)) g.volumenWeb += v.precio;
       else { g.volumenLocal += v.precio; g.cantVentasLocales++; }
+    }
+    if (v.envioMetodo === "uber_moto" && v.envioCosto) {
+      g.gananciaBruta -= v.envioCosto;
+      g.gananciaBrutaWeb -= v.envioCosto;
     }
     g.cantVentas++;
   });
