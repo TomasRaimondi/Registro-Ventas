@@ -645,10 +645,13 @@ function elegirIndicesEtiquetas(n, plotW) {
 // en un tooltip, y la línea se dibuja animada al abrir o cambiar de vista.
 function renderLineChart(container, entries, metricKey) {
   ocultarChartTooltip();
+  const anchoDisponible = container.getBoundingClientRect().width || 320;
   container.innerHTML = "";
   if (entries.length === 0) return;
 
-  const W = Math.max(entries.length * 46, 320);
+  // El ancho real del cuadro es el mínimo, no un número fijo: así, al alejar el zoom,
+  // el gráfico llena toda la pantalla en vez de quedar chico con un hueco vacío al lado.
+  const W = Math.max(entries.length * chartZoomPxPorPunto, anchoDisponible);
   const H = 320;
   const padL = 64, padR = 16, padT = 16, padB = 34;
   const plotW = W - padL - padR;
@@ -751,7 +754,10 @@ function renderDualLineChart(container, seriesA, seriesB, metricKey, labelA, lab
   svgWrap.style.minHeight = "0";
   container.appendChild(svgWrap);
 
-  const W = Math.max(maxLen * 46, 320);
+  // El ancho real del cuadro es el mínimo, no un número fijo: así, al alejar el zoom,
+  // el gráfico llena toda la pantalla en vez de quedar chico con un hueco vacío al lado.
+  const anchoDisponible = svgWrap.getBoundingClientRect().width || 320;
+  const W = Math.max(maxLen * chartZoomPxPorPunto, anchoDisponible);
   const H = 320;
   const padL = 64, padR = 16, padT = 16, padB = 34;
   const plotW = W - padL - padR;
@@ -876,12 +882,21 @@ let metricModalComparCanal = "total"; // filtro de canal en "Comparar rangos": t
 let metricModalMetricasExtra = []; // claves de métricas a comparar contra la abierta, en "Comparar métricas"
 const MAX_METRICAS_EXTRA = 4; // + la abierta = hasta 5 líneas en el gráfico
 
+// Zoom del gráfico de líneas, estilo TradingView: cuántos píxeles ocupa cada punto en
+// el eje X. Se ajusta con la rueda del mouse (o pellizco en celular) sobre el gráfico;
+// achicarlo permite ver muchos más puntos (ej. 3 meses) sin tener que hacer scroll.
+const CHART_ZOOM_PX_DEFAULT = 46;
+const CHART_ZOOM_PX_MIN = 6;
+const CHART_ZOOM_PX_MAX = 100;
+let chartZoomPxPorPunto = CHART_ZOOM_PX_DEFAULT;
+
 function abrirMetricModal(metricKey, titulo) {
   metricModalKey = metricKey;
   metricModalPeriodo = "dia";
   metricModalCanalActivo = false;
   metricModalMetricasExtra = [];
   metricModalComparCanal = "total";
+  chartZoomPxPorPunto = CHART_ZOOM_PX_DEFAULT;
   document.getElementById("metric-modal-titulo").textContent = titulo;
   document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
   document.getElementById("metric-modal-canal-btn").classList.remove("active");
@@ -1270,7 +1285,10 @@ function renderDualAxisLineChart(container, seriesA, seriesB, metricKeyA, metric
   svgWrap.style.minHeight = "0";
   container.appendChild(svgWrap);
 
-  const W = Math.max(n * 46, 320);
+  // El ancho real del cuadro es el mínimo, no un número fijo: así, al alejar el zoom,
+  // el gráfico llena toda la pantalla en vez de quedar chico con un hueco vacío al lado.
+  const anchoDisponible = svgWrap.getBoundingClientRect().width || 320;
+  const W = Math.max(n * chartZoomPxPorPunto, anchoDisponible);
   const H = 320;
   const padL = 64, padR = 64, padT = 16, padB = 34;
   const plotW = W - padL - padR;
@@ -1380,7 +1398,10 @@ function renderMultiLineChartNormalizado(container, seriesList, labels) {
   svgWrap.style.minHeight = "0";
   container.appendChild(svgWrap);
 
-  const W = Math.max(n * 46, 320);
+  // El ancho real del cuadro es el mínimo, no un número fijo: así, al alejar el zoom,
+  // el gráfico llena toda la pantalla en vez de quedar chico con un hueco vacío al lado.
+  const anchoDisponible = svgWrap.getBoundingClientRect().width || 320;
+  const W = Math.max(n * chartZoomPxPorPunto, anchoDisponible);
   const H = 320;
   const padL = 20, padR = 20, padT = 16, padB = 34;
   const plotW = W - padL - padR;
@@ -1687,6 +1708,27 @@ dibujarBtn.addEventListener("click", () => {
 borrarDibujosBtn.addEventListener("click", limpiarDibujosChart);
 
 window.addEventListener("resize", () => { if (lineasDibujadas.length) renderDibujos(); });
+
+// ---------- Zoom del gráfico con la rueda del mouse (estilo TradingView) ----------
+// Se guarda cuántos píxeles ocupa cada punto (chartZoomPxPorPunto, definido más arriba
+// junto al resto del estado del modal) y se re-dibuja el gráfico activo con ese ancho;
+// así se puede alejar la mirada para ver meses enteros sin tener que hacer scroll
+// horizontal, en vez de estar siempre a un tamaño de punto fijo.
+
+chartDrawWrap.addEventListener("wheel", (e) => {
+  if (!metricModalKey) return;
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.88 : 1 / 0.88; // scroll hacia abajo = alejar (achicar puntos)
+  chartZoomPxPorPunto = Math.min(CHART_ZOOM_PX_MAX, Math.max(CHART_ZOOM_PX_MIN, chartZoomPxPorPunto * factor));
+  renderMetricModal(true); // no borra las líneas de tendencia dibujadas
+}, { passive: false });
+
+// Doble click sobre el gráfico: vuelve al zoom por defecto, como el "reset" de TradingView.
+chartDrawWrap.addEventListener("dblclick", () => {
+  if (!metricModalKey || chartZoomPxPorPunto === CHART_ZOOM_PX_DEFAULT) return;
+  chartZoomPxPorPunto = CHART_ZOOM_PX_DEFAULT;
+  renderMetricModal(true);
+});
 
 // ---------- Render por período ----------
 
