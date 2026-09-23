@@ -422,6 +422,7 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
     case "ganancia-bruta": return { raw: brutaTotal, formatted: money(brutaTotal) };
     case "pct-retorno-general": { const v = pct(brutaTotal, volumenTotal); return { raw: v || 0, formatted: pctFmt(v) }; }
     case "ganancia-bruta-minorista": return { raw: g.gananciaBruta, formatted: money(g.gananciaBruta) };
+    case "ganancia-bruta-web": return { raw: g.gananciaBrutaWeb, formatted: money(g.gananciaBrutaWeb) };
     case "ganancia-neta-web": { const v = g.gananciaBrutaWeb - g.gastoPublicidadSuavizado; return { raw: v, formatted: money(v) }; }
     case "ganancia-neta-local": return { raw: g.gananciaBrutaLocal, formatted: money(g.gananciaBrutaLocal) };
     case "pct-retorno-minorista": { const v = pct(g.gananciaBruta, g.volumen); return { raw: v || 0, formatted: pctFmt(v) }; }
@@ -1827,6 +1828,7 @@ function renderPeriodo(tipo) {
   document.getElementById("label-ganancia-bruta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-general").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-bruta-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ganancia-bruta-web").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-neta-web").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-neta-local").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -1860,6 +1862,10 @@ function renderPeriodo(tipo) {
   statGananciaBrutaMinorista.textContent = money(actual.gananciaBruta);
   statGananciaBrutaMinorista.classList.toggle("value-positive", actual.gananciaBruta > 0);
   statGananciaBrutaMinorista.classList.toggle("value-negative", actual.gananciaBruta < 0);
+  const statGananciaBrutaWeb = document.getElementById("stat-ganancia-bruta-web");
+  statGananciaBrutaWeb.textContent = money(actual.gananciaBrutaWeb);
+  statGananciaBrutaWeb.classList.toggle("value-positive", actual.gananciaBrutaWeb > 0);
+  statGananciaBrutaWeb.classList.toggle("value-negative", actual.gananciaBrutaWeb < 0);
   const gananciaNetaWeb = actual.gananciaBrutaWeb - actual.gastoPublicidadSuavizado;
   const statGananciaNetaWeb = document.getElementById("stat-ganancia-neta-web");
   statGananciaNetaWeb.textContent = money(gananciaNetaWeb);
