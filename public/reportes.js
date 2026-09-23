@@ -417,6 +417,8 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
 
   switch (metricKey) {
     case "volumen": return { raw: g.volumen, formatted: money(g.volumen) };
+    case "volumen-local": return { raw: g.volumenLocal, formatted: money(g.volumenLocal) };
+    case "volumen-web": return { raw: g.volumenWeb, formatted: money(g.volumenWeb) };
     case "volumen-mayorista": return { raw: g.volumenMayorista, formatted: money(g.volumenMayorista) };
     case "ganancia-bruta": return { raw: brutaTotal, formatted: money(brutaTotal) };
     case "pct-retorno-general": { const v = pct(brutaTotal, volumenTotal); return { raw: v || 0, formatted: pctFmt(v) }; }
@@ -1815,6 +1817,8 @@ function renderPeriodo(tipo) {
 
   document.getElementById("label-volumen").textContent = actual.label;
   document.getElementById("label-volumen-mayorista").textContent = actual.label;
+  document.getElementById("label-volumen-local").textContent = actual.label;
+  document.getElementById("label-volumen-web").textContent = actual.label;
   document.getElementById("label-ganancia-bruta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-general").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-bruta-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -1835,6 +1839,8 @@ function renderPeriodo(tipo) {
 
   document.getElementById("stat-volumen").textContent = money(actual.volumen);
   document.getElementById("stat-volumen-mayorista").textContent = money(actual.volumenMayorista);
+  document.getElementById("stat-volumen-local").textContent = money(actual.volumenLocal);
+  document.getElementById("stat-volumen-web").textContent = money(actual.volumenWeb);
   const statGananciaBruta = document.getElementById("stat-ganancia-bruta");
   statGananciaBruta.textContent = money(brutaActual);
   statGananciaBruta.classList.toggle("value-positive", brutaActual > 0);
