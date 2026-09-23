@@ -152,6 +152,13 @@ async function checkAuth() {
 
 function renderDualBarChart(container, entries, { colorBySignA = false, labelA = "Minorista", labelB = "Mayorista", showGasto = false } = {}) {
   container.innerHTML = "";
+  // Por si el mismo cuadro veía antes un gráfico comparado (esos dejan flex-direction:
+  // column / align-items: stretch puestos inline): se limpia todo así siempre arranca
+  // de la disposición en fila que espera un gráfico de barras.
+  container.style.display = "";
+  container.style.flexDirection = "";
+  container.style.alignItems = "";
+  container.style.overflowX = "";
   if (entries.length === 0) return;
 
   const maxAbs = Math.max(
@@ -593,6 +600,12 @@ function agruparPorBucketIntradia(minutosBucket) {
 
 function renderSingleBarChart(container, entries) {
   container.innerHTML = "";
+  // Ídem renderDualBarChart: limpia el flex-direction/align-items que puede haber
+  // dejado puesto un gráfico comparado anterior en este mismo cuadro.
+  container.style.display = "";
+  container.style.flexDirection = "";
+  container.style.alignItems = "";
+  container.style.overflowX = "";
   if (entries.length === 0) return;
   const maxAbs = Math.max(...entries.map(e => Math.abs(e.raw)), 1);
   const barras = [];
@@ -718,6 +731,8 @@ function renderLineChart(container, entries, metricKey) {
   `).join("");
 
   container.style.display = "block";
+  container.style.flexDirection = "";
+  container.style.alignItems = "";
   container.style.overflowX = "auto";
   container.style.position = "relative";
   container.innerHTML = `
