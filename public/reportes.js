@@ -266,7 +266,7 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaWeb: 0, gananciaBrutaLocal: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0 };
     return porFecha[fecha];
   }
 
@@ -287,8 +287,13 @@ async function renderAll() {
     const key = normalizeNombre(it.producto);
     if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
       const margen = it.precio - costoPorProducto[key];
-      if (it.metodo === "mayorista") dia.gananciaBrutaMayorista += margen;
-      else dia.gananciaBruta += margen;
+      if (it.metodo === "mayorista") {
+        dia.gananciaBrutaMayorista += margen;
+      } else {
+        dia.gananciaBruta += margen;
+        if (esVentaCanalWeb(it)) dia.gananciaBrutaWeb += margen;
+        else dia.gananciaBrutaLocal += margen;
+      }
     }
   });
 
@@ -373,7 +378,7 @@ selectorMes.addEventListener("change", () => {
 // ---------- Utilidades de agrupación ----------
 
 function grupoVacio(key, label) {
-  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0, diasConDatos: 0 };
+  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaWeb: 0, gananciaBrutaLocal: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0, diasConDatos: 0 };
 }
 
 function sumarEnGrupo(acc, d) {
@@ -385,6 +390,8 @@ function sumarEnGrupo(acc, d) {
   acc.cantVentasLocales += d.cantVentasLocales || 0;
   acc.cantVentasPerdidas += d.cantVentasPerdidas || 0;
   acc.gananciaBruta += d.gananciaBruta;
+  acc.gananciaBrutaWeb += d.gananciaBrutaWeb || 0;
+  acc.gananciaBrutaLocal += d.gananciaBrutaLocal || 0;
   acc.gananciaBrutaMayorista += d.gananciaBrutaMayorista;
   acc.gasto += d.gasto;
   acc.gastoPublicidad += d.gastoPublicidad || 0;
@@ -423,6 +430,8 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
     case "ganancia-bruta": return { raw: brutaTotal, formatted: money(brutaTotal) };
     case "pct-retorno-general": { const v = pct(brutaTotal, volumenTotal); return { raw: v || 0, formatted: pctFmt(v) }; }
     case "ganancia-bruta-minorista": return { raw: g.gananciaBruta, formatted: money(g.gananciaBruta) };
+    case "ganancia-neta-web": { const v = g.gananciaBrutaWeb - g.gastoPublicidadSuavizado; return { raw: v, formatted: money(v) }; }
+    case "ganancia-neta-local": return { raw: g.gananciaBrutaLocal, formatted: money(g.gananciaBrutaLocal) };
     case "pct-retorno-minorista": { const v = pct(g.gananciaBruta, g.volumen); return { raw: v || 0, formatted: pctFmt(v) }; }
     case "ganancia-bruta-mayorista": return { raw: g.gananciaBrutaMayorista, formatted: money(g.gananciaBrutaMayorista) };
     case "pct-retorno-mayorista": { const v = pct(g.gananciaBrutaMayorista, g.volumenMayorista); return { raw: v || 0, formatted: pctFmt(v) }; }
@@ -544,8 +553,13 @@ function agruparPorBucketIntradia(minutosBucket) {
     const key = normalizeNombre(it.producto);
     if (Object.prototype.hasOwnProperty.call(costoPorProductoGlobal, key)) {
       const margen = it.precio - costoPorProductoGlobal[key];
-      if (it.metodo === "mayorista") g.gananciaBrutaMayorista += margen;
-      else g.gananciaBruta += margen;
+      if (it.metodo === "mayorista") {
+        g.gananciaBrutaMayorista += margen;
+      } else {
+        g.gananciaBruta += margen;
+        if (esVentaCanalWeb(it)) g.gananciaBrutaWeb += margen;
+        else g.gananciaBrutaLocal += margen;
+      }
     }
   });
 
@@ -1822,6 +1836,8 @@ function renderPeriodo(tipo) {
   document.getElementById("label-ganancia-bruta").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-general").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-bruta-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ganancia-neta-web").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ganancia-neta-local").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-minorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ganancia-bruta-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-pct-retorno-mayorista").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -1853,6 +1869,15 @@ function renderPeriodo(tipo) {
   statGananciaBrutaMinorista.textContent = money(actual.gananciaBruta);
   statGananciaBrutaMinorista.classList.toggle("value-positive", actual.gananciaBruta > 0);
   statGananciaBrutaMinorista.classList.toggle("value-negative", actual.gananciaBruta < 0);
+  const gananciaNetaWeb = actual.gananciaBrutaWeb - actual.gastoPublicidadSuavizado;
+  const statGananciaNetaWeb = document.getElementById("stat-ganancia-neta-web");
+  statGananciaNetaWeb.textContent = money(gananciaNetaWeb);
+  statGananciaNetaWeb.classList.toggle("value-positive", gananciaNetaWeb > 0);
+  statGananciaNetaWeb.classList.toggle("value-negative", gananciaNetaWeb < 0);
+  const statGananciaNetaLocal = document.getElementById("stat-ganancia-neta-local");
+  statGananciaNetaLocal.textContent = money(actual.gananciaBrutaLocal);
+  statGananciaNetaLocal.classList.toggle("value-positive", actual.gananciaBrutaLocal > 0);
+  statGananciaNetaLocal.classList.toggle("value-negative", actual.gananciaBrutaLocal < 0);
   const statPctRetornoMinorista = document.getElementById("stat-pct-retorno-minorista");
   statPctRetornoMinorista.textContent = pctRetornoMinorista !== null ? pctRetornoMinorista.toFixed(1) + "%" : "—";
   statPctRetornoMinorista.classList.toggle("value-positive", pctRetornoMinorista !== null && pctRetornoMinorista > 0);

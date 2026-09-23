@@ -392,7 +392,7 @@ if (USE_TURSO) {
     },
     async getAllItems() {
       const res = await client.execute(`
-        SELECT vi.*, v.fecha as fecha, v.horaLabel as horaLabel, v.metodo as metodo
+        SELECT vi.*, v.fecha as fecha, v.horaLabel as horaLabel, v.metodo as metodo, v.envioMetodo as envioMetodo
         FROM venta_items vi JOIN ventas v ON v.id = vi.ventaId
         ORDER BY v.creadoEn ASC
       `);
@@ -896,7 +896,7 @@ if (USE_TURSO) {
     },
     async getAllItems() {
       return db.prepare(`
-        SELECT vi.*, v.fecha as fecha, v.horaLabel as horaLabel, v.metodo as metodo
+        SELECT vi.*, v.fecha as fecha, v.horaLabel as horaLabel, v.metodo as metodo, v.envioMetodo as envioMetodo
         FROM venta_items vi JOIN ventas v ON v.id = vi.ventaId
         ORDER BY v.creadoEn ASC
       `).all();

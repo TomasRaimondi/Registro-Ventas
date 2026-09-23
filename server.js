@@ -858,6 +858,7 @@ const server = http.createServer(async (req, res) => {
             fecha: venta.fecha,
             horaLabel: venta.horaLabel,
             metodo: venta.metodo,
+            envioMetodo: venta.envioMetodo,
           });
         }
       }
