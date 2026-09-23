@@ -4,10 +4,6 @@ function money(n) {
   return sign + "$" + Math.abs(num).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
-function normalizeNombre(s) {
-  return (s || "").trim().toLowerCase();
-}
-
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
@@ -226,7 +222,6 @@ let itemsGlobal = [];
 let gastosGlobal = [];
 let ventasPerdidasGlobal = [];
 let porFechaGlobal = {};
-let costoPorProductoGlobal = {};
 let periodoActual = "dia";
 let semanaSeleccionada = null; // weekStart (YYYY-MM-DD), usada por la pestaña "Día"
 let mesSeleccionado = null; // YYYY-MM, usada por la pestaña "Semana"
@@ -239,11 +234,10 @@ const METODO_LABELS = {
 // ---------- Carga de datos ----------
 
 async function renderAll() {
-  let data, costos, hora, ventasPerdidas;
+  let data, hora, ventasPerdidas;
   try {
-    [data, costos, hora, ventasPerdidas] = await Promise.all([
+    [data, hora, ventasPerdidas] = await Promise.all([
       api("/api/reportes"),
-      api("/api/costos"),
       api("/api/hora"),
       api("/api/ventas-perdidas-todas"),
     ]);
@@ -259,10 +253,6 @@ async function renderAll() {
   itemsGlobal = data.items;
   gastosGlobal = data.gastos;
   ventasPerdidasGlobal = ventasPerdidas;
-
-  const costoPorProducto = {};
-  costos.forEach(c => { costoPorProducto[normalizeNombre(c.producto)] = c.costo; });
-  costoPorProductoGlobal = costoPorProducto;
 
   const porFecha = {};
   function getDia(fecha) {
@@ -282,11 +272,13 @@ async function renderAll() {
     dia.cantVentas++;
   });
 
+  // it.costo ya viene calculado por el servidor con el costo vigente EL DÍA de esa
+  // venta (no el costo actual del producto), para que la ganancia de ventas viejas no
+  // se mueva cuando se actualiza un costo hoy.
   itemsGlobal.forEach(it => {
     const dia = getDia(it.fecha);
-    const key = normalizeNombre(it.producto);
-    if (Object.prototype.hasOwnProperty.call(costoPorProducto, key)) {
-      const margen = it.precio - costoPorProducto[key];
+    if (it.costo !== null && it.costo !== undefined) {
+      const margen = it.precio - it.costo;
       if (it.metodo === "mayorista") {
         dia.gananciaBrutaMayorista += margen;
       } else {
@@ -550,9 +542,8 @@ function agruparPorBucketIntradia(minutosBucket) {
 
   itemsGlobal.filter(it => it.fecha === hoyFecha).forEach(it => {
     const g = getBucket(it.horaLabel);
-    const key = normalizeNombre(it.producto);
-    if (Object.prototype.hasOwnProperty.call(costoPorProductoGlobal, key)) {
-      const margen = it.precio - costoPorProductoGlobal[key];
+    if (it.costo !== null && it.costo !== undefined) {
+      const margen = it.precio - it.costo;
       if (it.metodo === "mayorista") {
         g.gananciaBrutaMayorista += margen;
       } else {
