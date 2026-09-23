@@ -255,17 +255,13 @@
     </div>
     <div class="comparar-panel" id="metric-modal-metricas-panel" style="display:none; margin-top:8px;">
       <div class="comparar-rango">
-        <span class="comparar-rango-dot comparar-rango-dot-a"></span>
         <label>Rango
           <input type="date" id="cmp-metricas-desde"> al <input type="date" id="cmp-metricas-hasta">
         </label>
       </div>
-      <div class="comparar-rango">
-        <span class="comparar-rango-dot comparar-rango-dot-b"></span>
-        <label>Comparar con
-          <select id="cmp-metrica-b"></select>
-        </label>
-      </div>
+      <div id="metric-modal-metricas-lista" class="metricas-lista"></div>
+      <button type="button" class="chart-toolbar-btn" id="cmp-metrica-agregar-btn" style="margin-left:0;">+ Agregar métrica</button>
+      <p class="hint" id="metric-modal-metricas-hint" style="display:none; margin:4px 0 0; width:100%;">Con 3 o más métricas, cada línea se muestra en su propia escala relativa (0 a 100% de su rango) para que quepan juntas — pasá el mouse sobre un punto para ver el valor real.</p>
     </div>
     <div class="periodo-tabs" id="metric-modal-comparar-canal" style="display:none; margin-top:8px;">
       <button type="button" class="periodo-tab" data-canal="local">Solo Local</button>

@@ -840,11 +840,14 @@ let metricModalTimeframe = 60; // minutos, usado en el modo "vivo"
 let metricModalLiveInterval = null;
 let metricModalCanalActivo = false; // segmentar "Volumen" en Web vs Local
 let metricModalComparCanal = "total"; // filtro de canal en "Comparar rangos": total | web | local
+let metricModalMetricasExtra = []; // claves de métricas a comparar contra la abierta, en "Comparar métricas"
+const MAX_METRICAS_EXTRA = 4; // + la abierta = hasta 5 líneas en el gráfico
 
 function abrirMetricModal(metricKey, titulo) {
   metricModalKey = metricKey;
   metricModalPeriodo = "dia";
   metricModalCanalActivo = false;
+  metricModalMetricasExtra = [];
   metricModalComparCanal = "total";
   document.getElementById("metric-modal-titulo").textContent = titulo;
   document.querySelectorAll("#metric-modal-tabs .periodo-tab").forEach(b => b.classList.toggle("active", b.dataset.periodo === "dia"));
@@ -967,22 +970,70 @@ function tituloDeMetrica(key) {
   return card ? card.querySelector(".label").textContent : key;
 }
 
-// Arma una sola vez el selector de "Comparar con" a partir de las mismas tarjetas
-// clickeables de arriba (así nunca queda desactualizado si se agrega o saca una
-// métrica), elige por defecto una distinta a la que está abierta, y precarga el rango
-// de fechas (últimos 30 días) la primera vez que se usa esta pestaña.
+// Misma lista que las tarjetas clickeables de arriba, para no duplicar a mano el
+// listado de métricas disponibles en los selects de "Comparar con".
+function opcionesMetricasDisponibles() {
+  return [...document.querySelectorAll(".metric-card-clickable")].map(card => ({
+    key: card.dataset.metric,
+    label: card.querySelector(".label").textContent,
+  }));
+}
+
+// Elige una métrica que todavía no esté siendo comparada (ni sea la abierta), para
+// que "Agregar métrica" siempre sume algo nuevo en vez de repetir una ya elegida.
+function siguienteMetricaDisponible() {
+  const usadas = new Set([metricModalKey, ...metricModalMetricasExtra]);
+  const todas = opcionesMetricasDisponibles();
+  const libre = todas.find(o => !usadas.has(o.key));
+  return libre ? libre.key : (todas[0] ? todas[0].key : metricModalKey);
+}
+
+const PALETA_COMPARAR_METRICAS = ["var(--accent)", "var(--orange)", "var(--green)", "var(--purple)", "var(--red)"];
+function colorDeSerieMetrica(i) {
+  return PALETA_COMPARAR_METRICAS[i % PALETA_COMPARAR_METRICAS.length];
+}
+
+// Reconstruye las filas de "Comparar con" (una por métrica extra elegida), cada una
+// con su propio select y un botón para sacarla — siempre queda al menos una (el
+// gráfico necesita mínimo dos métricas: la abierta + esta).
+function renderFilasMetricasExtra() {
+  const opciones = opcionesMetricasDisponibles();
+  const lista = document.getElementById("metric-modal-metricas-lista");
+  lista.innerHTML = metricModalMetricasExtra.map((key, i) => `
+    <div class="metrica-extra-row" data-idx="${i}">
+      <span class="comparar-rango-dot" style="background:${colorDeSerieMetrica(i + 1)};"></span>
+      <select class="cmp-metrica-extra">
+        ${opciones.map(o => `<option value="${o.key}"${o.key === key ? " selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+      </select>
+      <button type="button" class="metrica-quitar-btn" title="Quitar"${metricModalMetricasExtra.length <= 1 ? " disabled" : ""}>✕</button>
+    </div>
+  `).join("");
+
+  lista.querySelectorAll(".metrica-extra-row").forEach(row => {
+    const idx = Number(row.dataset.idx);
+    row.querySelector(".cmp-metrica-extra").addEventListener("change", (e) => {
+      metricModalMetricasExtra[idx] = e.target.value;
+      renderMetricModal();
+    });
+    row.querySelector(".metrica-quitar-btn").addEventListener("click", () => {
+      if (metricModalMetricasExtra.length <= 1) return;
+      metricModalMetricasExtra.splice(idx, 1);
+      renderFilasMetricasExtra();
+      renderMetricModal();
+    });
+  });
+
+  document.getElementById("cmp-metrica-agregar-btn").style.display =
+    metricModalMetricasExtra.length >= MAX_METRICAS_EXTRA ? "none" : "";
+}
+
+// Arranca con una sola métrica extra (el comportamiento de siempre) y precarga el
+// rango de fechas (últimos 30 días) la primera vez que se usa esta pestaña.
 function inicializarComparacionMetricas() {
-  const selectB = document.getElementById("cmp-metrica-b");
-  if (!selectB.dataset.poblado) {
-    const opciones = [...document.querySelectorAll(".metric-card-clickable")].map(card => ({
-      key: card.dataset.metric,
-      label: card.querySelector(".label").textContent,
-    }));
-    selectB.innerHTML = opciones.map(o => `<option value="${o.key}">${escapeHtml(o.label)}</option>`).join("");
-    selectB.dataset.poblado = "1";
+  if (metricModalMetricasExtra.length === 0) {
+    metricModalMetricasExtra = [siguienteMetricaDisponible()];
   }
-  const opcionDistinta = [...selectB.options].find(o => o.value !== metricModalKey);
-  if (opcionDistinta && (!selectB.value || selectB.value === metricModalKey)) selectB.value = opcionDistinta.value;
+  renderFilasMetricasExtra();
 
   const $desde = document.getElementById("cmp-metricas-desde");
   if (!$desde.value) {
@@ -1259,20 +1310,121 @@ function renderDualAxisLineChart(container, seriesA, seriesB, metricKeyA, metric
   }
 }
 
+// Con exactamente dos métricas (la abierta + una) se usa el gráfico de eje doble real,
+// que muestra la escala verdadera de cada una. Con tres o más ya no entran ejes reales
+// para todas, así que cada línea pasa a su propia escala relativa (0 a 100% de su
+// rango) — la forma se puede seguir comparando, y el valor real queda en el tooltip y
+// en la tabla de abajo.
+function renderMultiLineChartNormalizado(container, seriesList, labels) {
+  ocultarChartTooltip();
+  container.innerHTML = "";
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.alignItems = "stretch";
+  container.style.overflowX = "";
+  const n = seriesList[0] ? seriesList[0].length : 0;
+  if (n === 0) return;
+
+  const colores = labels.map((_, i) => colorDeSerieMetrica(i));
+
+  const legend = document.createElement("div");
+  legend.className = "chart-legend";
+  legend.style.margin = "0 0 8px";
+  legend.style.flex = "0 0 auto";
+  legend.innerHTML = labels.map((label, i) => `
+    <span class="legend-item"><span class="legend-dot" style="background:${colores[i]};"></span>${escapeHtml(label)}</span>
+  `).join("");
+  container.appendChild(legend);
+
+  const svgWrap = document.createElement("div");
+  svgWrap.style.overflowX = "auto";
+  svgWrap.style.flex = "1 1 auto";
+  svgWrap.style.minHeight = "0";
+  container.appendChild(svgWrap);
+
+  const W = Math.max(n * 46, 320);
+  const H = 320;
+  const padL = 20, padR = 20, padT = 16, padB = 34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  function normalizar(serie) {
+    const valores = serie.map(e => e.raw);
+    const max = Math.max(...valores);
+    const min = Math.min(...valores);
+    if (max === min) return serie.map(() => 0.5);
+    return serie.map(e => (e.raw - min) / (max - min));
+  }
+  const tPorSerie = seriesList.map(normalizar);
+
+  const xFor = (i) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const yFor = (t) => padT + plotH - t * plotH;
+
+  const numLineas = 4;
+  let gridSvg = "";
+  for (let i = 0; i <= numLineas; i++) {
+    const y = padT + plotH - (i / numLineas) * plotH;
+    gridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--card-border)" stroke-width="1" />`;
+  }
+
+  const indicesConEtiqueta = new Set(elegirIndicesEtiquetas(n, plotW));
+  let xLabelsSvg = "";
+  for (let i = 0; i < n; i++) {
+    if (indicesConEtiqueta.has(i)) {
+      xLabelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--text-dim)">${escapeHtml(seriesList[0][i].label)}</text>`;
+    }
+  }
+
+  const DASH_PATRONES = ["", "6,4", "2,3", "8,3,2,3", "1,3"];
+  function serieSvg(serie, ts, color, dash) {
+    const puntos = serie.map((e, i) => `${xFor(i).toFixed(1)},${yFor(ts[i]).toFixed(1)}`).join(" ");
+    const circles = serie.map((e, i) => `
+      <circle
+        class="chart-line-point"
+        style="animation-delay:${Math.min(i * 15, 400)}ms;"
+        cx="${xFor(i).toFixed(1)}" cy="${yFor(ts[i]).toFixed(1)}" r="4" fill="${color}"
+        data-label="${escapeHtml(e.fecha ? `${e.label} · ${nombreDiaSemana(e.fecha)}` : e.label)}" data-valor="${escapeHtml(e.formatted)}"
+      ></circle>
+    `).join("");
+    return `<polyline class="chart-line-path${dash ? " chart-line-path-dashed" : ""}" points="${puntos}" fill="none" stroke="${color}" stroke-width="2.5"${dash ? ` stroke-dasharray="${dash}"` : ""} />${circles}`;
+  }
+
+  const seriesSvg = seriesList.map((serie, i) => serieSvg(serie, tPorSerie[i], colores[i], DASH_PATRONES[i % DASH_PATRONES.length])).join("");
+
+  svgWrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="100%" style="display:block;">
+      ${gridSvg}
+      ${seriesSvg}
+      ${xLabelsSvg}
+    </svg>
+  `;
+
+  const pathPrincipal = svgWrap.querySelector(".chart-line-path:not(.chart-line-path-dashed)");
+  if (pathPrincipal && typeof pathPrincipal.getTotalLength === "function") {
+    const len = pathPrincipal.getTotalLength();
+    pathPrincipal.style.strokeDasharray = String(len);
+    pathPrincipal.style.strokeDashoffset = String(len);
+    pathPrincipal.getBoundingClientRect();
+    pathPrincipal.style.transition = "stroke-dashoffset .8s ease";
+    requestAnimationFrame(() => { pathPrincipal.style.strokeDashoffset = "0"; });
+  }
+}
+
 function renderMetricModalComparacionMetricas() {
   const desde = document.getElementById("cmp-metricas-desde").value;
   const hasta = document.getElementById("cmp-metricas-hasta").value;
-  const metricaB = document.getElementById("cmp-metrica-b").value;
 
   const chartEl = document.getElementById("metric-modal-chart");
   const bodyEl = document.getElementById("metric-modal-body");
-  const labelA = tituloDeMetrica(metricModalKey);
-  const labelB = tituloDeMetrica(metricaB);
-  document.getElementById("metric-modal-thead-row").innerHTML = `<th>Día</th><th>${escapeHtml(labelA)}</th><th>${escapeHtml(labelB)}</th>`;
+  const keys = [metricModalKey, ...metricModalMetricasExtra];
+  const labels = keys.map(tituloDeMetrica);
+  document.getElementById("metric-modal-thead-row").innerHTML =
+    `<th>Día</th>${labels.map(l => `<th>${escapeHtml(l)}</th>`).join("")}`;
+  document.getElementById("metric-modal-metricas-hint").style.display = keys.length >= 3 ? "block" : "none";
 
-  if (!desde || !hasta || !metricaB) {
+  if (!desde || !hasta) {
     chartEl.innerHTML = "";
-    bodyEl.innerHTML = `<tr class="empty-row"><td colspan="3">Elegí el rango y la métrica para comparar.</td></tr>`;
+    bodyEl.innerHTML = `<tr class="empty-row"><td colspan="${keys.length + 1}">Elegí el rango para comparar.</td></tr>`;
     return;
   }
 
@@ -1282,19 +1434,20 @@ function renderMetricModalComparacionMetricas() {
     const { raw, formatted } = calcularValorMetrica(key, g, 1);
     return { fecha, label: formatFecha(fecha), raw, formatted };
   });
+  const seriesPorMetrica = keys.map(armarSerie);
 
-  const seriesA = armarSerie(metricModalKey);
-  const seriesB = armarSerie(metricaB);
-
-  renderDualAxisLineChart(chartEl, seriesA, seriesB, metricModalKey, metricaB, labelA, labelB);
+  if (keys.length === 2) {
+    renderDualAxisLineChart(chartEl, seriesPorMetrica[0], seriesPorMetrica[1], keys[0], keys[1], labels[0], labels[1]);
+  } else {
+    renderMultiLineChartNormalizado(chartEl, seriesPorMetrica, labels);
+  }
 
   bodyEl.innerHTML = fechas.length === 0
-    ? `<tr class="empty-row"><td colspan="3">Sin datos.</td></tr>`
+    ? `<tr class="empty-row"><td colspan="${keys.length + 1}">Sin datos.</td></tr>`
     : fechas.map((fecha, i) => `
         <tr>
           <td>${escapeHtml(nombreDiaSemana(fecha))}, ${escapeHtml(formatFecha(fecha))}</td>
-          <td>${escapeHtml(seriesA[i].formatted)}</td>
-          <td>${escapeHtml(seriesB[i].formatted)}</td>
+          ${seriesPorMetrica.map(serie => `<td>${escapeHtml(serie[i].formatted)}</td>`).join("")}
         </tr>
       `).reverse().join("");
 }
@@ -1366,7 +1519,13 @@ document.getElementById("cmp-mes-anterior-btn").addEventListener("click", () => 
 ["cmp-metricas-desde", "cmp-metricas-hasta"].forEach(id => {
   document.getElementById(id).addEventListener("change", () => renderMetricModal());
 });
-document.getElementById("cmp-metrica-b").addEventListener("change", () => renderMetricModal());
+
+document.getElementById("cmp-metrica-agregar-btn").addEventListener("click", () => {
+  if (metricModalMetricasExtra.length >= MAX_METRICAS_EXTRA) return;
+  metricModalMetricasExtra.push(siguienteMetricaDisponible());
+  renderFilasMetricasExtra();
+  renderMetricModal();
+});
 
 document.getElementById("metric-modal-cerrar").addEventListener("click", cerrarMetricModal);
 document.getElementById("metric-modal").addEventListener("click", (e) => {
