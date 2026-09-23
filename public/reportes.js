@@ -331,8 +331,9 @@ async function renderAll() {
   renderPeriodo(periodoActual);
 
   // Si el modal de métrica está abierto en modo "En vivo", este mismo refresco
-  // (disparado cada 15s por el polling de esa vista) también lo actualiza a él.
-  if (metricModalKey && metricModalPeriodo === "vivo") renderMetricModal();
+  // (disparado cada 15s por el polling de esa vista) también lo actualiza a él, sin
+  // borrar las líneas de tendencia que el usuario haya dibujado encima.
+  if (metricModalKey && metricModalPeriodo === "vivo") renderMetricModal(true);
 }
 
 // ---------- Selectores de semana / mes ----------
@@ -428,6 +429,15 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
     case "gasto": return { raw: g.gasto, formatted: money(g.gasto) };
     case "gasto-publicidad": return { raw: g.gastoPublicidad, formatted: money(g.gastoPublicidad) };
     case "gasto-publicidad-diario": return { raw: g.gastoPublicidadSuavizado, formatted: money(g.gastoPublicidadSuavizado) };
+    case "roas": {
+      const pub = g.gastoPublicidadSuavizado;
+      const v = pub > 0 ? g.volumen / pub : null;
+      return { raw: v || 0, formatted: v !== null ? v.toFixed(1) + "x" : "—" };
+    }
+    case "ganancia-post-publicidad": {
+      const v = g.gananciaBruta - g.gastoPublicidadSuavizado;
+      return { raw: v, formatted: money(v) };
+    }
     case "cant-ventas": return { raw: g.cantVentas, formatted: String(g.cantVentas) };
     case "ticket-promedio": { const v = g.cantVentas ? g.volumen / g.cantVentas : 0; return { raw: v, formatted: money(v) }; }
     case "dias": return { raw: g.diasConDatos, formatted: `${g.diasConDatos} de ${diasEnPeriodo}` };
@@ -606,6 +616,7 @@ function renderSingleBarChart(container, entries) {
 function formatValorEje(metricKey, raw) {
   if (metricKey.startsWith("pct-")) return raw.toFixed(1) + "%";
   if (metricKey === "cant-ventas" || metricKey === "dias" || metricKey === "ventas-perdidas" || metricKey === "ingreso-clientes") return Math.round(raw).toLocaleString("es-AR");
+  if (metricKey === "roas") return raw.toFixed(1) + "x";
   return money(raw);
 }
 
@@ -889,6 +900,10 @@ function cerrarMetricModal() {
   ocultarChartTooltip();
   setMetricModalMaximizado(false);
   actualizarModoVivo();
+  limpiarDibujosChart();
+  dibujoActivo = false;
+  document.getElementById("metric-modal-dibujar-btn").classList.remove("active");
+  document.getElementById("metric-modal-chart-wrap").classList.remove("dibujando");
 }
 
 // Prende o apaga el polling de 15s y muestra/oculta el selector de timeframe y la
@@ -1064,9 +1079,10 @@ function inicializarComparacionMetricas() {
   }
 }
 
-function renderMetricModal() {
+function renderMetricModal(preservarDibujos) {
   if (!metricModalKey) return;
   ocultarChartTooltip();
+  if (!preservarDibujos) limpiarDibujosChart();
 
   if (metricModalPeriodo === "comparar") {
     renderMetricModalComparacion();
@@ -1568,9 +1584,109 @@ function setMetricModalMaximizado(valor) {
   metricModalCardEl.classList.toggle("modal-card-maximizado", valor);
   document.getElementById("metric-modal").classList.toggle("modal-overlay-maximizado", valor);
   metricModalFullscreenBtn.textContent = valor ? "🗗 Salir de pantalla completa" : "⛶ Pantalla completa";
+  // El cuadro del gráfico cambia de tamaño al maximizar: las líneas dibujadas se
+  // reubican solas porque se guardan como fracción del ancho/alto, no en píxeles fijos.
+  requestAnimationFrame(() => { if (lineasDibujadas.length) renderDibujos(); });
 }
 
 metricModalFullscreenBtn.addEventListener("click", () => setMetricModalMaximizado(!metricModalMaximizado));
+
+// ---------- Dibujar tendencias sobre el gráfico (estilo TradingView) ----------
+// Una capa de líneas aparte del contenido del gráfico (que se re-dibuja solo cada vez
+// que cambian los datos): así lo dibujado no desaparece si se toca un punto o se hace
+// scroll. Se guarda como fracción del ancho/alto del cuadro, no en píxeles fijos, para
+// que se reubique sola si el tamaño cambia (pantalla completa, resize).
+
+const chartDrawWrap = document.getElementById("metric-modal-chart-wrap");
+const chartDrawOverlay = document.getElementById("metric-modal-draw-overlay");
+const dibujarBtn = document.getElementById("metric-modal-dibujar-btn");
+const borrarDibujosBtn = document.getElementById("metric-modal-borrar-dibujos-btn");
+
+let dibujoActivo = false;
+let lineasDibujadas = []; // [{x1,y1,x2,y2}] fracciones 0..1 del cuadro del gráfico
+let lineaEnCurso = null;
+
+function puntoRelativo(clientX, clientY) {
+  const rect = chartDrawOverlay.getBoundingClientRect();
+  if (!rect.width || !rect.height) return { x: 0, y: 0 };
+  return {
+    x: Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1),
+    y: Math.min(Math.max((clientY - rect.top) / rect.height, 0), 1),
+  };
+}
+
+function renderDibujos() {
+  const rect = chartDrawOverlay.getBoundingClientRect();
+  const w = rect.width || 1;
+  const h = rect.height || 1;
+  const todas = lineaEnCurso ? [...lineasDibujadas, lineaEnCurso] : lineasDibujadas;
+  chartDrawOverlay.innerHTML = todas.map(l => `
+    <line x1="${(l.x1 * w).toFixed(1)}" y1="${(l.y1 * h).toFixed(1)}" x2="${(l.x2 * w).toFixed(1)}" y2="${(l.y2 * h).toFixed(1)}"
+      stroke="#F2C94C" stroke-width="2" stroke-linecap="round" />
+  `).join("");
+  borrarDibujosBtn.style.display = lineasDibujadas.length ? "" : "none";
+}
+
+// Se llama cada vez que el gráfico muestra datos distintos (cambio de pestaña, de
+// métrica, de rango, etc.) para que no queden líneas viejas sobre un gráfico nuevo. No
+// se llama en el refresco automático de "En vivo", que sigue siendo el mismo gráfico.
+function limpiarDibujosChart() {
+  lineasDibujadas = [];
+  lineaEnCurso = null;
+  if (chartDrawOverlay) chartDrawOverlay.innerHTML = "";
+  if (borrarDibujosBtn) borrarDibujosBtn.style.display = "none";
+}
+
+function coordsDeEvento(e) {
+  if (e.touches && e.touches[0]) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  return { clientX: e.clientX, clientY: e.clientY };
+}
+
+function iniciarLinea(e) {
+  if (!dibujoActivo) return;
+  e.preventDefault();
+  const { clientX, clientY } = coordsDeEvento(e);
+  const p = puntoRelativo(clientX, clientY);
+  lineaEnCurso = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+  renderDibujos();
+}
+
+function moverLinea(e) {
+  if (!dibujoActivo || !lineaEnCurso) return;
+  e.preventDefault();
+  const { clientX, clientY } = coordsDeEvento(e);
+  const p = puntoRelativo(clientX, clientY);
+  lineaEnCurso.x2 = p.x;
+  lineaEnCurso.y2 = p.y;
+  renderDibujos();
+}
+
+function terminarLinea() {
+  if (!dibujoActivo || !lineaEnCurso) return;
+  // Descarta las líneas de un solo click sin arrastre (demasiado cortas para ser una
+  // tendencia real).
+  const distancia = Math.hypot(lineaEnCurso.x2 - lineaEnCurso.x1, lineaEnCurso.y2 - lineaEnCurso.y1);
+  if (distancia > 0.01) lineasDibujadas.push(lineaEnCurso);
+  lineaEnCurso = null;
+  renderDibujos();
+}
+
+chartDrawOverlay.addEventListener("mousedown", iniciarLinea);
+chartDrawOverlay.addEventListener("mousemove", moverLinea);
+window.addEventListener("mouseup", terminarLinea);
+chartDrawOverlay.addEventListener("touchstart", iniciarLinea, { passive: false });
+chartDrawOverlay.addEventListener("touchmove", moverLinea, { passive: false });
+chartDrawOverlay.addEventListener("touchend", terminarLinea);
+
+dibujarBtn.addEventListener("click", () => {
+  dibujoActivo = !dibujoActivo;
+  dibujarBtn.classList.toggle("active", dibujoActivo);
+  chartDrawWrap.classList.toggle("dibujando", dibujoActivo);
+});
+
+borrarDibujosBtn.addEventListener("click", limpiarDibujosChart);
+
+window.addEventListener("resize", () => { if (lineasDibujadas.length) renderDibujos(); });
 
 // ---------- Render por período ----------
 
@@ -1668,6 +1784,8 @@ function renderPeriodo(tipo) {
   document.getElementById("label-gasto").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto-publicidad").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-gasto-publicidad-diario").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-roas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
+  document.getElementById("label-ganancia-post-publicidad").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-cant-ventas").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-dias").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
   document.getElementById("label-ingreso-clientes").textContent = nombrePeriodoDel.charAt(0).toUpperCase() + nombrePeriodoDel.slice(1);
@@ -1704,6 +1822,13 @@ function renderPeriodo(tipo) {
   document.getElementById("stat-gasto").textContent = money(actual.gasto);
   document.getElementById("stat-gasto-publicidad").textContent = money(actual.gastoPublicidad);
   document.getElementById("stat-gasto-publicidad-diario").textContent = money(actual.gastoPublicidadSuavizado);
+  const roasActual = actual.gastoPublicidadSuavizado > 0 ? actual.volumen / actual.gastoPublicidadSuavizado : null;
+  document.getElementById("stat-roas").textContent = roasActual !== null ? roasActual.toFixed(1) + "x" : "—";
+  const gananciaPostPublicidad = actual.gananciaBruta - actual.gastoPublicidadSuavizado;
+  const statGananciaPostPublicidad = document.getElementById("stat-ganancia-post-publicidad");
+  statGananciaPostPublicidad.textContent = money(gananciaPostPublicidad);
+  statGananciaPostPublicidad.classList.toggle("value-positive", gananciaPostPublicidad > 0);
+  statGananciaPostPublicidad.classList.toggle("value-negative", gananciaPostPublicidad < 0);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
   document.getElementById("stat-dias").textContent = `${actual.diasConDatos} de ${diasEnPeriodo}`;

@@ -639,6 +639,22 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 }
 .chart-tall { height: 220px; }
 #metric-modal-chart { height: 320px; }
+
+/* ---------- Dibujar tendencias sobre el gráfico ---------- */
+
+.chart-draw-wrap { position: relative; }
+.chart-draw-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  touch-action: none;
+}
+.chart-draw-wrap.dibujando .chart-draw-overlay {
+  pointer-events: auto;
+  cursor: crosshair;
+}
 .chart-bar-wrap {
   flex: 1;
   display: flex;

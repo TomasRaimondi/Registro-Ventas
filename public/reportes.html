@@ -116,6 +116,16 @@
         <span class="big-number" id="stat-gasto-publicidad-diario" style="color:var(--purple);">$0</span>
         <span class="metric-sub" id="label-gasto-publicidad-diario"></span>
       </div>
+      <div class="card metric-card metric-card-clickable" data-metric="roas" title="Volumen generado dividido por el gasto en publicidad prorrateado de ese período. No tiene en cuenta el margen: un ROAS alto no siempre significa ganancia, por eso conviene mirarlo junto a 'Ganancia post-publicidad'.">
+        <span class="label">ROAS</span>
+        <span class="big-number" id="stat-roas">—</span>
+        <span class="metric-sub" id="label-roas"></span>
+      </div>
+      <div class="card metric-card metric-card-clickable" data-metric="ganancia-post-publicidad" title="Ganancia bruta minorista menos el gasto en publicidad prorrateado de ese período: lo que queda después de pagar la pauta.">
+        <span class="label">Ganancia post-publicidad</span>
+        <span class="big-number" id="stat-ganancia-post-publicidad">$0</span>
+        <span class="metric-sub" id="label-ganancia-post-publicidad"></span>
+      </div>
       <div class="card metric-card metric-card-clickable" data-metric="cant-ventas">
         <span class="label">Ventas</span>
         <span class="big-number" id="stat-cant-ventas">0</span>
@@ -277,9 +287,14 @@
       <button type="button" class="periodo-tab" data-tipo="lineas" id="metric-modal-btn-lineas">📈 Líneas</button>
       <button type="button" class="periodo-tab active" data-tipo="barras" id="metric-modal-btn-barras">📊 Barras</button>
       <button type="button" class="periodo-tab" id="metric-modal-canal-btn" style="display:none;">🌐 Web / Local</button>
+      <button type="button" class="periodo-tab" id="metric-modal-dibujar-btn">✏️ Dibujar tendencias</button>
+      <button type="button" class="chart-toolbar-btn" id="metric-modal-borrar-dibujos-btn" style="display:none;">🗑️ Borrar líneas</button>
       <button type="button" class="chart-toolbar-btn" id="metric-modal-fullscreen-btn">⛶ Pantalla completa</button>
     </div>
-    <div class="chart chart-tall" id="metric-modal-chart"></div>
+    <div class="chart-draw-wrap" id="metric-modal-chart-wrap">
+      <div class="chart chart-tall" id="metric-modal-chart"></div>
+      <svg id="metric-modal-draw-overlay" class="chart-draw-overlay"></svg>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr id="metric-modal-thead-row"><th>Día</th><th>Valor</th></tr></thead>
