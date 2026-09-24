@@ -279,19 +279,8 @@
       <button type="button" class="periodo-tab" data-tf="240">4 horas</button>
     </div>
     <div class="comparar-panel" id="metric-modal-comparar-panel" style="display:none; margin-top:8px;">
-      <div class="comparar-rango">
-        <span class="comparar-rango-dot comparar-rango-dot-a"></span>
-        <label>Rango A
-          <input type="date" id="cmp-a-desde"> al <input type="date" id="cmp-a-hasta">
-        </label>
-      </div>
-      <div class="comparar-rango">
-        <span class="comparar-rango-dot comparar-rango-dot-b"></span>
-        <label>Rango B
-          <input type="date" id="cmp-b-desde"> al <input type="date" id="cmp-b-hasta">
-        </label>
-        <button type="button" class="chart-toolbar-btn" id="cmp-mes-anterior-btn">Mismo rango, mes anterior</button>
-      </div>
+      <div id="metric-modal-rangos-lista" class="metricas-lista"></div>
+      <button type="button" class="chart-toolbar-btn" id="cmp-rango-agregar-btn" style="margin-left:0;">+ Agregar rango</button>
     </div>
     <div class="comparar-panel" id="metric-modal-metricas-panel" style="display:none; margin-top:8px;">
       <div class="comparar-rango">

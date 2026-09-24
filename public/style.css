@@ -889,7 +889,18 @@ body.chart-maximizado-activo { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
+.metrica-extra-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.metrica-extra-row input[type="date"] { padding: 6px 8px; }
 .metrica-quitar-btn {
   background: none;
   border: 1px solid var(--card-border);
