@@ -263,7 +263,7 @@ async function renderAll() {
 
   const porFecha = {};
   function getDia(fecha) {
-    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaWeb: 0, gananciaBrutaLocal: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0 };
+    if (!porFecha[fecha]) porFecha[fecha] = { volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasWeb: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaWeb: 0, gananciaBrutaLocal: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0 };
     return porFecha[fecha];
   }
 
@@ -273,7 +273,7 @@ async function renderAll() {
       dia.volumenMayorista += v.precio;
     } else {
       dia.volumen += v.precio;
-      if (esVentaCanalWeb(v)) dia.volumenWeb += v.precio;
+      if (esVentaCanalWeb(v)) { dia.volumenWeb += v.precio; dia.cantVentasWeb++; }
       else { dia.volumenLocal += v.precio; dia.cantVentasLocales++; }
     }
     // El costo del viaje de Uber Moto es un costo directo de esa venta (como el costo
@@ -384,7 +384,7 @@ selectorMes.addEventListener("change", () => {
 // ---------- Utilidades de agrupación ----------
 
 function grupoVacio(key, label) {
-  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaWeb: 0, gananciaBrutaLocal: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0, diasConDatos: 0 };
+  return { key, label, volumen: 0, volumenWeb: 0, volumenLocal: 0, volumenMayorista: 0, cantVentas: 0, cantVentasLocales: 0, cantVentasWeb: 0, cantVentasPerdidas: 0, gananciaBruta: 0, gananciaBrutaWeb: 0, gananciaBrutaLocal: 0, gananciaBrutaMayorista: 0, gasto: 0, gastoPublicidad: 0, gastoPublicidadSuavizado: 0, diasConDatos: 0 };
 }
 
 function sumarEnGrupo(acc, d) {
@@ -394,6 +394,7 @@ function sumarEnGrupo(acc, d) {
   acc.volumenMayorista += d.volumenMayorista;
   acc.cantVentas += d.cantVentas;
   acc.cantVentasLocales += d.cantVentasLocales || 0;
+  acc.cantVentasWeb += d.cantVentasWeb || 0;
   acc.cantVentasPerdidas += d.cantVentasPerdidas || 0;
   acc.gananciaBruta += d.gananciaBruta;
   acc.gananciaBrutaWeb += d.gananciaBrutaWeb || 0;
@@ -457,7 +458,8 @@ function calcularValorMetrica(metricKey, g, diasEnPeriodo) {
       return { raw: v, formatted: money(v) };
     }
     case "cant-ventas": return { raw: g.cantVentas, formatted: String(g.cantVentas) };
-    case "ticket-promedio": { const v = g.cantVentas ? g.volumen / g.cantVentas : 0; return { raw: v, formatted: money(v) }; }
+    case "ticket-promedio": { const v = g.cantVentasLocales ? g.volumenLocal / g.cantVentasLocales : 0; return { raw: v, formatted: money(v) }; }
+    case "ticket-promedio-web": { const v = g.cantVentasWeb ? g.volumenWeb / g.cantVentasWeb : 0; return { raw: v, formatted: money(v) }; }
     case "dias": return { raw: g.diasConDatos, formatted: `${g.diasConDatos} de ${diasEnPeriodo}` };
     case "ventas-perdidas": return { raw: g.cantVentasPerdidas, formatted: String(g.cantVentasPerdidas) };
     case "ingreso-clientes": { const v = g.cantVentasLocales + g.cantVentasPerdidas; return { raw: v, formatted: String(v) }; }
@@ -549,7 +551,7 @@ function agruparPorBucketIntradia(minutosBucket) {
       g.volumenMayorista += v.precio;
     } else {
       g.volumen += v.precio;
-      if (esVentaCanalWeb(v)) g.volumenWeb += v.precio;
+      if (esVentaCanalWeb(v)) { g.volumenWeb += v.precio; g.cantVentasWeb++; }
       else { g.volumenLocal += v.precio; g.cantVentasLocales++; }
     }
     if (v.envioMetodo === "uber_moto" && v.envioCosto) {
@@ -1972,7 +1974,8 @@ function renderPeriodo(tipo) {
   const brutaActual = actual.gananciaBruta + actual.gananciaBrutaMayorista;
   const volumenTotalActual = actual.volumen + actual.volumenMayorista;
   const netaActual = brutaActual - actual.gasto;
-  const ticketActual = actual.cantVentas ? actual.volumen / actual.cantVentas : 0;
+  const ticketActual = actual.cantVentasLocales ? actual.volumenLocal / actual.cantVentasLocales : 0;
+  const ticketWebActual = actual.cantVentasWeb ? actual.volumenWeb / actual.cantVentasWeb : 0;
 
   const fmtPct = (ganancia, venta) => (venta > 0 ? (ganancia / venta) * 100 : null);
   const pctRetornoGeneral = fmtPct(brutaActual, volumenTotalActual);
@@ -2060,6 +2063,7 @@ function renderPeriodo(tipo) {
   statGananciaPostPublicidad.classList.toggle("value-negative", gananciaPostPublicidad < 0);
   document.getElementById("stat-cant-ventas").textContent = actual.cantVentas;
   document.getElementById("stat-ticket-promedio").textContent = money(ticketActual);
+  document.getElementById("stat-ticket-promedio-web").textContent = money(ticketWebActual);
   document.getElementById("stat-dias").textContent = `${actual.diasConDatos} de ${diasEnPeriodo}`;
   document.getElementById("stat-ingreso-clientes").textContent = actual.cantVentasLocales + actual.cantVentasPerdidas;
   document.getElementById("stat-ventas-perdidas").textContent = actual.cantVentasPerdidas;
