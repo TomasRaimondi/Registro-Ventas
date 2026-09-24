@@ -117,6 +117,15 @@ function waLink(telefonoRaw, mensaje) {
   return `https://wa.me/${numero}${texto ? `?text=${texto}` : ""}`;
 }
 
+// La ciudad de envío no viene en un solo lugar: shipping_address es un objeto (para
+// pedidos con envío), pero los datos de facturación vienen sueltos en campos planos
+// (billing_city, no billing_address.city) — así que se prueban los dos, en ese orden.
+// En pedidos de retiro en el local puede no haber ninguno de los dos.
+function ciudadDeOrden(o) {
+  const ciudad = (o.shipping_address && o.shipping_address.city) || o.billing_city || "";
+  return ciudad.trim();
+}
+
 let cache = { data: null, fetchedAt: 0 };
 const CACHE_MS = 3 * 60 * 1000;
 
@@ -147,6 +156,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
         ultimaCompra: null,
         productos: new Map(),
         pedidos: [],
+        ciudades: new Set(),
       });
     }
 
@@ -155,6 +165,9 @@ async function getClientesRecompra({ forzar = false } = {}) {
     c.totalGastado += Number(o.total) || 0;
     if (!c.telefono && (cust.phone || o.contact_phone)) c.telefono = cust.phone || o.contact_phone;
     if (!c.email && (cust.email || o.contact_email)) c.email = cust.email || o.contact_email;
+
+    const ciudadOrden = ciudadDeOrden(o);
+    if (ciudadOrden) c.ciudades.add(ciudadOrden);
 
     const fechaOrden = fechaOrdenISO(o);
     if (fechaOrden && (!c.ultimaCompra || fechaOrden > c.ultimaCompra)) c.ultimaCompra = fechaOrden;
@@ -175,6 +188,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
       fecha: fechaOrden,
       total: Number(o.total) || 0,
       productos: items,
+      ciudad: ciudadOrden || null,
     });
   }
 
@@ -197,6 +211,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
         .map(([nombre, cantidad]) => ({ nombre, cantidad }))
         .sort((a, b) => b.cantidad - a.cantidad),
       pedidos: c.pedidos.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")),
+      ciudades: [...c.ciudades],
     };
   });
 

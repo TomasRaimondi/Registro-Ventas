@@ -135,6 +135,7 @@ document.getElementById("segmento-tabs").addEventListener("click", (e) => {
 
 document.getElementById("buscador").addEventListener("input", () => render());
 document.getElementById("umbral-dias").addEventListener("input", () => render());
+document.getElementById("filtro-ciudad").addEventListener("input", () => render());
 
 // ---------- Render ----------
 
@@ -167,8 +168,14 @@ function render() {
   document.getElementById("stat-unico").textContent = totalUnico;
   document.getElementById("stat-inactivo").textContent = totalInactivo;
 
+  const textoCiudad = document.getElementById("filtro-ciudad").value.trim().toLowerCase();
+
   let filtrados = conSegmento.filter((c) => {
     if (segmentoActivo !== "todos" && c.segmentoUi !== segmentoActivo) return false;
+    if (textoCiudad) {
+      const tieneCiudad = (c.ciudades || []).some((ciudad) => ciudad.toLowerCase().includes(textoCiudad));
+      if (!tieneCiudad) return false;
+    }
     if (!texto) return true;
     const haystack = `${c.nombre || ""} ${c.email || ""} ${c.telefono || ""}`.toLowerCase();
     return haystack.includes(texto);
@@ -343,7 +350,7 @@ function toggleDetalle(tr, c) {
   detalle.className = "fila-detalle";
   const pedidosHtml = c.pedidos.map((p) => `
     <div class="detalle-pedido">
-      <span>#${p.numero} — ${formatFechaHora(p.fecha)} — ${money(p.total)}</span>
+      <span>#${p.numero} — ${formatFechaHora(p.fecha)} — ${money(p.total)}${p.ciudad ? ` — <span class="hint">${escapeHtml(p.ciudad)}</span>` : ""}</span>
       <span class="detalle-pedido-productos">${escapeHtml(p.productos.map((it) => `${it.cantidad}x ${it.nombre}`).join(", "))}</span>
     </div>
   `).join("");
