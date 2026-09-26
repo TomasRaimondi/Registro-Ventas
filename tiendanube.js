@@ -269,4 +269,26 @@ async function generarCupon({ porcentaje, nota }) {
   return { code: cupon.code || codigo, id: cupon.id, porcentaje: pct, nota: nota || null };
 }
 
-module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono };
+// Busca un pedido por su número visible (el "#1234" que ve el cliente) para precargar
+// nombre, teléfono y ciudad al crear un seguimiento de envío.
+async function buscarOrdenPorNumero(numero) {
+  if (!isConfigured()) throw new Error("Tienda no conectada");
+  const n = String(numero).replace(/\D/g, "");
+  if (!n) return null;
+  const lote = await tnFetch(`/orders?q=${encodeURIComponent(n)}&per_page=10`);
+  const o = Array.isArray(lote) ? lote.find((x) => String(x.number) === n) : null;
+  if (!o) return null;
+  const cust = o.customer || {};
+  const dir = o.shipping_address || {};
+  return {
+    orden: String(o.number),
+    cliente: cust.name || o.contact_name || "",
+    telefono: cust.phone || o.contact_phone || "",
+    ciudad: ciudadDeOrden(o),
+    direccion: [dir.address, dir.number, dir.floor].filter(Boolean).join(" "),
+    productos: (o.products || []).map((p) => `${Number(p.quantity) || 1}x ${nombreProducto(p)}`),
+    pagado: o.payment_status === "paid",
+  };
+}
+
+module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero };

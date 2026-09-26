@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seguimiento de Envíos</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#EEF2F0">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<script src="nav-menu.js"></script>
+<style>
+  .seg-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: end; }
+  .seg-form .field { margin: 0; }
+  .seg-buscar-row { display: flex; gap: 8px; }
+  .seg-buscar-row input { flex: 1; min-width: 0; }
+  .seg-info { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--green-soft); font-size: 13px; line-height: 1.45; display: none; }
+  .seg-info.aviso { background: var(--orange-soft); }
+  .seg-lista { display: grid; gap: 14px; margin-top: 4px; }
+  .seg-item { border: 1px solid var(--card-border); border-radius: var(--radius); padding: 14px; background: var(--card); }
+  .seg-item.cerrado { opacity: .62; }
+  .seg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .seg-titulo { font-weight: 700; font-size: 16px; }
+  .seg-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .seg-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 4px 10px; border-radius: 999px; background: var(--green-soft); color: var(--green); white-space: nowrap; }
+  .seg-badge.en_camino { background: var(--purple-soft); color: var(--purple); }
+  .seg-badge.entregado { background: var(--blue-soft); color: var(--blue); }
+  .seg-badge.cancelado { background: var(--red-soft); color: var(--red); }
+  .seg-bloque { margin-top: 12px; }
+  .seg-bloque-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin-bottom: 6px; }
+  .seg-fila { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .seg-btn { border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 10px; padding: 9px 13px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .seg-btn:hover { border-color: var(--green); }
+  .seg-btn.activo { background: var(--green); border-color: var(--green); color: #fff; }
+  .seg-btn.peligro:hover { border-color: var(--red); color: var(--red); }
+  .seg-btn.wa { background: #25d366; border-color: #25d366; color: #fff; }
+  .seg-input-mini { border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 10px; padding: 9px 11px; font-size: 13px; font-family: inherit; }
+  .seg-input-mini.min { width: 84px; }
+  .seg-input-mini.url { flex: 1; min-width: 180px; }
+  .seg-eta-actual { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .seg-vacio { text-align: center; color: var(--text-dim); padding: 20px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Seguimiento de Envíos</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">Registro de Ventas</a>
+    <div id="app-nav"></div>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="usuario">Usuario</label>
+        <input type="text" id="usuario" name="usuario" placeholder="Tomás o Chino" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Usuario o contraseña incorrectos.</p>
+    </form>
+  </section>
+
+  <div id="app-content" style="display:none;">
+
+    <section class="card">
+      <h2>Nuevo seguimiento</h2>
+      <p class="hint">Cuando tomes un pedido con Uber Moto, cargá el número de pedido de la tienda. El cliente lo sigue desde su celular con los colores de Platense Fit.</p>
+      <form id="seg-form" autocomplete="off">
+        <div class="seg-form">
+          <div class="field">
+            <label for="seg-orden">Nº de pedido</label>
+            <div class="seg-buscar-row">
+              <input type="text" id="seg-orden" inputmode="numeric" placeholder="1234" required>
+              <button type="button" class="seg-btn" id="seg-buscar-btn">Buscar</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="seg-cliente">Cliente</label>
+            <input type="text" id="seg-cliente" placeholder="Nombre">
+          </div>
+          <div class="field">
+            <label for="seg-telefono">WhatsApp</label>
+            <input type="text" id="seg-telefono" inputmode="tel" placeholder="221 555 1234">
+          </div>
+          <div class="field">
+            <label for="seg-uber">Link de seguimiento de Uber (opcional)</label>
+            <input type="url" id="seg-uber" placeholder="https://...">
+          </div>
+          <button type="submit" class="submit-btn" id="seg-crear-btn">Crear seguimiento</button>
+        </div>
+        <div class="seg-info" id="seg-info"></div>
+        <p class="hint error-hint" id="seg-error" style="display:none;"></p>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Envíos en curso y de las últimas 48 hs</h2>
+      <div class="seg-lista" id="seg-lista"><div class="seg-vacio">Cargando...</div></div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="seguimientos.js"></script>
+</body>
+</html>

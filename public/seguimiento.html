@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#3f7d34">
+<title>Seguí tu pedido | Platense Fit</title>
+<style>
+  :root {
+    --verde: #3f7d34;
+    --verde-oscuro: #2f6127;
+    --verde-claro: #e8f3e3;
+    --texto: #1c1c1c;
+    --gris: #6b6b6b;
+    --linea: #dfe6dc;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f4f7f2;
+    color: var(--texto);
+    min-height: 100vh;
+  }
+  .top {
+    background: var(--verde);
+    color: #fff;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  }
+  .top img { height: 34px; width: 34px; border-radius: 8px; background: #fff; object-fit: contain; }
+  .top h1 { font-size: 17px; margin: 0; font-weight: 800; letter-spacing: .2px; }
+  main { max-width: 520px; margin: 0 auto; padding: 16px 14px 40px; }
+  .card {
+    background: #fff;
+    border: 2px solid var(--verde);
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--verde-claro); color: var(--verde);
+    font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--verde); animation: pulso 1.6s ease-in-out infinite; }
+  @keyframes pulso { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.7); opacity: .45; } }
+  .saludo { font-size: 13px; color: var(--gris); margin: 0 0 2px; font-weight: 600; }
+  .titulo { font-size: 24px; font-weight: 900; margin: 0 0 6px; line-height: 1.15; }
+  .sub { font-size: 14px; color: var(--gris); margin: 0; line-height: 1.4; }
+  .eta { margin-top: 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .eta-hora { font-size: 30px; font-weight: 900; color: var(--verde); }
+  .eta-cuenta { font-size: 14px; font-weight: 700; color: var(--texto); background: var(--verde-claro); padding: 3px 10px; border-radius: 999px; }
+  .mapa { border-radius: 14px; overflow: hidden; border: 1px solid var(--linea); margin-top: 16px; background: #eaf2e4; }
+  .mapa svg { display: block; width: 100%; height: auto; }
+  .mapa-pie { display: flex; justify-content: space-between; font-size: 11px; color: var(--gris); font-weight: 700; padding: 6px 12px 8px; background: #fff; border-top: 1px solid var(--linea); }
+  .moto-halo { animation: halo 1.8s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes halo { 0% { transform: scale(.6); opacity: .55; } 100% { transform: scale(1.8); opacity: 0; } }
+  .btn-uber {
+    display: none; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; margin-top: 14px; padding: 14px;
+    background: var(--verde); color: #fff; border: 0; border-radius: 12px;
+    font-size: 15px; font-weight: 800; text-decoration: none; cursor: pointer;
+    position: relative; overflow: hidden; animation: brillo 2s ease-in-out infinite;
+  }
+  .btn-uber.visible { display: flex; }
+  @keyframes brillo { 0%,100% { box-shadow: 0 0 0 0 rgba(63,125,52,.5); } 50% { box-shadow: 0 0 0 8px rgba(63,125,52,0); } }
+  .pasos { list-style: none; margin: 0; padding: 0; }
+  .paso { display: flex; gap: 14px; position: relative; padding-bottom: 20px; }
+  .paso:last-child { padding-bottom: 0; }
+  .paso::before { content: ""; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: var(--linea); }
+  .paso:last-child::before { display: none; }
+  .paso.hecho::before { background: var(--verde); }
+  .paso-icono {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    background: #fff; border: 2px solid var(--linea); color: var(--gris); z-index: 1;
+  }
+  .paso.hecho .paso-icono { background: var(--verde); border-color: var(--verde); color: #fff; }
+  .paso.actual .paso-icono { background: #fff; border-color: var(--verde); color: var(--verde); animation: brillo 2s ease-in-out infinite; }
+  .paso-texto { padding-top: 4px; }
+  .paso-nombre { font-weight: 800; font-size: 15px; }
+  .paso.pendiente .paso-nombre { color: var(--gris); font-weight: 700; }
+  .paso-detalle { font-size: 12px; color: var(--gris); margin-top: 2px; }
+  .buscar { display: flex; gap: 8px; margin-top: 14px; }
+  .buscar input { flex: 1; min-width: 0; border: 2px solid #e2e2e2; border-radius: 10px; padding: 12px 14px; font-size: 16px; }
+  .buscar input:focus { border-color: var(--verde); outline: none; box-shadow: 0 0 0 3px rgba(63,125,52,.15); }
+  .buscar button { background: var(--verde); color: #fff; border: 0; border-radius: 10px; padding: 0 18px; font-weight: 800; font-size: 15px; cursor: pointer; }
+  .error { color: #b3261e; font-size: 13px; font-weight: 700; margin-top: 8px; display: none; }
+  .ayuda { text-align: center; font-size: 13px; color: var(--gris); margin-top: 6px; }
+  .ayuda a { color: var(--verde); font-weight: 800; text-decoration: none; }
+  .cancelado .titulo { color: #b3261e; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <img src="/logo-platense-fit.png" alt="">
+  <h1>Platense Fit · Seguí tu pedido</h1>
+</div>
+
+<main>
+  <!-- Buscar por número de pedido -->
+  <section class="card" id="vista-buscar" hidden>
+    <span class="pill"><i></i> Envío en el día</span>
+    <h2 class="titulo">¿Dónde está mi pedido?</h2>
+    <p class="sub">Ingresá el número de tu pedido (lo ves en la confirmación de compra, por ejemplo #1234).</p>
+    <form class="buscar" id="form-buscar">
+      <input type="text" id="input-orden" inputmode="numeric" placeholder="Nº de pedido" autocomplete="off">
+      <button type="submit">Ver</button>
+    </form>
+    <div class="error" id="error-buscar"></div>
+  </section>
+
+  <!-- Seguimiento -->
+  <div id="vista-seguimiento" hidden>
+    <section class="card" id="card-estado">
+      <span class="pill" id="pill"><i></i> <span id="pill-texto">Pedido #</span></span>
+      <p class="saludo" id="saludo"></p>
+      <h2 class="titulo" id="titulo"></h2>
+      <p class="sub" id="sub"></p>
+
+      <div class="eta" id="eta" hidden>
+        <span class="eta-hora" id="eta-hora"></span>
+        <span class="eta-cuenta" id="eta-cuenta"></span>
+      </div>
+
+      <div class="mapa" id="mapa-wrap">
+        <svg viewBox="0 0 360 190" xmlns="http://www.w3.org/2000/svg" aria-label="Recorrido estimado del pedido">
+          <rect width="360" height="190" fill="#eaf2e4"/>
+          <g stroke="#ffffff" stroke-width="9" stroke-linecap="round" fill="none" opacity=".9">
+            <path d="M-10 60 L370 40"/>
+            <path d="M-10 130 L370 150"/>
+            <path d="M80 -10 L100 200"/>
+            <path d="M200 -10 L190 200"/>
+            <path d="M290 -10 L310 200"/>
+          </g>
+          <g stroke="#f6faf3" stroke-width="4" stroke-linecap="round" fill="none">
+            <path d="M-10 100 L370 96"/>
+            <path d="M140 -10 L150 200"/>
+            <path d="M245 -10 L250 200"/>
+          </g>
+          <rect x="106" y="70" width="70" height="46" rx="8" fill="#cfe4c6"/>
+          <rect x="212" y="104" width="62" height="40" rx="8" fill="#cfe4c6"/>
+          <path id="ruta-base" d="M42 148 C 105 150, 96 66, 168 84 S 268 140, 318 46" fill="none" stroke="#b9cdb2" stroke-width="6" stroke-linecap="round" stroke-dasharray="1 11"/>
+          <path id="ruta-progreso" d="M42 148 C 105 150, 96 66, 168 84 S 268 140, 318 46" fill="none" stroke="#3f7d34" stroke-width="6" stroke-linecap="round"/>
+          <g transform="translate(42,148)">
+            <circle r="15" fill="#fff" stroke="#3f7d34" stroke-width="3"/>
+            <text text-anchor="middle" dominant-baseline="central" font-size="15">🏪</text>
+          </g>
+          <g transform="translate(318,46)">
+            <circle r="15" fill="#3f7d34"/>
+            <text text-anchor="middle" dominant-baseline="central" font-size="15">🏠</text>
+          </g>
+          <g id="moto" transform="translate(42,148)">
+            <circle class="moto-halo" r="16" fill="#3f7d34"/>
+            <circle r="16" fill="#fff" stroke="#3f7d34" stroke-width="3"/>
+            <text text-anchor="middle" dominant-baseline="central" font-size="18">🛵</text>
+          </g>
+        </svg>
+        <div class="mapa-pie"><span>Platense Fit</span><span id="mapa-nota">Recorrido estimado</span><span>Tu casa</span></div>
+      </div>
+
+      <a class="btn-uber" id="btn-uber" href="#" target="_blank" rel="noopener noreferrer">📍 Ver la moto en vivo</a>
+    </section>
+
+    <section class="card">
+      <ul class="pasos" id="pasos"></ul>
+    </section>
+
+    <p class="ayuda">¿Alguna consulta? <a id="link-wa" href="https://wa.me/542216388756" target="_blank" rel="noopener noreferrer">Escribinos por WhatsApp</a></p>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var TZ = "America/Argentina/Buenos_Aires";
+  var params = new URLSearchParams(location.search);
+  var token = params.get("t") || "";
+  var ordenParam = (params.get("orden") || "").replace(/\D/g, "");
+
+  var $ = function (id) { return document.getElementById(id); };
+  var vistaBuscar = $("vista-buscar");
+  var vistaSeg = $("vista-seguimiento");
+
+  var PASOS = [
+    { clave: "recibido", icono: "✓", nombre: "Pedido recibido", detalle: "Ya tenemos tu pedido" },
+    { clave: "preparando", icono: "📦", nombre: "Preparando tu pedido", detalle: "Lo estamos armando" },
+    { clave: "en_camino", icono: "🛵", nombre: "En camino", detalle: "Salió del local" },
+    { clave: "entregado", icono: "🎉", nombre: "Entregado", detalle: "¡A disfrutarlo!" }
+  ];
+  var ORDEN_ESTADO = { recibido: 0, preparando: 1, en_camino: 2, entregado: 3 };
+
+  var datos = null;
+  var offsetReloj = 0;
+  var progresoMostrado = 0;
+  var primeraVez = true;
+  var animId = null;
+  var timerPoll = null;
+
+  function hora(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ });
+  }
+
+  function ahoraMs() { return Date.now() + offsetReloj; }
+
+  function mostrarBuscar(mensajeError) {
+    vistaSeg.hidden = true;
+    vistaBuscar.hidden = false;
+    var e = $("error-buscar");
+    if (mensajeError) { e.textContent = mensajeError; e.style.display = "block"; }
+    else e.style.display = "none";
+  }
+
+  $("form-buscar").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var n = $("input-orden").value.replace(/\D/g, "");
+    if (!n) return;
+    location.href = "/seguimiento.html?orden=" + encodeURIComponent(n);
+  });
+
+  function progresoRuta() {
+    if (!datos) return 0;
+    if (datos.estado === "entregado") return 1;
+    if (datos.estado === "recibido") return 0;
+    if (datos.estado === "preparando") return 0.02;
+    // en camino: avanza según el tiempo transcurrido entre la salida y la hora estimada
+    var salida = datos.salidaISO ? Date.parse(datos.salidaISO) : null;
+    var eta = datos.etaISO ? Date.parse(datos.etaISO) : null;
+    if (!salida || !eta || eta <= salida) return 0.15;
+    var p = (ahoraMs() - salida) / (eta - salida);
+    return Math.max(0.06, Math.min(0.94, p));
+  }
+
+  function posicionarMoto(p) {
+    var ruta = $("ruta-base");
+    var largo = ruta.getTotalLength();
+    var pt = ruta.getPointAtLength(largo * p);
+    $("moto").setAttribute("transform", "translate(" + pt.x + "," + pt.y + ")");
+    var prog = $("ruta-progreso");
+    prog.style.strokeDasharray = largo;
+    prog.style.strokeDashoffset = largo * (1 - p);
+  }
+
+  function animarMoto(hacia) {
+    if (animId) cancelAnimationFrame(animId);
+    var desde = progresoMostrado;
+    if (primeraVez || Math.abs(hacia - desde) < 0.002) {
+      primeraVez = false;
+      posicionarMoto(hacia);
+      progresoMostrado = hacia;
+      return;
+    }
+    var inicio = null;
+    var dur = 900;
+    function paso(t) {
+      if (inicio === null) inicio = t;
+      var k = Math.min(1, (t - inicio) / dur);
+      var e = 1 - Math.pow(1 - k, 3);
+      progresoMostrado = desde + (hacia - desde) * e;
+      posicionarMoto(progresoMostrado);
+      if (k < 1) animId = requestAnimationFrame(paso);
+    }
+    animId = requestAnimationFrame(paso);
+  }
+
+  function renderPasos() {
+    var lista = $("pasos");
+    lista.innerHTML = "";
+    var actual = ORDEN_ESTADO[datos.estado];
+    if (actual === undefined) actual = -1;
+    PASOS.forEach(function (p, i) {
+      var li = document.createElement("li");
+      var clase = "paso ";
+      if (datos.estado === "entregado" || i < actual) clase += "hecho";
+      else if (i === actual) clase += "actual";
+      else clase += "pendiente";
+      li.className = clase;
+
+      var ico = document.createElement("div");
+      ico.className = "paso-icono";
+      ico.textContent = (clase.indexOf("hecho") !== -1) ? "✓" : p.icono;
+
+      var txt = document.createElement("div");
+      txt.className = "paso-texto";
+      var nombre = document.createElement("div");
+      nombre.className = "paso-nombre";
+      nombre.textContent = p.nombre;
+      var det = document.createElement("div");
+      det.className = "paso-detalle";
+      var h = datos.hitos && datos.hitos[p.clave];
+      det.textContent = h ? (hora(h) + " hs") : p.detalle;
+
+      txt.appendChild(nombre);
+      txt.appendChild(det);
+      li.appendChild(ico);
+      li.appendChild(txt);
+      lista.appendChild(li);
+    });
+  }
+
+  function textos() {
+    var e = datos.estado;
+    var enPreparacion = { t: "Estamos preparando tu pedido", s: "En cuanto salga la moto te avisamos acá." };
+    if (e === "recibido") return { t: "¡Recibimos tu pedido!", s: "En un momento empezamos a prepararlo." };
+    if (e === "preparando") return enPreparacion;
+    if (e === "en_camino") {
+      var eta = datos.etaISO ? Date.parse(datos.etaISO) : null;
+      if (eta && ahoraMs() > eta + 10 * 60000) return { t: "Tu pedido está por llegar", s: "El repartidor está a pocos minutos. Tené el celular a mano." };
+      return { t: "Tu pedido va en camino", s: "El repartidor ya salió del local. Podés seguirlo abajo." };
+    }
+    if (e === "entregado") return { t: "¡Pedido entregado!", s: "Gracias por comprar en Platense Fit. ¡A entrenar!" };
+    if (e === "cancelado") return { t: "Pedido cancelado", s: "Escribinos por WhatsApp y lo resolvemos." };
+    return { t: "Seguimiento de tu pedido", s: "" };
+  }
+
+  function renderEtaYTextos() {
+    if (!datos) return;
+    var tx = textos();
+    $("titulo").textContent = tx.t;
+    $("sub").textContent = tx.s;
+
+    var etaBox = $("eta");
+    var eta = datos.etaISO ? Date.parse(datos.etaISO) : null;
+    var mostrarEta = eta && (datos.estado === "preparando" || datos.estado === "en_camino" || datos.estado === "recibido");
+    etaBox.hidden = !mostrarEta;
+    if (mostrarEta) {
+      $("eta-hora").textContent = hora(datos.etaISO) + " – " + hora(new Date(eta + 10 * 60000).toISOString());
+      var faltan = Math.round((eta - ahoraMs()) / 60000);
+      var cuenta = $("eta-cuenta");
+      if (faltan > 1) cuenta.textContent = "en ~" + faltan + " min";
+      else if (faltan >= -10) cuenta.textContent = "llegando";
+      else cuenta.textContent = "demorado unos minutos";
+    }
+  }
+
+  function render() {
+    if (!datos) return;
+    $("pill-texto").textContent = "Pedido #" + datos.orden;
+    $("saludo").textContent = datos.cliente ? ("Hola " + datos.cliente + " 👋") : "";
+    $("card-estado").classList.toggle("cancelado", datos.estado === "cancelado");
+
+    var btn = $("btn-uber");
+    if (datos.uberUrl) {
+      btn.href = datos.uberUrl;
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+
+    $("mapa-wrap").hidden = datos.estado === "cancelado";
+    $("mapa-nota").textContent = datos.estado === "entregado" ? "Entregado" : "Recorrido estimado";
+    $("link-wa").href = "https://wa.me/542216388756?text=" + encodeURIComponent("Hola! Consulta por mi pedido #" + datos.orden);
+
+    renderEtaYTextos();
+    renderPasos();
+    animarMoto(progresoRuta());
+  }
+
+  function cargar() {
+    var url = "/api/seguimiento-publico?" + (token ? "t=" + encodeURIComponent(token) : "orden=" + encodeURIComponent(ordenParam));
+    fetch(url, { cache: "no-store" })
+      .then(function (r) {
+        if (r.status === 404) { var err = new Error("nf"); err.nf = true; throw err; }
+        if (!r.ok) throw new Error("http " + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        datos = d;
+        offsetReloj = Date.parse(d.ahora) - Date.now();
+        vistaBuscar.hidden = true;
+        vistaSeg.hidden = false;
+        render();
+      })
+      .catch(function (e) {
+        if (e && e.nf && !datos) {
+          mostrarBuscar(token
+            ? "No encontramos ese seguimiento. Revisá el link o buscá tu pedido por número."
+            : "Todavía no cargamos el seguimiento del pedido #" + ordenParam + ". Cuando salga la moto te avisamos por WhatsApp.");
+        }
+      });
+  }
+
+  function iniciarPolling() {
+    if (timerPoll) clearInterval(timerPoll);
+    timerPoll = setInterval(function () {
+      if (document.hidden) return;
+      cargar();
+    }, 15000);
+    // Refresca cuenta regresiva y avance de la moto sin pedirle nada al servidor
+    setInterval(function () {
+      if (!datos || document.hidden) return;
+      renderEtaYTextos();
+      if (datos.estado === "en_camino") animarMoto(progresoRuta());
+    }, 20000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) cargar(); });
+  }
+
+  if (!token && !ordenParam) {
+    mostrarBuscar();
+  } else {
+    cargar();
+    iniciarPolling();
+  }
+})();
+</script>
+</body>
+</html>

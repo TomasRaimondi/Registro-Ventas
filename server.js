@@ -546,6 +546,62 @@ async function sincronizarRedlink({ diasAtras = 2 } = {}) {
   }
 }
 
+// ---------- Seguimiento de envíos: helpers ----------
+
+const ESTADOS_SEGUIMIENTO = ["recibido", "preparando", "en_camino", "entregado", "cancelado"];
+
+function parseHitos(raw) {
+  try { const h = JSON.parse(raw || "{}"); return h && typeof h === "object" ? h : {}; }
+  catch (e) { return {}; }
+}
+
+// "" si viene vacío, null si no es una URL http(s) válida (evita links tipo javascript:).
+function normalizarUrlSeguimiento(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (s.length > 600) return null;
+  try {
+    const u = new URL(s);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function seguimientoAdmin(row) {
+  return {
+    id: row.id,
+    orden: row.orden,
+    cliente: row.cliente || "",
+    telefono: row.telefono || "",
+    telefonoWa: tiendanube.normalizarTelefono(row.telefono),
+    estado: row.estado,
+    hitos: parseHitos(row.hitos),
+    etaISO: row.etaISO || null,
+    salidaISO: row.salidaISO || null,
+    uberUrl: row.uberUrl || "",
+    creadoEn: row.creadoEn,
+    actualizadoEn: row.actualizadoEn,
+  };
+}
+
+function seguimientoPublico(row, conToken) {
+  const salida = {
+    orden: row.orden,
+    estado: row.estado,
+    hitos: parseHitos(row.hitos),
+    etaISO: row.etaISO || null,
+    salidaISO: row.salidaISO || null,
+    actualizadoEn: row.actualizadoEn,
+    ahora: new Date().toISOString(),
+  };
+  if (conToken) {
+    salida.cliente = String(row.cliente || "").trim().split(/\s+/)[0] || "";
+    salida.uberUrl = row.estado === "en_camino" && row.uberUrl ? row.uberUrl : null;
+  }
+  return salida;
+}
+
 // ---------- Servidor ----------
 
 const server = http.createServer(async (req, res) => {
@@ -795,6 +851,137 @@ const server = http.createServer(async (req, res) => {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const id = decodeURIComponent(pathname.slice("/api/ventas-perdidas/".length));
       await db.deleteVentaPerdida(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // ---------- Seguimiento de envíos Uber Moto (panel + página pública del cliente) ----------
+
+    if (pathname === "/api/seguimiento-publico" && req.method === "GET") {
+      // Público (lo abre el cliente desde su celular). Con token (link que le mandamos por
+      // WhatsApp) ve todo, incluido el link de Uber; con solo el número de pedido ve estado y
+      // hora estimada, pero nunca el link de Uber ni datos personales.
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cache-Control", "no-store");
+      const token = String(query.get("t") || "");
+      const orden = String(query.get("orden") || "").replace(/\D/g, "");
+      let row = null;
+      let conToken = false;
+      if (token) {
+        if (!/^[A-Za-z0-9_-]{8,64}$/.test(token)) return sendJson(res, 404, { error: "no_encontrado" });
+        row = await db.getSeguimiento(token);
+        conToken = !!row;
+      } else if (orden && orden.length <= 12) {
+        row = await db.getSeguimientoPorOrden(orden);
+      }
+      if (!row) return sendJson(res, 404, { error: "no_encontrado" });
+      return sendJson(res, 200, seguimientoPublico(row, conToken));
+    }
+
+    if (pathname === "/api/seguimientos" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const desde = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+      const rows = await db.getSeguimientosRecientes(desde);
+      return sendJson(res, 200, rows.map(seguimientoAdmin));
+    }
+
+    if (pathname.startsWith("/api/seguimientos/orden/") && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!tiendanube.isConfigured()) return sendJson(res, 503, { error: "La tienda no está conectada." });
+      try {
+        const orden = await tiendanube.buscarOrdenPorNumero(decodeURIComponent(pathname.slice("/api/seguimientos/orden/".length)));
+        if (!orden) return sendJson(res, 404, { error: "No se encontró ese pedido en la tienda" });
+        return sendJson(res, 200, orden);
+      } catch (e) {
+        console.error("Error buscando pedido en Tiendanube:", e);
+        return sendJson(res, 502, { error: "No se pudo consultar Tiendanube: " + e.message });
+      }
+    }
+
+    if (pathname === "/api/seguimientos" && req.method === "POST") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const orden = String(body.orden || "").replace(/\D/g, "");
+      if (!orden || orden.length > 12) return sendJson(res, 400, { error: "Falta el número de pedido" });
+      const uberUrl = normalizarUrlSeguimiento(body.uberUrl);
+      if (uberUrl === null) return sendJson(res, 400, { error: "El link de Uber no es válido" });
+      const ahora = new Date().toISOString();
+      const row = {
+        id: crypto.randomBytes(9).toString("base64url"),
+        orden,
+        cliente: String(body.cliente || "").trim().slice(0, 120) || null,
+        telefono: String(body.telefono || "").trim().slice(0, 40) || null,
+        estado: "recibido",
+        hitos: JSON.stringify({ recibido: ahora }),
+        etaISO: null,
+        salidaISO: null,
+        uberUrl: uberUrl || null,
+        creadoEn: ahora,
+        actualizadoEn: ahora,
+      };
+      await db.insertSeguimiento(row);
+      return sendJson(res, 201, seguimientoAdmin(row));
+    }
+
+    if (pathname.startsWith("/api/seguimientos/") && req.method === "PATCH") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/seguimientos/".length));
+      const row = await db.getSeguimiento(id);
+      if (!row) return sendJson(res, 404, { error: "Seguimiento no encontrado" });
+      const body = await readJsonBody(req);
+      const ahora = new Date().toISOString();
+      const hitos = parseHitos(row.hitos);
+      const nuevo = {
+        id: row.id,
+        cliente: row.cliente,
+        telefono: row.telefono,
+        estado: row.estado,
+        etaISO: row.etaISO,
+        salidaISO: row.salidaISO,
+        uberUrl: row.uberUrl,
+        actualizadoEn: ahora,
+      };
+
+      if (body.cliente !== undefined) nuevo.cliente = String(body.cliente || "").trim().slice(0, 120) || null;
+      if (body.telefono !== undefined) nuevo.telefono = String(body.telefono || "").trim().slice(0, 40) || null;
+
+      if (body.uberUrl !== undefined) {
+        const u = normalizarUrlSeguimiento(body.uberUrl);
+        if (u === null) return sendJson(res, 400, { error: "El link de Uber no es válido" });
+        nuevo.uberUrl = u || null;
+      }
+
+      if (body.estado !== undefined) {
+        if (!ESTADOS_SEGUIMIENTO.includes(body.estado)) return sendJson(res, 400, { error: "Estado inválido" });
+        nuevo.estado = body.estado;
+        if (!hitos[body.estado]) hitos[body.estado] = ahora;
+        if (body.estado === "en_camino") {
+          if (!nuevo.salidaISO) nuevo.salidaISO = ahora;
+          delete hitos.entregado;
+        } else if (body.estado === "recibido" || body.estado === "preparando") {
+          nuevo.salidaISO = null;
+          delete hitos.en_camino;
+          delete hitos.entregado;
+        }
+      }
+
+      if (body.etaMin !== undefined) {
+        if (body.etaMin === null || body.etaMin === "") {
+          nuevo.etaISO = null;
+        } else {
+          const min = Number(body.etaMin);
+          if (!Number.isFinite(min) || min < 1 || min > 600) return sendJson(res, 400, { error: "Minutos inválidos" });
+          nuevo.etaISO = new Date(Date.now() + min * 60000).toISOString();
+        }
+      }
+
+      nuevo.hitos = JSON.stringify(hitos);
+      await db.updateSeguimiento(nuevo);
+      return sendJson(res, 200, seguimientoAdmin({ ...row, ...nuevo }));
+    }
+
+    if (pathname.startsWith("/api/seguimientos/") && req.method === "DELETE") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      await db.deleteSeguimiento(decodeURIComponent(pathname.slice("/api/seguimientos/".length)));
       return sendJson(res, 200, { ok: true });
     }
 

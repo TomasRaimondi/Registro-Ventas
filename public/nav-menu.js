@@ -38,6 +38,7 @@
       label: "Clientes y envíos",
       items: [
         { href: "/clientes.html", label: "Recompra de Clientes" },
+        { href: "/seguimientos.html", label: "Seguimiento de Envíos" },
         { href: "/envios.html", label: "Envíos Uber Moto" },
         { href: "/pagos.html", label: "Pagos Recibidos" },
       ],

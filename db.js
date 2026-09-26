@@ -118,6 +118,19 @@ const SCHEMA = `
     horaLabel TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS seguimientos (
+    id TEXT PRIMARY KEY,
+    orden TEXT NOT NULL,
+    cliente TEXT,
+    telefono TEXT,
+    estado TEXT NOT NULL,
+    hitos TEXT,
+    etaISO TEXT,
+    salidaISO TEXT,
+    uberUrl TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS clientes_mayoristas (
     id TEXT PRIMARY KEY,
     nombreNormalizado TEXT NOT NULL UNIQUE,
@@ -615,6 +628,34 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM ventas_perdidas WHERE id = ?", args: [id] });
     },
 
+    async getSeguimientosRecientes(desdeISO) {
+      const res = await client.execute({ sql: "SELECT * FROM seguimientos WHERE creadoEn >= ? ORDER BY creadoEn DESC", args: [desdeISO] });
+      return res.rows;
+    },
+    async getSeguimiento(id) {
+      const res = await client.execute({ sql: "SELECT * FROM seguimientos WHERE id = ?", args: [id] });
+      return res.rows[0] || null;
+    },
+    async getSeguimientoPorOrden(orden) {
+      const res = await client.execute({ sql: "SELECT * FROM seguimientos WHERE orden = ? ORDER BY creadoEn DESC LIMIT 1", args: [orden] });
+      return res.rows[0] || null;
+    },
+    async insertSeguimiento(row) {
+      await client.execute({
+        sql: `INSERT INTO seguimientos (id, orden, cliente, telefono, estado, hitos, etaISO, salidaISO, uberUrl, creadoEn, actualizadoEn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.orden, row.cliente, row.telefono, row.estado, row.hitos, row.etaISO, row.salidaISO, row.uberUrl, row.creadoEn, row.actualizadoEn],
+      });
+    },
+    async updateSeguimiento(row) {
+      await client.execute({
+        sql: `UPDATE seguimientos SET cliente = ?, telefono = ?, estado = ?, hitos = ?, etaISO = ?, salidaISO = ?, uberUrl = ?, actualizadoEn = ? WHERE id = ?`,
+        args: [row.cliente, row.telefono, row.estado, row.hitos, row.etaISO, row.salidaISO, row.uberUrl, row.actualizadoEn, row.id],
+      });
+    },
+    async deleteSeguimiento(id) {
+      await client.execute({ sql: "DELETE FROM seguimientos WHERE id = ?", args: [id] });
+    },
+
     async getAllClientesMayoristas() {
       const res = await client.execute("SELECT * FROM clientes_mayoristas ORDER BY nombre ASC");
       return res.rows;
@@ -1081,6 +1122,29 @@ if (USE_TURSO) {
     },
     async deleteVentaPerdida(id) {
       db.prepare("DELETE FROM ventas_perdidas WHERE id = ?").run(id);
+    },
+
+    async getSeguimientosRecientes(desdeISO) {
+      return db.prepare("SELECT * FROM seguimientos WHERE creadoEn >= ? ORDER BY creadoEn DESC").all(desdeISO);
+    },
+    async getSeguimiento(id) {
+      return db.prepare("SELECT * FROM seguimientos WHERE id = ?").get(id) || null;
+    },
+    async getSeguimientoPorOrden(orden) {
+      return db.prepare("SELECT * FROM seguimientos WHERE orden = ? ORDER BY creadoEn DESC LIMIT 1").get(orden) || null;
+    },
+    async insertSeguimiento(row) {
+      db.prepare(
+        `INSERT INTO seguimientos (id, orden, cliente, telefono, estado, hitos, etaISO, salidaISO, uberUrl, creadoEn, actualizadoEn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.orden, row.cliente, row.telefono, row.estado, row.hitos, row.etaISO, row.salidaISO, row.uberUrl, row.creadoEn, row.actualizadoEn);
+    },
+    async updateSeguimiento(row) {
+      db.prepare(
+        `UPDATE seguimientos SET cliente = ?, telefono = ?, estado = ?, hitos = ?, etaISO = ?, salidaISO = ?, uberUrl = ?, actualizadoEn = ? WHERE id = ?`
+      ).run(row.cliente, row.telefono, row.estado, row.hitos, row.etaISO, row.salidaISO, row.uberUrl, row.actualizadoEn, row.id);
+    },
+    async deleteSeguimiento(id) {
+      db.prepare("DELETE FROM seguimientos WHERE id = ?").run(id);
     },
 
 
