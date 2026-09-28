@@ -651,6 +651,28 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, items);
     }
 
+    // Diagnóstico temporal: muestra, para cada item de una venta, qué costo detecta
+    // el sistema AHORA MISMO (con el nombre exacto guardado en la venta). Sirve para
+    // encontrar productos cuyo nombre en la venta no coincide con el de la planilla
+    // de Costos (por eso una corrección de costo no mueve el bono de esa venta).
+    if (pathname.startsWith("/api/ventas/") && pathname.endsWith("/debug-costo") && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const ventaId = decodeURIComponent(pathname.slice("/api/ventas/".length, -"/debug-costo".length));
+      const [venta, items, indiceCosto] = await Promise.all([
+        db.getVentaById(ventaId),
+        db.getItemsByVentaId(ventaId),
+        construirIndiceCostoHistorico(),
+      ]);
+      if (!venta) return sendJson(res, 404, { error: "Venta no encontrada" });
+      const detalle = items.map((it) => ({
+        producto: it.producto,
+        precio: it.precio,
+        costoHistoricoUsadoParaElBono: calcularCostoHistorico(it.producto, venta.fecha, indiceCosto),
+        existeEnPlanillaDeCostos: indiceCosto.costoPorProductoActual[normalizeNombre(it.producto)] !== undefined,
+      }));
+      return sendJson(res, 200, { fecha: venta.fecha, detalle });
+    }
+
     if (pathname === "/api/ventas" && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
