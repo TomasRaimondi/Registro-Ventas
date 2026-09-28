@@ -174,6 +174,31 @@ function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) 
   return actual === undefined ? null : actual;
 }
 
+// Recalcula ganancia neta y bono de las ventas mayoristas YA GUARDADAS, con el costo
+// vigente hoy para cada producto. Se llama después de editar cualquier costo o
+// composición de combo: así, si Chino cargó un pedido mayorista antes de que se
+// actualizara el costo de algún producto, el bono automático (20%) que ya quedó
+// guardado se corrige solo en vez de quedar pisado con un costo viejo.
+// No mueve ventas mayoristas de días anteriores si su costo histórico no cambió: el
+// historial de costos es por fecha, así que corregir el costo de hoy no afecta la
+// ganancia de ventas de días previos, solo las de hoy en adelante.
+async function recalcularBonosMayoristas() {
+  const [indiceCosto, bonos] = await Promise.all([construirIndiceCostoHistorico(), db.getAllBonosMayoristas()]);
+  for (const b of bonos) {
+    const items = await db.getItemsByVentaId(b.ventaId);
+    if (!items.length) continue; // la venta se borró o no tiene items propios
+    const gananciaNeta = items.reduce((acc, it) => {
+      const costo = calcularCostoHistorico(it.producto, b.fecha, indiceCosto);
+      return costo !== null ? acc + (it.precio - costo) : acc;
+    }, 0);
+    const gananciaNetaRedondeada = Math.round(gananciaNeta * 100) / 100;
+    const bono = Math.round(Math.max(0, gananciaNeta) * BONO_MAYORISTA_AUTOMATICO_PORCENTAJE * 100) / 100;
+    if (gananciaNetaRedondeada !== b.gananciaNeta || bono !== b.bono) {
+      await db.updateBonoMayorista(b.id, gananciaNetaRedondeada, bono);
+    }
+  }
+}
+
 // ---------- Contraseñas del panel (dueño y empleado) ----------
 
 let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
@@ -1146,6 +1171,7 @@ const server = http.createServer(async (req, res) => {
       await db.upsertCosto(producto, costo);
       await registrarHistorialCosto(producto, costo, costoAnterior, getArgentinaNow().fecha);
       await recalcularCostosCombos();
+      await recalcularBonosMayoristas();
       return sendJson(res, 200, { ok: true, producto, costo });
     }
 
@@ -1154,6 +1180,7 @@ const server = http.createServer(async (req, res) => {
       const producto = decodeURIComponent(pathname.slice("/api/costos/".length));
       await db.deleteCosto(producto);
       await recalcularCostosCombos();
+      await recalcularBonosMayoristas();
       return sendJson(res, 200, { ok: true });
     }
 
@@ -1224,6 +1251,7 @@ const server = http.createServer(async (req, res) => {
       const row = { id: crypto.randomUUID(), comboProducto, componenteProducto, cantidad };
       await db.insertComponente(row);
       await recalcularCostosCombos();
+      await recalcularBonosMayoristas();
       return sendJson(res, 201, row);
     }
 
@@ -1232,6 +1260,7 @@ const server = http.createServer(async (req, res) => {
       const id = decodeURIComponent(pathname.slice("/api/composicion/".length));
       await db.deleteComponente(id);
       await recalcularCostosCombos();
+      await recalcularBonosMayoristas();
       return sendJson(res, 200, { ok: true });
     }
 
@@ -1342,6 +1371,8 @@ const server = http.createServer(async (req, res) => {
         filasInsertadas.push(row);
       }
 
+      await recalcularCostosCombos();
+      await recalcularBonosMayoristas();
       return sendJson(res, 201, { loteId, items: filasInsertadas });
     }
 

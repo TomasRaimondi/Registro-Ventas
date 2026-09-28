@@ -833,6 +833,9 @@ if (USE_TURSO) {
     async deleteBonosMayoristasByVentaId(ventaId) {
       await client.execute({ sql: "DELETE FROM bonos_mayoristas WHERE ventaId = ?", args: [ventaId] });
     },
+    async updateBonoMayorista(id, gananciaNeta, bono) {
+      await client.execute({ sql: "UPDATE bonos_mayoristas SET gananciaNeta = ?, bono = ? WHERE id = ?", args: [gananciaNeta, bono, id] });
+    },
 
     async getAllCalendarioContenido() {
       const res = await client.execute("SELECT * FROM calendario_contenido ORDER BY (fecha IS NULL), fecha ASC, creadoEn ASC");
@@ -1296,6 +1299,9 @@ if (USE_TURSO) {
     },
     async deleteBonosMayoristasByVentaId(ventaId) {
       db.prepare("DELETE FROM bonos_mayoristas WHERE ventaId = ?").run(ventaId);
+    },
+    async updateBonoMayorista(id, gananciaNeta, bono) {
+      db.prepare("UPDATE bonos_mayoristas SET gananciaNeta = ?, bono = ? WHERE id = ?").run(gananciaNeta, bono, id);
     },
 
     async getAllCalendarioContenido() {
