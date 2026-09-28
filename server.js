@@ -184,6 +184,7 @@ function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) 
 // ganancia de ventas de días previos, solo las de hoy en adelante.
 async function recalcularBonosMayoristas() {
   const [indiceCosto, bonos] = await Promise.all([construirIndiceCostoHistorico(), db.getAllBonosMayoristas()]);
+  const cambios = [];
   for (const b of bonos) {
     const items = await db.getItemsByVentaId(b.ventaId);
     if (!items.length) continue; // la venta se borró o no tiene items propios
@@ -193,10 +194,15 @@ async function recalcularBonosMayoristas() {
     }, 0);
     const gananciaNetaRedondeada = Math.round(gananciaNeta * 100) / 100;
     const bono = Math.round(Math.max(0, gananciaNeta) * BONO_MAYORISTA_AUTOMATICO_PORCENTAJE * 100) / 100;
-    if (gananciaNetaRedondeada !== b.gananciaNeta || bono !== b.bono) {
+    // Number(...) porque algunos clientes de DB devuelven las columnas numéricas como
+    // string/bigint: comparar con !== directo contra esos tipos siempre da "distinto"
+    // aunque el valor sea el mismo, y quedaría reescribiendo la fila en cada llamada.
+    if (gananciaNetaRedondeada !== Number(b.gananciaNeta) || bono !== Number(b.bono)) {
       await db.updateBonoMayorista(b.id, gananciaNetaRedondeada, bono);
+      cambios.push({ ventaId: b.ventaId, fecha: b.fecha, antes: { gananciaNeta: b.gananciaNeta, bono: b.bono }, despues: { gananciaNeta: gananciaNetaRedondeada, bono } });
     }
   }
+  return cambios;
 }
 
 // ---------- Contraseñas del panel (dueño y empleado) ----------
@@ -671,6 +677,15 @@ const server = http.createServer(async (req, res) => {
         existeEnPlanillaDeCostos: indiceCosto.costoPorProductoActual[normalizeNombre(it.producto)] !== undefined,
       }));
       return sendJson(res, 200, { fecha: venta.fecha, detalle });
+    }
+
+    // Diagnóstico temporal: fuerza el recálculo de todos los bonos mayoristas ya
+    // guardados (lo mismo que corre solo al editar un costo) y devuelve qué filas
+    // cambiaron. Sirve para ponerse al día si alguna corrección de costo anterior no
+    // llegó a disparar el recálculo automático.
+    if (pathname === "/api/debug/recalcular-bonos-ahora" && req.method === "POST") {
+      const cambios = await recalcularBonosMayoristas();
+      return sendJson(res, 200, { actualizados: cambios.length, cambios });
     }
 
     if (pathname === "/api/ventas" && req.method === "POST") {
