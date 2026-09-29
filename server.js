@@ -657,37 +657,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, items);
     }
 
-    // Diagnóstico temporal: muestra, para cada item de una venta, qué costo detecta
-    // el sistema AHORA MISMO (con el nombre exacto guardado en la venta). Sirve para
-    // encontrar productos cuyo nombre en la venta no coincide con el de la planilla
-    // de Costos (por eso una corrección de costo no mueve el bono de esa venta).
-    if (pathname.startsWith("/api/ventas/") && pathname.endsWith("/debug-costo") && req.method === "GET") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
-      const ventaId = decodeURIComponent(pathname.slice("/api/ventas/".length, -"/debug-costo".length));
-      const [venta, items, indiceCosto] = await Promise.all([
-        db.getVentaById(ventaId),
-        db.getItemsByVentaId(ventaId),
-        construirIndiceCostoHistorico(),
-      ]);
-      if (!venta) return sendJson(res, 404, { error: "Venta no encontrada" });
-      const detalle = items.map((it) => ({
-        producto: it.producto,
-        precio: it.precio,
-        costoHistoricoUsadoParaElBono: calcularCostoHistorico(it.producto, venta.fecha, indiceCosto),
-        existeEnPlanillaDeCostos: indiceCosto.costoPorProductoActual[normalizeNombre(it.producto)] !== undefined,
-      }));
-      return sendJson(res, 200, { fecha: venta.fecha, detalle });
-    }
-
-    // Diagnóstico temporal: fuerza el recálculo de todos los bonos mayoristas ya
-    // guardados (lo mismo que corre solo al editar un costo) y devuelve qué filas
-    // cambiaron. Sirve para ponerse al día si alguna corrección de costo anterior no
-    // llegó a disparar el recálculo automático.
-    if (pathname === "/api/debug/recalcular-bonos-ahora" && req.method === "POST") {
-      const cambios = await recalcularBonosMayoristas();
-      return sendJson(res, 200, { actualizados: cambios.length, cambios });
-    }
-
     if (pathname === "/api/ventas" && req.method === "POST") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
