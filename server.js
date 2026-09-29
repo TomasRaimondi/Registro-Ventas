@@ -18,7 +18,7 @@ const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
 
 // Comisión minorista del empleado: 5% del excedente por sobre $45.000 en cada venta
 // que él mismo registre (no mayorista), a partir del 2026-09-16.
-const COMISION_MINORISTA_UMBRAL = 45000;
+const COMISION_MINORISTA_UMBRAL = 50000;
 const COMISION_MINORISTA_PORCENTAJE = 0.05;
 const COMISION_MINORISTA_DESDE = "2026-09-16";
 
