@@ -22,6 +22,7 @@
         { href: "/reportes.html", label: "Reportes" },
         { href: "/rentabilidad.html", label: "Rentabilidad" },
         { href: "/gastos.html", label: "Gastos" },
+        { href: "/costos-fijos.html", label: "Costos Fijos" },
         { href: "/balance.html", label: "Situación Financiera" },
         { href: "/salario.html", label: "Mi Salario" },
         { href: "/comisiones-minoristas.html", label: "Comisiones Minoristas" },

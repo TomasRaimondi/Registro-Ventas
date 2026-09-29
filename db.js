@@ -194,6 +194,14 @@ const SCHEMA = `
     creadoEn TEXT NOT NULL,
     actualizadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS costos_fijos (
+    id TEXT PRIMARY KEY,
+    concepto TEXT NOT NULL,
+    monto REAL NOT NULL,
+    notas TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS inversiones_activos (
     id TEXT PRIMARY KEY,
     simbolo TEXT NOT NULL,
@@ -536,6 +544,35 @@ if (USE_TURSO) {
     },
     async deleteAnuncio(id) {
       await client.execute({ sql: "DELETE FROM anuncios WHERE id = ?", args: [id] });
+    },
+
+    async getAllCostosFijos() {
+      const res = await client.execute("SELECT * FROM costos_fijos ORDER BY concepto ASC");
+      return res.rows;
+    },
+    async insertCostoFijo(row) {
+      await client.execute({
+        sql: `INSERT INTO costos_fijos (id, concepto, monto, notas, creadoEn, actualizadoEn) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.concepto, row.monto, row.notas, row.creadoEn, row.actualizadoEn],
+      });
+    },
+    async updateCostoFijo(id, campos) {
+      const sets = [];
+      const args = [];
+      for (const campo of ["concepto", "monto", "notas"]) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      sets.push("actualizadoEn = ?");
+      args.push(campos.actualizadoEn);
+      args.push(id);
+      await client.execute({ sql: `UPDATE costos_fijos SET ${sets.join(", ")} WHERE id = ?`, args });
+    },
+    async deleteCostoFijo(id) {
+      await client.execute({ sql: "DELETE FROM costos_fijos WHERE id = ?", args: [id] });
     },
 
     async getAllSalario() {
@@ -1046,6 +1083,33 @@ if (USE_TURSO) {
     },
     async deleteAnuncio(id) {
       db.prepare("DELETE FROM anuncios WHERE id = ?").run(id);
+    },
+
+    async getAllCostosFijos() {
+      return db.prepare("SELECT * FROM costos_fijos ORDER BY concepto ASC").all();
+    },
+    async insertCostoFijo(row) {
+      db.prepare(
+        `INSERT INTO costos_fijos (id, concepto, monto, notas, creadoEn, actualizadoEn) VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.concepto, row.monto, row.notas, row.creadoEn, row.actualizadoEn);
+    },
+    async updateCostoFijo(id, campos) {
+      const sets = [];
+      const args = [];
+      for (const campo of ["concepto", "monto", "notas"]) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      sets.push("actualizadoEn = ?");
+      args.push(campos.actualizadoEn);
+      args.push(id);
+      db.prepare(`UPDATE costos_fijos SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+    },
+    async deleteCostoFijo(id) {
+      db.prepare("DELETE FROM costos_fijos WHERE id = ?").run(id);
     },
 
     async getAllSalario() {

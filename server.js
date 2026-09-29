@@ -1781,6 +1781,63 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Costos fijos mensuales (alquiler, servicios, etc.): solo el dueño ----------
+
+    if (pathname === "/api/costos-fijos" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const rows = await db.getAllCostosFijos();
+      return sendJson(res, 200, rows);
+    }
+
+    if (pathname === "/api/costos-fijos" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const concepto = String(body.concepto || "").trim();
+      const monto = Number(body.monto);
+      const notas = body.notas ? String(body.notas).trim() : null;
+
+      if (!concepto) return sendJson(res, 400, { error: "Falta el concepto" });
+      if (!Number.isFinite(monto) || monto < 0) return sendJson(res, 400, { error: "Monto inválido" });
+
+      const ahora = new Date().toISOString();
+      const row = { id: crypto.randomUUID(), concepto, monto, notas, creadoEn: ahora, actualizadoEn: ahora };
+      await db.insertCostoFijo(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/costos-fijos/") && req.method === "PUT") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/costos-fijos/".length));
+      const body = await readJsonBody(req);
+      const campos = {};
+
+      if (body.concepto !== undefined) {
+        const concepto = String(body.concepto || "").trim();
+        if (!concepto) return sendJson(res, 400, { error: "Falta el concepto" });
+        campos.concepto = concepto;
+      }
+      if (body.monto !== undefined) {
+        const monto = Number(body.monto);
+        if (!Number.isFinite(monto) || monto < 0) return sendJson(res, 400, { error: "Monto inválido" });
+        campos.monto = monto;
+      }
+      if (body.notas !== undefined) {
+        campos.notas = body.notas ? String(body.notas).trim() : null;
+      }
+      if (!Object.keys(campos).length) return sendJson(res, 400, { error: "Nada para actualizar" });
+
+      campos.actualizadoEn = new Date().toISOString();
+      await db.updateCostoFijo(id, campos);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname.startsWith("/api/costos-fijos/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/costos-fijos/".length));
+      await db.deleteCostoFijo(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Salario del empleado ----------
     // Lectura pública (el empleado la ve sin contraseña), escritura solo del dueño.
 
