@@ -2033,7 +2033,9 @@ const server = http.createServer(async (req, res) => {
     // ---------- Recompra de clientes (vive de la API de Tiendanube, no de la DB local) ----------
 
     if (pathname === "/api/clientes-recompra" && req.method === "GET") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      // También lo usa Chino (empleado), para mandar los cupones por WhatsApp a los
+      // clientes inactivos. No expone costos ni ganancias, solo datos del cliente.
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       if (!tiendanube.isConfigured()) {
         return sendJson(res, 503, { error: "La tienda no está conectada (falta tiendanube-config.json)." });
       }
@@ -2048,7 +2050,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/clientes-recompra/cupon" && req.method === "POST") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       if (!tiendanube.isConfigured()) {
         return sendJson(res, 503, { error: "La tienda no está conectada (falta tiendanube-config.json)." });
       }
