@@ -846,6 +846,44 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, rows);
     }
 
+    // Desglose de ganancia por venta que comisiona: solo el dueño (expone costos).
+    // Agrupa los items por fecha en vez de pedirlos venta por venta, para no golpear
+    // la base con una consulta por cada comisión ya guardada.
+    if (pathname === "/api/comisiones-minoristas/detalle" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const [comisiones, indiceCosto] = await Promise.all([db.getAllComisionesMinoristas(), construirIndiceCostoHistorico()]);
+
+      const fechas = [...new Set(comisiones.map((c) => c.fecha))];
+      const itemsPorFecha = new Map();
+      for (const fecha of fechas) {
+        itemsPorFecha.set(fecha, await db.getItemsByFecha(fecha));
+      }
+
+      const detalle = [];
+      for (const c of comisiones) {
+        let itemsDeEstaVenta = (itemsPorFecha.get(c.fecha) || []).filter((it) => it.ventaId === c.ventaId);
+        if (!itemsDeEstaVenta.length) {
+          const venta = await db.getVentaById(c.ventaId);
+          if (venta) itemsDeEstaVenta = [{ producto: venta.producto, precio: venta.precio }];
+        }
+        const ganancia = itemsDeEstaVenta.reduce((acc, it) => {
+          const costo = calcularCostoHistorico(it.producto, c.fecha, indiceCosto);
+          return costo !== null ? acc + (it.precio - costo) : acc;
+        }, 0);
+        detalle.push({
+          ventaId: c.ventaId,
+          fecha: c.fecha,
+          horaLabel: c.horaLabel,
+          productos: itemsDeEstaVenta.map((it) => it.producto).join(", "),
+          montoVenta: c.montoVenta,
+          ganancia: Math.round(ganancia * 100) / 100,
+          excedente: c.excedente,
+          comision: c.comision,
+        });
+      }
+      return sendJson(res, 200, detalle);
+    }
+
     // Bonos mayoristas automáticos del empleado: público, mismo criterio que
     // /api/comisiones-minoristas (lo consume salario.html, que no tiene login).
     if (pathname === "/api/bonos-mayoristas" && req.method === "GET") {

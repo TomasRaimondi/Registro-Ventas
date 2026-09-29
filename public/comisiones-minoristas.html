@@ -18,6 +18,12 @@
 <script src="nav-menu.js"></script>
 <style>
   #comisiones-chart .chart-bar { background: linear-gradient(180deg, var(--green), #1f9c68); }
+  .ganancia-dia { margin-bottom: 22px; }
+  .ganancia-dia:last-child { margin-bottom: 0; }
+  .ganancia-dia-titulo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .ganancia-dia-titulo h3 { margin: 0; font-size: 15px; }
+  .ganancia-dia-resumen { font-size: 13px; color: var(--text-dim); }
+  .ganancia-dia-resumen strong { color: var(--green); }
 </style>
 </head>
 <body>
@@ -104,6 +110,13 @@
           <tbody id="detalle-body"><tr class="empty-row"><td colspan="5">Cargando...</td></tr></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- Solo visible para el dueño: expone la ganancia de cada venta (costo de producto), Chino no debe verlo -->
+    <section class="card" id="ganancia-card" style="display:none;">
+      <h2>Ganancia por venta que comisiona (privado)</h2>
+      <p class="hint" style="text-align:left;">Por día: qué se vendió, cuánto ganaste en esa venta y a qué equivale el 5% de comisión.</p>
+      <div id="ganancia-dias"><p class="hint">Cargando...</p></div>
     </section>
 
   </div>

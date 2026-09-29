@@ -76,12 +76,19 @@ const loginCard = document.getElementById("login-card");
 const appContent = document.getElementById("app-content");
 const logoutBtn = document.getElementById("logout-btn");
 
+let esDueno = false;
+
 function showApp() {
   loginCard.style.display = "none";
   appContent.style.display = "block";
   logoutBtn.style.display = "inline-block";
+  document.getElementById("ganancia-card").style.display = esDueno ? "block" : "none";
   cargarResumen();
   setInterval(cargarResumen, 10000);
+  if (esDueno) {
+    cargarGananciaPorVenta();
+    setInterval(cargarGananciaPorVenta, 30000);
+  }
 }
 
 function showLogin() {
@@ -96,11 +103,12 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   const errorHint = document.getElementById("login-error");
   errorHint.style.display = "none";
   try {
-    await api("/api/login", {
+    const resultado = await api("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
     });
+    esDueno = resultado.role === "owner";
     document.getElementById("password").value = "";
     showApp();
   } catch (err) {
@@ -115,7 +123,8 @@ logoutBtn.addEventListener("click", async () => {
 });
 
 async function checkAuth() {
-  const { authenticated } = await api("/api/auth-check");
+  const { authenticated, role } = await api("/api/auth-check");
+  esDueno = role === "owner";
   if (authenticated) showApp();
   else showLogin();
 }
@@ -262,6 +271,67 @@ function renderDetalle() {
         <td style="color:var(--green); font-weight:700;">${money(c.comision)}</td>
       </tr>
     `).join("");
+}
+
+// ---------- Ganancia por venta (solo dueño) ----------
+
+async function cargarGananciaPorVenta() {
+  const cont = document.getElementById("ganancia-dias");
+  try {
+    const detalle = await api("/api/comisiones-minoristas/detalle");
+    renderGananciaPorVenta(detalle);
+  } catch (err) {
+    if (err.status === 401) return; // no es dueño: la tarjeta ya está oculta
+    cont.innerHTML = `<p class="hint">Error al cargar: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderGananciaPorVenta(detalle) {
+  const cont = document.getElementById("ganancia-dias");
+  if (!detalle.length) {
+    cont.innerHTML = `<p class="hint">Todavía no se registró ninguna comisión.</p>`;
+    return;
+  }
+
+  const porFecha = new Map();
+  detalle.forEach((d) => {
+    if (!porFecha.has(d.fecha)) porFecha.set(d.fecha, []);
+    porFecha.get(d.fecha).push(d);
+  });
+
+  const fechas = [...porFecha.keys()].sort().reverse().slice(0, 30);
+
+  cont.innerHTML = fechas.map((fecha) => {
+    const ventas = porFecha.get(fecha).sort((a, b) => b.horaLabel.localeCompare(a.horaLabel));
+    const totalGanancia = ventas.reduce((a, v) => a + v.ganancia, 0);
+    const totalComision = ventas.reduce((a, v) => a + v.comision, 0);
+    const filas = ventas.map((v) => `
+      <tr>
+        <td>${escapeHtml((v.horaLabel || "").slice(0, 5))}</td>
+        <td>${escapeHtml(v.productos)}</td>
+        <td>${money(v.montoVenta)}</td>
+        <td>${money(v.ganancia)}</td>
+        <td>${money(v.excedente)}</td>
+        <td style="color:var(--green); font-weight:700;">${money(v.comision)}</td>
+      </tr>
+    `).join("");
+    return `
+      <div class="ganancia-dia">
+        <div class="ganancia-dia-titulo">
+          <h3>${escapeHtml(formatFechaLarga(fecha))}</h3>
+          <span class="ganancia-dia-resumen">${ventas.length} venta${ventas.length === 1 ? "" : "s"} · ganancia total ${money(totalGanancia)} · comisión <strong>${money(totalComision)}</strong></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Hora</th><th>Producto(s)</th><th>Monto venta</th><th>Ganancia</th><th>Excedente (base 5%)</th><th>Comisión (5%)</th></tr>
+            </thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 document.getElementById("resumen-periodo-tabs").addEventListener("click", (e) => {
