@@ -79,6 +79,7 @@
 .badge-segmento.recompro { background: var(--green-soft); color: var(--green); }
 .badge-segmento.unico { background: var(--blue-soft); color: var(--blue); }
 .badge-segmento.inactivo { background: var(--red-soft); color: var(--red); }
+.badge-segmento.alerta { background: var(--orange-soft); color: var(--orange); }
 
 .productos-lista {
   font-size: 12px;

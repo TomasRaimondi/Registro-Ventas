@@ -84,6 +84,10 @@
         <span class="label">Inactivos (según umbral)</span>
         <span class="big-number" id="stat-inactivo" style="color:var(--red);">0</span>
       </div>
+      <div class="card metric-card">
+        <span class="label">Sin recomprar proteína (30+ días)</span>
+        <span class="big-number" id="stat-alerta-proteina" style="color:var(--orange);">0</span>
+      </div>
     </section>
 
     <section class="card">
@@ -93,6 +97,7 @@
           <button type="button" class="periodo-tab" data-segmento="recompro">Recompraron</button>
           <button type="button" class="periodo-tab" data-segmento="unico">Compra única</button>
           <button type="button" class="periodo-tab" data-segmento="inactivo">Inactivos</button>
+          <button type="button" class="periodo-tab" data-segmento="alerta_proteina">⚠️ Sin recomprar proteína</button>
         </div>
 
         <div class="clientes-controles">

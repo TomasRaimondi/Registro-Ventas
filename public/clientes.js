@@ -159,6 +159,7 @@ function render() {
   const totalRecompro = conSegmento.filter((c) => c.segmento === "recompro").length;
   const totalUnico = conSegmento.filter((c) => c.segmento === "unico").length;
   const totalInactivo = conSegmento.filter((c) => c.segmentoUi === "inactivo").length;
+  const totalAlertaProteina = conSegmento.filter((c) => c.alertaProteina).length;
 
   document.getElementById("stat-total").textContent = conSegmento.length;
   document.getElementById("stat-recompro").textContent = totalRecompro;
@@ -167,11 +168,16 @@ function render() {
     : "";
   document.getElementById("stat-unico").textContent = totalUnico;
   document.getElementById("stat-inactivo").textContent = totalInactivo;
+  document.getElementById("stat-alerta-proteina").textContent = totalAlertaProteina;
 
   const textoCiudad = document.getElementById("filtro-ciudad").value.trim().toLowerCase();
 
   let filtrados = conSegmento.filter((c) => {
-    if (segmentoActivo !== "todos" && c.segmentoUi !== segmentoActivo) return false;
+    if (segmentoActivo === "alerta_proteina") {
+      if (!c.alertaProteina) return false;
+    } else if (segmentoActivo !== "todos" && c.segmentoUi !== segmentoActivo) {
+      return false;
+    }
     if (textoCiudad) {
       const tieneCiudad = (c.ciudades || []).some((ciudad) => ciudad.toLowerCase().includes(textoCiudad));
       if (!tieneCiudad) return false;
@@ -181,7 +187,9 @@ function render() {
     return haystack.includes(texto);
   });
 
-  if (segmentoActivo === "inactivo") {
+  if (segmentoActivo === "alerta_proteina") {
+    filtrados.sort((a, b) => (b.diasSinProteina || 0) - (a.diasSinProteina || 0));
+  } else if (segmentoActivo === "inactivo") {
     filtrados.sort((a, b) => (b.diasSinComprar || 0) - (a.diasSinComprar || 0));
   } else if (segmentoActivo === "recompro") {
     filtrados.sort((a, b) => b.compras - a.compras || b.totalGastado - a.totalGastado);
@@ -209,6 +217,11 @@ function badgeSegmento(seg) {
   if (seg === "recompro") return `<span class="badge-segmento recompro">Recompró</span>`;
   if (seg === "inactivo") return `<span class="badge-segmento inactivo">Inactivo</span>`;
   return `<span class="badge-segmento unico">Compra única</span>`;
+}
+
+function badgeAlertaProteina(c) {
+  if (!c.alertaProteina) return "";
+  return `<span class="badge-segmento alerta" title="Última compra de proteína: ${formatFechaHora(c.ultimaCompraProteina)}">⚠️ Proteína hace ${c.diasSinProteina}d</span>`;
 }
 
 function listaProductos(productos) {
@@ -242,7 +255,7 @@ function filaCliente(c) {
     </td>
     <td>${money(c.totalGastado)}</td>
     <td><div class="productos-lista">${listaProductos(c.productos)}</div></td>
-    <td>${badgeSegmento(c.segmentoUi)}</td>
+    <td>${badgeSegmento(c.segmentoUi)} ${badgeAlertaProteina(c)}</td>
     <td class="cupon-celda"></td>
   `;
 
