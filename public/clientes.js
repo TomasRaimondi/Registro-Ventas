@@ -17,6 +17,19 @@ function formatFechaHora(iso) {
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+const MESES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function mesKey(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function mesLabel(key) {
+  const [y, m] = key.split("-").map(Number);
+  return `${MESES_CORTO[m - 1]} ${String(y).slice(2)}`;
+}
+
 async function api(url, options) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -103,6 +116,7 @@ async function cargarClientes(forzar = false) {
     clientes = data.clientes;
     sincronizadoEn = data.sincronizadoEn;
     document.getElementById("sin-conexion").style.display = "none";
+    renderPanorama();
     render();
   } catch (err) {
     if (err.status === 503) {
@@ -114,6 +128,123 @@ async function cargarClientes(forzar = false) {
   } finally {
     cargando = false;
   }
+}
+
+// ---------- Panorama: métricas agregadas para marketing (no dependen del filtro) ----------
+
+function calcularPanorama(lista) {
+  const hoyKey = mesKey(new Date().toISOString());
+
+  // Cada pedido de cada cliente, marcado como "primera compra de ese cliente" o
+  // "recompra", para poder separar clientes nuevos de recompras mes a mes.
+  const pedidosConTipo = [];
+  lista.forEach((c) => {
+    const ordenados = [...(c.pedidos || [])].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || ""));
+    ordenados.forEach((p, idx) => {
+      if (!p.fecha) return;
+      pedidosConTipo.push({ fecha: p.fecha, esPrimera: idx === 0, productos: p.productos || [] });
+    });
+  });
+
+  const porMes = new Map();
+  pedidosConTipo.forEach((p) => {
+    const key = mesKey(p.fecha);
+    if (!key) return;
+    if (!porMes.has(key)) porMes.set(key, { nuevos: 0, recompras: 0 });
+    const bucket = porMes.get(key);
+    if (p.esPrimera) bucket.nuevos++; else bucket.recompras++;
+  });
+  const ultimosMeses = [...porMes.keys()].sort().slice(-6).map((key) => ({ key, label: mesLabel(key), ...porMes.get(key) }));
+
+  // Producto que más aparece en una RECOMPRA (no en la primera compra de nadie): qué
+  // empujar en el mensaje cuando se le escribe a alguien que ya compró antes.
+  const conteoProductoRecompra = new Map();
+  pedidosConTipo.forEach((p) => {
+    if (p.esPrimera) return;
+    p.productos.forEach((it) => {
+      conteoProductoRecompra.set(it.nombre, (conteoProductoRecompra.get(it.nombre) || 0) + (it.cantidad || 1));
+    });
+  });
+  const topProductosRecompra = [...conteoProductoRecompra.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([nombre, veces]) => ({ nombre, veces }));
+
+  const topClientes = [...lista].sort((a, b) => b.totalGastado - a.totalGastado).slice(0, 5);
+
+  const comprasTotales = lista.reduce((acc, c) => acc + c.compras, 0);
+  const ticketPromedioGlobal = comprasTotales ? lista.reduce((acc, c) => acc + c.totalGastado, 0) / comprasTotales : 0;
+
+  const nuevosEsteMes = pedidosConTipo.filter((p) => p.esPrimera && mesKey(p.fecha) === hoyKey).length;
+  const recomprasEsteMes = pedidosConTipo.filter((p) => !p.esPrimera && mesKey(p.fecha) === hoyKey).length;
+
+  return { ultimosMeses, topProductosRecompra, topClientes, ticketPromedioGlobal, nuevosEsteMes, recomprasEsteMes };
+}
+
+function renderGraficoEvolucion(meses) {
+  const cont = document.getElementById("evolucion-chart");
+  if (!meses.length) {
+    cont.innerHTML = `<p class="hint">Todavía no hay suficiente historial para ver una evolución mensual.</p>`;
+    return;
+  }
+  const max = Math.max(1, ...meses.map((m) => Math.max(m.nuevos, m.recompras)));
+  const anchoGrupo = 92;
+  const ancho = meses.length * anchoGrupo;
+  const altoBarras = 118;
+  const baseY = 138;
+
+  const barras = meses.map((m, i) => {
+    const x0 = i * anchoGrupo + 16;
+    const hN = Math.round((m.nuevos / max) * altoBarras);
+    const hR = Math.round((m.recompras / max) * altoBarras);
+    return `
+      <g>
+        <rect x="${x0}" y="${baseY - hN}" width="26" height="${Math.max(hN, 1)}" rx="3" fill="var(--blue)"></rect>
+        <text x="${x0 + 13}" y="${baseY - hN - 6}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text-dim)">${m.nuevos}</text>
+        <rect x="${x0 + 30}" y="${baseY - hR}" width="26" height="${Math.max(hR, 1)}" rx="3" fill="var(--green)"></rect>
+        <text x="${x0 + 43}" y="${baseY - hR - 6}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text-dim)">${m.recompras}</text>
+        <text x="${x0 + 28}" y="${baseY + 20}" text-anchor="middle" font-size="12" fill="var(--text-dim)">${escapeHtml(m.label)}</text>
+      </g>
+    `;
+  }).join("");
+
+  cont.innerHTML = `
+    <svg viewBox="0 0 ${ancho} 168" width="100%" style="max-width:${ancho}px; display:block;" role="img" aria-label="Clientes nuevos y recompras por mes">
+      <line x1="0" y1="${baseY}" x2="${ancho}" y2="${baseY}" stroke="var(--card-border)" stroke-width="1"></line>
+      ${barras}
+    </svg>
+  `;
+}
+
+function renderPanorama() {
+  if (!clientes.length) return;
+  const p = calcularPanorama(clientes);
+
+  document.getElementById("stat-ticket-promedio").textContent = money(p.ticketPromedioGlobal);
+  document.getElementById("stat-nuevos-mes").textContent = p.nuevosEsteMes;
+  document.getElementById("stat-nuevos-mes-sub").textContent = `${p.recomprasEsteMes} recompra${p.recomprasEsteMes === 1 ? "" : "s"} este mes`;
+
+  renderGraficoEvolucion(p.ultimosMeses);
+
+  document.getElementById("top-productos-recompra").innerHTML = p.topProductosRecompra.length
+    ? p.topProductosRecompra.map((pr, i) => `
+        <div class="ranking-fila">
+          <span class="ranking-pos">${i + 1}</span>
+          <span class="ranking-nombre">${escapeHtml(pr.nombre)}</span>
+          <span class="ranking-valor">${pr.veces}x</span>
+        </div>
+      `).join("")
+    : `<p class="hint">Todavía no hay recompras registradas.</p>`;
+
+  document.getElementById("top-clientes").innerHTML = p.topClientes.length
+    ? p.topClientes.map((c, i) => `
+        <div class="ranking-fila">
+          <span class="ranking-pos">${i + 1}</span>
+          <span class="ranking-nombre">${escapeHtml(c.nombre)}${c.compras >= 3 ? ` <span class="fan-badge" title="Cliente fan: 3 o más compras">⭐</span>` : ""}</span>
+          <span class="ranking-valor">${money(c.totalGastado)}</span>
+        </div>
+      `).join("")
+    : `<p class="hint">Todavía no hay clientes.</p>`;
 }
 
 document.getElementById("refrescar-btn").addEventListener("click", () => cargarClientes(true));
@@ -247,7 +378,7 @@ function filaCliente(c) {
 
   tr.innerHTML = `
     <td>
-      <span class="cliente-nombre">${escapeHtml(c.nombre)}</span>
+      <span class="cliente-nombre">${escapeHtml(c.nombre)}${c.compras >= 3 ? ` <span class="fan-badge" title="Cliente fan: 3 o más compras">⭐</span>` : ""}</span>
       <span class="cliente-email">${escapeHtml(c.email || "")}</span>
     </td>
     <td>${wa}</td>
@@ -354,6 +485,21 @@ platensefit.com`;
   return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 }
 
+// Promedio de días entre una compra y la siguiente (solo tiene sentido con 2+ pedidos):
+// da una idea de cada cuánto conviene volver a escribirle a este cliente puntual.
+function cadenciaDias(c) {
+  const fechas = (c.pedidos || [])
+    .map((p) => p.fecha)
+    .filter(Boolean)
+    .sort();
+  if (fechas.length < 2) return null;
+  let totalDias = 0;
+  for (let i = 1; i < fechas.length; i++) {
+    totalDias += (new Date(fechas[i]) - new Date(fechas[i - 1])) / 86400000;
+  }
+  return Math.round(totalDias / (fechas.length - 1));
+}
+
 function toggleDetalle(tr, c) {
   const siguiente = tr.nextElementSibling;
   if (siguiente && siguiente.classList.contains("fila-detalle")) {
@@ -361,6 +507,9 @@ function toggleDetalle(tr, c) {
     return;
   }
   document.querySelectorAll(".fila-detalle").forEach((f) => f.remove());
+
+  const ticketPromedio = c.compras ? c.totalGastado / c.compras : 0;
+  const cadencia = cadenciaDias(c);
 
   const detalle = document.createElement("tr");
   detalle.className = "fila-detalle";
@@ -371,7 +520,12 @@ function toggleDetalle(tr, c) {
     </div>
   `).join("");
   detalle.innerHTML = `<td colspan="8">
-    <strong>Historial de pedidos de ${escapeHtml(c.nombre)}</strong>
+    <strong>Historial de ${escapeHtml(c.nombre)}</strong>
+    <div class="detalle-mini-stats">
+      <div class="mini-stat"><span class="mini-stat-label">Ticket promedio</span><span class="mini-stat-valor">${money(ticketPromedio)}</span></div>
+      <div class="mini-stat"><span class="mini-stat-label">Cadencia de compra</span><span class="mini-stat-valor">${cadencia != null ? `cada ${cadencia} días` : "—"}</span></div>
+      <div class="mini-stat"><span class="mini-stat-label">Total histórico</span><span class="mini-stat-valor">${money(c.totalGastado)}</span></div>
+    </div>
     ${pedidosHtml || "<p class=\"hint\">Sin pedidos.</p>"}
   </td>`;
   tr.after(detalle);

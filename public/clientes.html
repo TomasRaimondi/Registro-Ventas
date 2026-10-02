@@ -88,6 +88,33 @@
         <span class="label">Con alerta de recompra</span>
         <span class="big-number" id="stat-alerta-proteina" style="color:var(--orange);">0</span>
       </div>
+      <div class="card metric-card">
+        <span class="label">Ticket promedio</span>
+        <span class="big-number" id="stat-ticket-promedio">$0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Clientes nuevos este mes</span>
+        <span class="big-number" id="stat-nuevos-mes" style="color:var(--blue);">0</span>
+        <span class="metric-sub" id="stat-nuevos-mes-sub"></span>
+      </div>
+    </section>
+
+    <section class="panorama-grid">
+      <div class="card panorama-chart">
+        <h2>📈 Evolución mensual</h2>
+        <p class="hint" style="text-align:left;">Clientes nuevos (<span style="color:var(--blue); font-weight:700;">azul</span>) contra recompras (<span style="color:var(--green); font-weight:700;">verde</span>), mes a mes.</p>
+        <div id="evolucion-chart" class="evolucion-chart-wrap"></div>
+      </div>
+      <div class="card">
+        <h2>⭐ Top clientes</h2>
+        <p class="hint" style="text-align:left;">Los que más gastaron en total.</p>
+        <div id="top-clientes" class="ranking-lista"></div>
+      </div>
+      <div class="card">
+        <h2>🔁 Motor de recompra</h2>
+        <p class="hint" style="text-align:left;">Lo que más se repite cuando un cliente vuelve a comprar.</p>
+        <div id="top-productos-recompra" class="ranking-lista"></div>
+      </div>
     </section>
 
     <section class="card">
