@@ -1824,6 +1824,15 @@ const server = http.createServer(async (req, res) => {
       if (body.notas !== undefined) {
         campos.notas = body.notas ? String(body.notas).trim() : null;
       }
+      if (body.pagadoMes !== undefined) {
+        if (body.pagadoMes === null) {
+          campos.pagadoMes = null;
+        } else if (/^\d{4}-\d{2}$/.test(body.pagadoMes)) {
+          campos.pagadoMes = body.pagadoMes;
+        } else {
+          return sendJson(res, 400, { error: "pagadoMes inválido" });
+        }
+      }
       if (!Object.keys(campos).length) return sendJson(res, 400, { error: "Nada para actualizar" });
 
       campos.actualizadoEn = new Date().toISOString();

@@ -76,6 +76,15 @@ async function checkAuth() {
 
 let costosGlobal = [];
 
+function mesActual() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function estaPagadoEsteMes(c) {
+  return c.pagadoMes === mesActual();
+}
+
 async function cargarLista() {
   const cont = document.getElementById("cf-lista");
   try {
@@ -89,9 +98,22 @@ async function cargarLista() {
 
 function renderStats() {
   const total = costosGlobal.reduce((acc, c) => acc + c.monto, 0);
+  const pagados = costosGlobal.filter(estaPagadoEsteMes);
+  const pagado = pagados.reduce((acc, c) => acc + c.monto, 0);
+  const falta = total - pagado;
+  const faltantes = costosGlobal.length - pagados.length;
+
   document.getElementById("stat-total").textContent = money(total);
   document.getElementById("stat-cantidad").textContent =
     `${costosGlobal.length} costo${costosGlobal.length === 1 ? "" : "s"} fijo${costosGlobal.length === 1 ? "" : "s"}`;
+
+  document.getElementById("stat-pagado").textContent = money(pagado);
+  document.getElementById("stat-pagado-cant").textContent =
+    `${pagados.length} de ${costosGlobal.length} pagado${pagados.length === 1 ? "" : "s"}`;
+
+  document.getElementById("stat-falta").textContent = money(falta);
+  document.getElementById("stat-falta-cant").textContent =
+    faltantes > 0 ? `${faltantes} costo${faltantes === 1 ? "" : "s"} sin pagar` : "¡Todo pagado este mes! 🎉";
 }
 
 function renderLista() {
@@ -104,10 +126,12 @@ function renderLista() {
 
   cont.innerHTML = "";
   costosGlobal.forEach((c) => {
+    const pagado = estaPagadoEsteMes(c);
     const fila = document.createElement("div");
-    fila.className = "cf-fila";
+    fila.className = "cf-fila" + (pagado ? " cf-pagada" : "");
     fila.dataset.id = c.id;
     fila.innerHTML = `
+      <input type="checkbox" class="cf-pagado-check" data-campo="pagadoMes" ${pagado ? "checked" : ""} title="Marcar como pagado este mes">
       <input type="text" class="cf-input" data-campo="concepto" value="${escapeHtml(c.concepto)}">
       <div class="cf-monto-wrap"><span>$</span><input type="number" class="cf-input" data-campo="monto" value="${c.monto}" min="0" step="0.01"></div>
       <input type="text" class="cf-input" data-campo="notas" placeholder="Notas" value="${escapeHtml(c.notas || "")}">
@@ -128,7 +152,8 @@ async function guardarCampo(fila, campo, valor) {
     });
     const c = costosGlobal.find((x) => x.id === id);
     if (c) c[campo] = valor;
-    if (campo === "monto") renderStats();
+    if (campo === "monto" || campo === "pagadoMes") renderStats();
+    if (campo === "pagadoMes") fila.classList.toggle("cf-pagada", valor === mesActual());
     const aviso = fila.querySelector(".cf-guardado");
     aviso.classList.add("visible");
     setTimeout(() => aviso.classList.remove("visible"), 1500);
@@ -138,6 +163,13 @@ async function guardarCampo(fila, campo, valor) {
 }
 
 document.getElementById("cf-lista").addEventListener("change", (e) => {
+  const checkbox = e.target.closest(".cf-pagado-check");
+  if (checkbox) {
+    const fila = checkbox.closest(".cf-fila");
+    guardarCampo(fila, "pagadoMes", checkbox.checked ? mesActual() : null);
+    return;
+  }
+
   const input = e.target.closest(".cf-input");
   if (!input) return;
   const fila = input.closest(".cf-fila");

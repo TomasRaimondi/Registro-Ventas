@@ -373,6 +373,17 @@ async function migrarBonoMayoristaAutoManual(execFn) {
   }
 }
 
+// Guarda el mes (YYYY-MM) en el que se marcó como pagado un costo fijo. Al llegar un
+// mes nuevo, ese valor ya no coincide con "el mes actual" y el check se ve destildado
+// solo, sin necesidad de ningún proceso que lo resetee.
+async function migrarCostosFijosPago(execFn) {
+  try {
+    await execFn("ALTER TABLE costos_fijos ADD COLUMN pagadoMes TEXT");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 const USE_TURSO = !!process.env.TURSO_DATABASE_URL;
 
 let impl;
@@ -397,6 +408,7 @@ if (USE_TURSO) {
       await migrarVendedor((sql) => client.execute(sql));
       await migrarBonoMinoristaManual((sql) => client.execute(sql));
       await migrarBonoMayoristaAutoManual((sql) => client.execute(sql));
+      await migrarCostosFijosPago((sql) => client.execute(sql));
       await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
       await migrarInversionesCoinGeckoABinance(() => impl.getAllInversionesActivos(), (id, tf, fid) => impl.updateInversionActivoFuente(id, tf, fid));
     },
@@ -559,7 +571,7 @@ if (USE_TURSO) {
     async updateCostoFijo(id, campos) {
       const sets = [];
       const args = [];
-      for (const campo of ["concepto", "monto", "notas"]) {
+      for (const campo of ["concepto", "monto", "notas", "pagadoMes"]) {
         if (Object.prototype.hasOwnProperty.call(campos, campo)) {
           sets.push(`${campo} = ?`);
           args.push(campos[campo]);
@@ -966,6 +978,7 @@ if (USE_TURSO) {
       await migrarVendedor(async (sql) => db.exec(sql));
       await migrarBonoMinoristaManual(async (sql) => db.exec(sql));
       await migrarBonoMayoristaAutoManual(async (sql) => db.exec(sql));
+      await migrarCostosFijosPago(async (sql) => db.exec(sql));
       await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
       await migrarInversionesCoinGeckoABinance(() => impl.getAllInversionesActivos(), (id, tf, fid) => impl.updateInversionActivoFuente(id, tf, fid));
     },
@@ -1096,7 +1109,7 @@ if (USE_TURSO) {
     async updateCostoFijo(id, campos) {
       const sets = [];
       const args = [];
-      for (const campo of ["concepto", "monto", "notas"]) {
+      for (const campo of ["concepto", "monto", "notas", "pagadoMes"]) {
         if (Object.prototype.hasOwnProperty.call(campos, campo)) {
           sets.push(`${campo} = ?`);
           args.push(campos[campo]);

@@ -27,6 +27,9 @@
   .cf-guardado { font-size: 11px; color: var(--green); opacity: 0; transition: opacity .2s; }
   .cf-guardado.visible { opacity: 1; }
   .cf-vacio { text-align: center; color: var(--text-dim); padding: 20px 0; }
+  .cf-pagado-check { width: 20px; height: 20px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; }
+  .cf-fila.cf-pagada { opacity: .55; }
+  .cf-fila.cf-pagada input[type="text"], .cf-fila.cf-pagada input[type="number"] { text-decoration: line-through; }
 </style>
 </head>
 <body>
@@ -72,6 +75,16 @@
         <span class="big-number" id="stat-total" style="color:var(--green);">$0</span>
         <span class="metric-sub" id="stat-cantidad"></span>
       </div>
+      <div class="card metric-card">
+        <span class="label">Pagado este mes</span>
+        <span class="big-number" id="stat-pagado" style="color:var(--blue);">$0</span>
+        <span class="metric-sub" id="stat-pagado-cant"></span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Falta pagar</span>
+        <span class="big-number" id="stat-falta" style="color:var(--orange);">$0</span>
+        <span class="metric-sub" id="stat-falta-cant"></span>
+      </div>
     </section>
 
     <section class="card">
@@ -101,7 +114,7 @@
 
     <section class="card">
       <h2>Costos cargados</h2>
-      <p class="hint" style="text-align:left;">Tocá cualquier campo para editarlo; se guarda solo.</p>
+      <p class="hint" style="text-align:left;">Tocá cualquier campo para editarlo; se guarda solo. Marcá el check cuando lo pagues este mes — el 1° de cada mes se destilda solo.</p>
       <div id="cf-lista"><p class="cf-vacio">Cargando...</p></div>
     </section>
 
