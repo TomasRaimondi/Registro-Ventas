@@ -953,6 +953,15 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, rows.map(seguimientoAdmin));
     }
 
+    // Diagnóstico temporal: ver el estado crudo de un pedido tal cual lo devuelve la
+    // API de Tiendanube, para investigar por qué una compra no aparece en Recompra.
+    if (pathname.startsWith("/api/debug/orden-cruda/") && req.method === "GET") {
+      if (!tiendanube.isConfigured()) return sendJson(res, 503, { error: "La tienda no está conectada." });
+      const numero = decodeURIComponent(pathname.slice("/api/debug/orden-cruda/".length));
+      const raw = await tiendanube.debugOrdenCruda(numero);
+      return sendJson(res, 200, raw);
+    }
+
     if (pathname.startsWith("/api/seguimientos/orden/") && req.method === "GET") {
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       if (!tiendanube.isConfigured()) return sendJson(res, 503, { error: "La tienda no está conectada." });

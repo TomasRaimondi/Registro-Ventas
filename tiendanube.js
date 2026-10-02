@@ -328,4 +328,23 @@ async function buscarOrdenPorNumero(numero) {
   };
 }
 
-module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero };
+async function debugOrdenCruda(numero) {
+  if (!isConfigured()) throw new Error("Tienda no conectada");
+  const n = String(numero).replace(/\D/g, "");
+  const lote = await tnFetch(`/orders?q=${encodeURIComponent(n)}&per_page=10`);
+  const o = Array.isArray(lote) ? lote.find((x) => String(x.number) === n) : null;
+  if (!o) return { encontrado: false };
+  return {
+    encontrado: true,
+    number: o.number,
+    payment_status: o.payment_status,
+    status: o.status,
+    cancelled_at: o.cancelled_at,
+    customer_id: o.customer && o.customer.id,
+    contact_email: o.contact_email,
+    created_at: o.created_at,
+    completed_at: o.completed_at,
+  };
+}
+
+module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero, debugOrdenCruda };
