@@ -159,7 +159,7 @@ function render() {
   const totalRecompro = conSegmento.filter((c) => c.segmento === "recompro").length;
   const totalUnico = conSegmento.filter((c) => c.segmento === "unico").length;
   const totalInactivo = conSegmento.filter((c) => c.segmentoUi === "inactivo").length;
-  const totalAlertaProteina = conSegmento.filter((c) => c.alertaProteina).length;
+  const totalAlertaProteina = conSegmento.filter((c) => (c.alertasRecompra || []).some((a) => a.activa)).length;
 
   document.getElementById("stat-total").textContent = conSegmento.length;
   document.getElementById("stat-recompro").textContent = totalRecompro;
@@ -174,7 +174,7 @@ function render() {
 
   let filtrados = conSegmento.filter((c) => {
     if (segmentoActivo === "alerta_proteina") {
-      if (!c.alertaProteina) return false;
+      if (!(c.alertasRecompra || []).some((a) => a.activa)) return false;
     } else if (segmentoActivo !== "todos" && c.segmentoUi !== segmentoActivo) {
       return false;
     }
@@ -188,7 +188,8 @@ function render() {
   });
 
   if (segmentoActivo === "alerta_proteina") {
-    filtrados.sort((a, b) => (b.diasSinProteina || 0) - (a.diasSinProteina || 0));
+    const maxDiasActivo = (c) => Math.max(0, ...((c.alertasRecompra || []).filter((a) => a.activa).map((a) => a.dias)));
+    filtrados.sort((a, b) => maxDiasActivo(b) - maxDiasActivo(a));
   } else if (segmentoActivo === "inactivo") {
     filtrados.sort((a, b) => (b.diasSinComprar || 0) - (a.diasSinComprar || 0));
   } else if (segmentoActivo === "recompro") {
@@ -220,8 +221,10 @@ function badgeSegmento(seg) {
 }
 
 function badgeAlertaProteina(c) {
-  if (!c.alertaProteina) return "";
-  return `<span class="badge-segmento alerta" title="Última compra de proteína: ${formatFechaHora(c.ultimaCompraProteina)}">⚠️ Proteína hace ${c.diasSinProteina}d</span>`;
+  return (c.alertasRecompra || [])
+    .filter((a) => a.activa)
+    .map((a) => `<span class="badge-segmento alerta" title="Última compra de ${escapeHtml(a.etiqueta)}: ${formatFechaHora(a.ultimaCompra)} · umbral ${a.diasUmbral} días">⚠️ ${escapeHtml(a.etiqueta)} hace ${a.dias}d</span>`)
+    .join(" ");
 }
 
 function listaProductos(productos) {

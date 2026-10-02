@@ -131,11 +131,17 @@ function normalizarTexto(s) {
   return (s || "").toString().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-// "protein" matchea tanto "Proteína"/"proteina" (es, sin acentos) como "Whey Protein"/
-// "Protein" (nombres en inglés que también se usan en el catálogo), en una sola pasada.
-function esProductoProteina(nombre) {
-  return normalizarTexto(nombre).includes("protein");
-}
+// Reglas de recompra por producto: cada una se dispara cuando pasaron "dias" días
+// desde la última compra de un producto que matchee "match" (sin tildes, minúscula,
+// comparado por substring contra el nombre del producto), sin que haya una compra más
+// nueva de ese mismo producto. El umbral sale de cuánto rinde cada pote/frasco.
+const REGLAS_RECOMPRA_PRODUCTO = [
+  // "protein" matchea tanto "Proteína"/"proteina" (es, sin acentos) como "Whey Protein"
+  // (nombres en inglés que también se usan en el catálogo), en una sola pasada.
+  { id: "proteina", etiqueta: "Proteína", match: "protein", dias: 30 },
+  { id: "creatina_star_300", etiqueta: "Creatina Star Nutrition 300g", match: "creatina star nutrition 300g", dias: 50 },
+  { id: "creatina_onefit_500", etiqueta: "Creatina One Fit 500g", match: "creatina one fit 500g", dias: 60 },
+];
 
 let cache = { data: null, fetchedAt: 0 };
 const CACHE_MS = 3 * 60 * 1000;
@@ -165,7 +171,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
         compras: 0,
         totalGastado: 0,
         ultimaCompra: null,
-        ultimaCompraProteina: null,
+        ultimaCompraPorRegla: new Map(),
         productos: new Map(),
         pedidos: [],
         ciudades: new Set(),
@@ -194,11 +200,14 @@ async function getClientesRecompra({ forzar = false } = {}) {
       c.productos.set(it.nombre, (c.productos.get(it.nombre) || 0) + it.cantidad);
     }
 
-    // Última vez que este cliente compró proteína (de cualquier marca/sabor), para la
-    // alerta de recompra: un pote rinde 30 servicios o menos, así que pasados 30 días
-    // sin una compra nueva de proteína es buen momento para re-contactarlo.
-    if (fechaOrden && items.some((it) => esProductoProteina(it.nombre))) {
-      if (!c.ultimaCompraProteina || fechaOrden > c.ultimaCompraProteina) c.ultimaCompraProteina = fechaOrden;
+    // Última vez que este cliente compró cada producto con regla de recompra.
+    if (fechaOrden) {
+      for (const regla of REGLAS_RECOMPRA_PRODUCTO) {
+        const compro = items.some((it) => normalizarTexto(it.nombre).includes(regla.match));
+        if (!compro) continue;
+        const actual = c.ultimaCompraPorRegla.get(regla.id);
+        if (!actual || fechaOrden > actual) c.ultimaCompraPorRegla.set(regla.id, fechaOrden);
+      }
     }
 
     c.pedidos.push({
@@ -216,10 +225,12 @@ async function getClientesRecompra({ forzar = false } = {}) {
     const ultimaCompraMs = c.ultimaCompra ? new Date(c.ultimaCompra).getTime() : null;
     const diasSinComprar = Number.isFinite(ultimaCompraMs) ? Math.floor((ahora - ultimaCompraMs) / 86400000) : null;
 
-    const ultimaCompraProteinaMs = c.ultimaCompraProteina ? new Date(c.ultimaCompraProteina).getTime() : null;
-    const diasSinProteina = Number.isFinite(ultimaCompraProteinaMs)
-      ? Math.floor((ahora - ultimaCompraProteinaMs) / 86400000)
-      : null;
+    const alertasRecompra = REGLAS_RECOMPRA_PRODUCTO.map((regla) => {
+      const ultima = c.ultimaCompraPorRegla.get(regla.id) || null;
+      const ultimaMs = ultima ? new Date(ultima).getTime() : null;
+      const dias = Number.isFinite(ultimaMs) ? Math.floor((ahora - ultimaMs) / 86400000) : null;
+      return { id: regla.id, etiqueta: regla.etiqueta, diasUmbral: regla.dias, ultimaCompra: ultima, dias, activa: dias !== null && dias >= regla.dias };
+    }).filter((a) => a.ultimaCompra !== null);
 
     return {
       id: c.id,
@@ -231,9 +242,7 @@ async function getClientesRecompra({ forzar = false } = {}) {
       totalGastado: Math.round(c.totalGastado * 100) / 100,
       ultimaCompra: c.ultimaCompra,
       diasSinComprar,
-      ultimaCompraProteina: c.ultimaCompraProteina,
-      diasSinProteina,
-      alertaProteina: diasSinProteina !== null && diasSinProteina >= 30,
+      alertasRecompra,
       segmento: c.compras >= 2 ? "recompro" : "unico",
       productos: [...c.productos.entries()]
         .map(([nombre, cantidad]) => ({ nombre, cantidad }))
