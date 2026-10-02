@@ -160,7 +160,11 @@ async function getClientesRecompra({ forzar = false } = {}) {
     if (o.cancelled_at || o.payment_status !== "paid") continue;
 
     const cust = o.customer || {};
-    const key = (cust.id && String(cust.id)) || (o.contact_email || cust.email || "").toLowerCase() || `pedido-${o.id}`;
+    // El email agrupa mejor que el id de cliente: una misma persona puede comprar una
+    // vez como invitado (sin customer.id) y otra vez logueada (con customer.id), y con
+    // el id como clave esas dos compras quedaban como "dos clientes" distintos en vez de
+    // sumarse al historial de uno solo. El id solo se usa si el pedido no trae email.
+    const key = (o.contact_email || cust.email || "").trim().toLowerCase() || (cust.id && String(cust.id)) || `pedido-${o.id}`;
 
     if (!porCliente.has(key)) {
       porCliente.set(key, {
@@ -328,23 +332,4 @@ async function buscarOrdenPorNumero(numero) {
   };
 }
 
-async function debugOrdenCruda(numero) {
-  if (!isConfigured()) throw new Error("Tienda no conectada");
-  const n = String(numero).replace(/\D/g, "");
-  const lote = await tnFetch(`/orders?q=${encodeURIComponent(n)}&per_page=10`);
-  const o = Array.isArray(lote) ? lote.find((x) => String(x.number) === n) : null;
-  if (!o) return { encontrado: false };
-  return {
-    encontrado: true,
-    number: o.number,
-    payment_status: o.payment_status,
-    status: o.status,
-    cancelled_at: o.cancelled_at,
-    customer_id: o.customer && o.customer.id,
-    contact_email: o.contact_email,
-    created_at: o.created_at,
-    completed_at: o.completed_at,
-  };
-}
-
-module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero, debugOrdenCruda };
+module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero };
