@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#EEF2F0">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Platense Fit">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<script src="nav-menu.js"></script>
+<style>
+  .inv-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .inv-buscador { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; flex: 1; min-width: 220px; }
+  .inv-buscador input[type="text"] { min-width: 220px; flex: 1; }
+  .inv-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .inv-estado-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .inv-estado-badge.normal { background: var(--green-soft); color: var(--green); }
+  .inv-estado-badge.bajo { background: var(--orange-soft); color: var(--orange); }
+  .inv-estado-badge.agotado { background: var(--red-soft); color: var(--red); }
+  .inv-estado-badge.sin-clasificar { background: var(--card-border); color: var(--text-dim); }
+
+  .inv-input { width: 100%; border: 1px solid transparent; background: transparent; color: var(--text); font-family: inherit; font-size: 13px; padding: 5px 6px; border-radius: 7px; text-align: right; }
+  .inv-input:hover { border-color: var(--card-border); }
+  .inv-input:focus { outline: none; border-color: var(--accent); background: var(--bg-soft); }
+  .inv-input.inv-input-texto { text-align: left; }
+  td.inv-td-input { padding: 4px 6px; }
+
+  table.inv-tabla th, table.inv-tabla td { white-space: nowrap; }
+  table.inv-tabla .col-producto { white-space: normal; min-width: 160px; }
+  .inv-producto-nombre { font-weight: 700; }
+  .inv-sin-clasificar-tag { font-size: 10px; color: var(--text-dim); display: block; }
+
+  .inv-guardado { font-size: 10px; color: var(--green); opacity: 0; transition: opacity .2s; position: absolute; margin-top: -2px; }
+  .inv-guardado.visible { opacity: 1; }
+
+  tr.inv-fila { cursor: pointer; }
+  tr.inv-fila:hover { background: var(--accent-soft); }
+  tr.inv-fila-detalle { background: var(--bg-soft); }
+  tr.inv-fila-detalle td { padding: 16px 18px; }
+  .inv-detalle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .inv-detalle-campo { display: flex; flex-direction: column; gap: 4px; }
+  .inv-detalle-campo label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .03em; }
+  .inv-detalle-campo input, .inv-detalle-campo textarea { border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: 13px; }
+  .inv-ultimo-precio { font-size: 12px; color: var(--text-dim); }
+  .inv-ultimo-precio strong { color: var(--text); }
+  .inv-metodo-estimacion { font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
+
+  .inv-modal .modal-card { max-width: 520px; }
+  .inv-modal .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .inv-modal .field-row .field { flex: 1; min-width: 140px; }
+  .inv-ingreso-items { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .inv-ingreso-item-row { display: flex; gap: 8px; align-items: center; }
+  .inv-ingreso-item-row input { flex: 1; }
+  .inv-ingreso-item-row .cantidad-input { max-width: 80px; }
+  .inv-ingreso-item-row .precio-input { max-width: 120px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Inventario</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">Registro de Ventas</a>
+    <a href="/ganancias.html" class="link-btn">Panel de Ganancias</a>
+    <div id="app-nav"></div>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:18px;">
+      <div class="card metric-card metric-card-wide">
+        <span class="label">Capital invertido</span>
+        <span class="big-number" id="stat-capital">$0</span>
+        <span class="metric-sub">stock × costo</span>
+      </div>
+      <div class="card metric-card metric-card-wide">
+        <span class="label">Valor estimado de venta</span>
+        <span class="big-number" id="stat-valor-estimado" style="color:var(--green);">$0</span>
+        <span class="metric-sub">según últimos precios vendidos</span>
+      </div>
+      <div class="card metric-card metric-card-wide">
+        <span class="label">Ganancia potencial</span>
+        <span class="big-number" id="stat-ganancia-potencial" style="color:var(--accent);">$0</span>
+        <span class="metric-sub">estimado − invertido, no es plata ganada</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Stock total (unidades)</span>
+        <span class="big-number" id="stat-stock-total">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Productos activos</span>
+        <span class="big-number" id="stat-productos">0</span>
+        <span class="metric-sub" id="stat-sin-clasificar"></span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Stock bajo</span>
+        <span class="big-number" id="stat-stock-bajo" style="color:var(--orange);">0</span>
+      </div>
+      <div class="card metric-card">
+        <span class="label">Agotados</span>
+        <span class="big-number" id="stat-agotados" style="color:var(--red);">0</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="inv-toolbar">
+        <div class="inv-buscador">
+          <input type="text" id="inv-buscador" placeholder="Buscar por nombre, marca, categoría, SKU...">
+          <select id="inv-orden">
+            <option value="nombre">Ordenar: Nombre</option>
+            <option value="stock-asc">Menor stock</option>
+            <option value="stock-desc">Mayor stock</option>
+            <option value="valor-desc">Mayor valor de inventario</option>
+            <option value="capital-desc">Mayor capital invertido</option>
+            <option value="ganancia-desc">Mayor ganancia potencial</option>
+          </select>
+          <select id="inv-filtro-estado">
+            <option value="todos">Todos los estados</option>
+            <option value="normal">Stock normal</option>
+            <option value="bajo">Stock bajo</option>
+            <option value="agotado">Agotados</option>
+            <option value="sin-clasificar">Sin clasificar</option>
+          </select>
+        </div>
+        <div class="inv-acciones">
+          <button type="button" class="clear-btn" id="btn-nuevo-ingreso">+ Nuevo Ingreso</button>
+          <button type="button" class="submit-btn" id="btn-nuevo-producto" style="width:auto; padding:10px 18px; margin-top:0;">+ Nuevo Producto</button>
+        </div>
+      </div>
+
+      <p class="hint" style="text-align:left;">Tocá una fila para ver/editar marca, categoría, SKU, notas y el detalle de últimos precios vendidos. Los campos con fondo se editan tocándolos.</p>
+
+      <div class="table-wrap">
+        <table class="inv-tabla">
+          <thead>
+            <tr>
+              <th class="col-producto">Producto</th>
+              <th>Stock</th>
+              <th>Costo</th>
+              <th>Mín.</th>
+              <th>Minorista</th>
+              <th>Mayorista</th>
+              <th>Valor stock</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="inv-body"><tr class="empty-row"><td colspan="8">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<!-- Modal: Nuevo Producto -->
+<div id="modal-nuevo-producto" class="modal-overlay inv-modal" style="display:none;">
+  <div class="card modal-card">
+    <button type="button" class="modal-cerrar" id="np-cerrar-btn" aria-label="Cerrar">×</button>
+    <h2>Nuevo producto</h2>
+    <form id="np-form">
+      <div class="field">
+        <label for="np-nombre">Nombre</label>
+        <input type="text" id="np-nombre" placeholder="Ej: Creatina XBody 300g" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="np-marca">Marca</label>
+          <input type="text" id="np-marca" placeholder="Ej: XBody">
+        </div>
+        <div class="field">
+          <label for="np-categoria">Categoría</label>
+          <input type="text" id="np-categoria" placeholder="Ej: Creatinas">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="np-costo">Costo unitario</label>
+          <div class="input-prefix"><span>$</span><input type="number" id="np-costo" min="0" step="0.01" required></div>
+        </div>
+        <div class="field">
+          <label for="np-stock-inicial">Stock inicial</label>
+          <input type="number" id="np-stock-inicial" min="0" step="1" value="0">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="np-minorista">Precio minorista</label>
+          <div class="input-prefix"><span>$</span><input type="number" id="np-minorista" min="0" step="0.01"></div>
+        </div>
+        <div class="field">
+          <label for="np-mayorista">Precio mayorista</label>
+          <div class="input-prefix"><span>$</span><input type="number" id="np-mayorista" min="0" step="0.01"></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="np-stock-minimo">Stock mínimo</label>
+          <input type="number" id="np-stock-minimo" min="0" step="1" placeholder="Alerta de stock bajo">
+        </div>
+        <div class="field">
+          <label for="np-stock-ideal">Stock ideal</label>
+          <input type="number" id="np-stock-ideal" min="0" step="1">
+        </div>
+      </div>
+      <button type="submit" class="submit-btn" id="np-submit-btn">Crear producto</button>
+      <p class="hint error-hint" id="np-error" style="display:none;"></p>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Nuevo Ingreso -->
+<div id="modal-nuevo-ingreso" class="modal-overlay inv-modal" style="display:none;">
+  <div class="card modal-card">
+    <button type="button" class="modal-cerrar" id="ni-cerrar-btn" aria-label="Cerrar">×</button>
+    <h2>Nuevo ingreso de mercadería</h2>
+    <form id="ni-form">
+      <div class="field-row">
+        <div class="field">
+          <label for="ni-fecha">Fecha</label>
+          <input type="date" id="ni-fecha" required>
+        </div>
+        <div class="field">
+          <label for="ni-proveedor">Proveedor <span class="opcional">(opcional)</span></label>
+          <input type="text" id="ni-proveedor" placeholder="Ej: Distribuidora XYZ">
+        </div>
+      </div>
+
+      <div class="field autocomplete-field">
+        <label for="ni-producto-input">Agregar producto</label>
+        <input type="text" id="ni-producto-input" placeholder="Buscar producto..." autocomplete="off">
+        <div class="suggestions" id="ni-producto-suggestions"></div>
+      </div>
+
+      <div class="inv-ingreso-items" id="ni-items"></div>
+
+      <div class="field">
+        <label for="ni-factura">Nº de factura/remito <span class="opcional">(opcional)</span></label>
+        <input type="text" id="ni-factura">
+      </div>
+      <div class="field">
+        <label for="ni-notas">Notas <span class="opcional">(opcional)</span></label>
+        <input type="text" id="ni-notas">
+      </div>
+      <button type="submit" class="submit-btn" id="ni-submit-btn">Confirmar ingreso</button>
+      <p class="hint error-hint" id="ni-error" style="display:none;"></p>
+    </form>
+  </div>
+</div>
+
+<script src="inventario.js"></script>
+</body>
+</html>

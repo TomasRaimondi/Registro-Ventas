@@ -23,7 +23,6 @@
         { href: "/rentabilidad.html", label: "Rentabilidad" },
         { href: "/gastos.html", label: "Gastos" },
         { href: "/costos-fijos.html", label: "Costos Fijos" },
-        { href: "/balance.html", label: "Situación Financiera" },
         { href: "/salario.html", label: "Mi Salario" },
         { href: "/comisiones-minoristas.html", label: "Comisiones Minoristas" },
       ],
@@ -47,8 +46,8 @@
     {
       label: "Otros",
       items: [
+        { href: "/inventario.html", label: "Inventario" },
         { href: "/anuncios.html", label: "Anuncios" },
-        { href: "/compras-stock.html", label: "Compras de Stock" },
         { href: "/calendario-contenido.html", label: "Calendario de Contenido" },
         { href: "/inversiones.html", label: "Inversiones" },
       ],

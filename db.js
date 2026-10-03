@@ -912,15 +912,6 @@ if (USE_TURSO) {
     async deleteBalanceManual(fecha) {
       await client.execute({ sql: "DELETE FROM balance_manual WHERE fecha = ?", args: [fecha] });
     },
-    async deleteAllBalanceManual() {
-      await client.execute("DELETE FROM balance_manual");
-    },
-    async deleteAllComprasStock() {
-      await client.execute("DELETE FROM compras_stock");
-    },
-    async resetTodoElStock() {
-      await client.execute("UPDATE costos SET stock = 0");
-    },
 
     async insertItem(row) {
       await client.execute({
@@ -1510,15 +1501,6 @@ if (USE_TURSO) {
     },
     async deleteBalanceManual(fecha) {
       db.prepare("DELETE FROM balance_manual WHERE fecha = ?").run(fecha);
-    },
-    async deleteAllBalanceManual() {
-      db.prepare("DELETE FROM balance_manual").run();
-    },
-    async deleteAllComprasStock() {
-      db.prepare("DELETE FROM compras_stock").run();
-    },
-    async resetTodoElStock() {
-      db.prepare("UPDATE costos SET stock = 0").run();
     },
 
     async insertItem(row) {
