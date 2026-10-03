@@ -67,6 +67,46 @@ const SCHEMA = `
     componenteProducto TEXT NOT NULL,
     cantidad INTEGER NOT NULL DEFAULT 1
   );
+  CREATE TABLE IF NOT EXISTS productos (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    nombreNormalizado TEXT NOT NULL UNIQUE,
+    marca TEXT,
+    categoria TEXT,
+    subcategoria TEXT,
+    variante TEXT,
+    sabor TEXT,
+    tamano TEXT,
+    sku TEXT,
+    codigoBarra TEXT,
+    proveedorId TEXT,
+    stockMinimo INTEGER,
+    stockIdeal INTEGER,
+    precioMinoristaActual REAL,
+    precioMayoristaActual REAL,
+    imagenUrl TEXT,
+    estado TEXT NOT NULL DEFAULT 'activo',
+    notas TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS proveedores (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    nombreNormalizado TEXT NOT NULL UNIQUE,
+    telefono TEXT,
+    email TEXT,
+    notas TEXT,
+    creadoEn TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS precios_historial (
+    id TEXT PRIMARY KEY,
+    productoId TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    precio REAL NOT NULL,
+    vigenteDesde TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS compras_stock (
     id TEXT PRIMARY KEY,
     loteId TEXT,
@@ -272,6 +312,49 @@ async function sembrarInversionesActivos(getAllFn, insertFn) {
   }
 }
 
+function normalizarNombreProducto(s) {
+  return (s || "").toString().trim().toLowerCase();
+}
+
+// Crea una fila en "productos" para cada producto de "costos" que todavía no la tenga,
+// así el módulo de Inventario arranca con todo lo que ya existe en el sistema en vez de
+// con una lista vacía. Los combos quedan afuera (no tienen stock propio). Es idempotente:
+// se fija por nombreNormalizado antes de insertar, así que correr esto en cada arranque
+// no duplica nada, y un producto nuevo cargado desde cualquier pantalla vieja (Pedidos
+// Mayoristas, Compras de Stock) aparece solo la próxima vez que arranca el servidor.
+async function backfillProductosDesdeCostos(getCostosFn, getComposicionFn, getProductosFn, insertProductoFn) {
+  try {
+    const [costos, composicion, productosExistentes] = await Promise.all([getCostosFn(), getComposicionFn(), getProductosFn()]);
+    const combos = new Set(composicion.map((c) => normalizarNombreProducto(c.comboProducto)));
+    const yaExisten = new Set(productosExistentes.map((p) => p.nombreNormalizado));
+    const ahora = new Date().toISOString();
+    for (const c of costos) {
+      const nombreNormalizado = normalizarNombreProducto(c.producto);
+      if (!nombreNormalizado || combos.has(nombreNormalizado) || yaExisten.has(nombreNormalizado)) continue;
+      try {
+        await insertProductoFn({
+          id: crypto.randomUUID(),
+          nombre: c.producto,
+          nombreNormalizado,
+          marca: null, categoria: null, subcategoria: null, variante: null, sabor: null, tamano: null,
+          sku: null, codigoBarra: null, proveedorId: null,
+          stockMinimo: null, stockIdeal: null,
+          precioMinoristaActual: null, precioMayoristaActual: null,
+          imagenUrl: null, estado: "activo", notas: null,
+          creadoEn: ahora, actualizadoEn: ahora,
+        });
+        yaExisten.add(nombreNormalizado); // por si "costos" tiene dos filas que normalizan igual
+      } catch (e) {
+        // Choque de UNIQUE (ya lo insertó otra fila que normaliza igual) u otro error puntual:
+        // se saltea esa fila y se sigue con el resto, no se corta el arranque del servidor.
+        console.error(`No se pudo crear "productos" para "${c.producto}":`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error("Error en backfillProductosDesdeCostos:", e);
+  }
+}
+
 // Se probaron CoinGecko (bloquea IPs de hosting compartido) y Binance (devuelve 451,
 // bloqueado por region para IPs de EE.UU. como las de Render) antes de asentarse en
 // Coinbase, que sí responde bien desde ahí. Esto corrige las filas que ya se habían
@@ -409,6 +492,7 @@ if (USE_TURSO) {
       await migrarBonoMinoristaManual((sql) => client.execute(sql));
       await migrarBonoMayoristaAutoManual((sql) => client.execute(sql));
       await migrarCostosFijosPago((sql) => client.execute(sql));
+      await backfillProductosDesdeCostos(() => impl.getCostos(), () => impl.getComposicion(), () => impl.getProductos(), (row) => impl.insertProducto(row));
       await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
       await migrarInversionesCoinGeckoABinance(() => impl.getAllInversionesActivos(), (id, tf, fid) => impl.updateInversionActivoFuente(id, tf, fid));
     },
@@ -509,6 +593,86 @@ if (USE_TURSO) {
     },
     async deleteComponente(id) {
       await client.execute({ sql: "DELETE FROM producto_composicion WHERE id = ?", args: [id] });
+    },
+
+    // ---------- Inventario: productos enriquecidos, proveedores, historial de precio de lista ----------
+    async getProductos() {
+      const res = await client.execute("SELECT * FROM productos ORDER BY nombre ASC");
+      return res.rows;
+    },
+    async getProductoById(id) {
+      const res = await client.execute({ sql: "SELECT * FROM productos WHERE id = ?", args: [id] });
+      return res.rows[0] || null;
+    },
+    async getProductoByNombreNormalizado(nombreNormalizado) {
+      const res = await client.execute({ sql: "SELECT * FROM productos WHERE nombreNormalizado = ?", args: [nombreNormalizado] });
+      return res.rows[0] || null;
+    },
+    async insertProducto(row) {
+      await client.execute({
+        sql: `INSERT INTO productos (id, nombre, nombreNormalizado, marca, categoria, subcategoria, variante, sabor, tamano, sku, codigoBarra, proveedorId, stockMinimo, stockIdeal, precioMinoristaActual, precioMayoristaActual, imagenUrl, estado, notas, creadoEn, actualizadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.nombre, row.nombreNormalizado, row.marca, row.categoria, row.subcategoria, row.variante, row.sabor, row.tamano, row.sku, row.codigoBarra, row.proveedorId, row.stockMinimo, row.stockIdeal, row.precioMinoristaActual, row.precioMayoristaActual, row.imagenUrl, row.estado, row.notas, row.creadoEn, row.actualizadoEn],
+      });
+    },
+    async updateProducto(id, campos) {
+      const permitidos = ["nombre", "nombreNormalizado", "marca", "categoria", "subcategoria", "variante", "sabor", "tamano", "sku", "codigoBarra", "proveedorId", "stockMinimo", "stockIdeal", "precioMinoristaActual", "precioMayoristaActual", "imagenUrl", "estado", "notas"];
+      const sets = [];
+      const args = [];
+      for (const campo of permitidos) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      sets.push("actualizadoEn = ?");
+      args.push(campos.actualizadoEn);
+      args.push(id);
+      await client.execute({ sql: `UPDATE productos SET ${sets.join(", ")} WHERE id = ?`, args });
+    },
+    async deleteProducto(id) {
+      await client.execute({ sql: "DELETE FROM productos WHERE id = ?", args: [id] });
+    },
+
+    async getProveedores() {
+      const res = await client.execute("SELECT * FROM proveedores ORDER BY nombre ASC");
+      return res.rows;
+    },
+    async getProveedorByNombreNormalizado(nombreNormalizado) {
+      const res = await client.execute({ sql: "SELECT * FROM proveedores WHERE nombreNormalizado = ?", args: [nombreNormalizado] });
+      return res.rows[0] || null;
+    },
+    async insertProveedor(row) {
+      await client.execute({
+        sql: `INSERT INTO proveedores (id, nombre, nombreNormalizado, telefono, email, notas, creadoEn) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.nombre, row.nombreNormalizado, row.telefono, row.email, row.notas, row.creadoEn],
+      });
+    },
+    async updateProveedor(id, campos) {
+      const permitidos = ["nombre", "nombreNormalizado", "telefono", "email", "notas"];
+      const sets = [];
+      const args = [];
+      for (const campo of permitidos) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      args.push(id);
+      await client.execute({ sql: `UPDATE proveedores SET ${sets.join(", ")} WHERE id = ?`, args });
+    },
+
+    async getPreciosHistorial(productoId) {
+      const res = await client.execute({ sql: "SELECT * FROM precios_historial WHERE productoId = ? ORDER BY tipo ASC, vigenteDesde ASC", args: [productoId] });
+      return res.rows;
+    },
+    async upsertPrecioHistorial(row) {
+      await client.execute({
+        sql: `INSERT INTO precios_historial (id, productoId, tipo, precio, vigenteDesde, creadoEn) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.productoId, row.tipo, row.precio, row.vigenteDesde, row.creadoEn],
+      });
     },
 
     async getGastosByFecha(fecha) {
@@ -748,6 +912,15 @@ if (USE_TURSO) {
     async deleteBalanceManual(fecha) {
       await client.execute({ sql: "DELETE FROM balance_manual WHERE fecha = ?", args: [fecha] });
     },
+    async deleteAllBalanceManual() {
+      await client.execute("DELETE FROM balance_manual");
+    },
+    async deleteAllComprasStock() {
+      await client.execute("DELETE FROM compras_stock");
+    },
+    async resetTodoElStock() {
+      await client.execute("UPDATE costos SET stock = 0");
+    },
 
     async insertItem(row) {
       await client.execute({
@@ -979,6 +1152,7 @@ if (USE_TURSO) {
       await migrarBonoMinoristaManual(async (sql) => db.exec(sql));
       await migrarBonoMayoristaAutoManual(async (sql) => db.exec(sql));
       await migrarCostosFijosPago(async (sql) => db.exec(sql));
+      await backfillProductosDesdeCostos(() => impl.getCostos(), () => impl.getComposicion(), () => impl.getProductos(), (row) => impl.insertProducto(row));
       await sembrarInversionesActivos(() => impl.getAllInversionesActivos(), (row) => impl.insertInversionActivo(row));
       await migrarInversionesCoinGeckoABinance(() => impl.getAllInversionesActivos(), (id, tf, fid) => impl.updateInversionActivoFuente(id, tf, fid));
     },
@@ -1058,6 +1232,77 @@ if (USE_TURSO) {
     },
     async deleteComponente(id) {
       db.prepare("DELETE FROM producto_composicion WHERE id = ?").run(id);
+    },
+
+    // ---------- Inventario: productos enriquecidos, proveedores, historial de precio de lista ----------
+    async getProductos() {
+      return db.prepare("SELECT * FROM productos ORDER BY nombre ASC").all();
+    },
+    async getProductoById(id) {
+      return db.prepare("SELECT * FROM productos WHERE id = ?").get(id) || null;
+    },
+    async getProductoByNombreNormalizado(nombreNormalizado) {
+      return db.prepare("SELECT * FROM productos WHERE nombreNormalizado = ?").get(nombreNormalizado) || null;
+    },
+    async insertProducto(row) {
+      db.prepare(
+        `INSERT INTO productos (id, nombre, nombreNormalizado, marca, categoria, subcategoria, variante, sabor, tamano, sku, codigoBarra, proveedorId, stockMinimo, stockIdeal, precioMinoristaActual, precioMayoristaActual, imagenUrl, estado, notas, creadoEn, actualizadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.nombre, row.nombreNormalizado, row.marca, row.categoria, row.subcategoria, row.variante, row.sabor, row.tamano, row.sku, row.codigoBarra, row.proveedorId, row.stockMinimo, row.stockIdeal, row.precioMinoristaActual, row.precioMayoristaActual, row.imagenUrl, row.estado, row.notas, row.creadoEn, row.actualizadoEn);
+    },
+    async updateProducto(id, campos) {
+      const permitidos = ["nombre", "nombreNormalizado", "marca", "categoria", "subcategoria", "variante", "sabor", "tamano", "sku", "codigoBarra", "proveedorId", "stockMinimo", "stockIdeal", "precioMinoristaActual", "precioMayoristaActual", "imagenUrl", "estado", "notas"];
+      const sets = [];
+      const args = [];
+      for (const campo of permitidos) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      sets.push("actualizadoEn = ?");
+      args.push(campos.actualizadoEn);
+      args.push(id);
+      db.prepare(`UPDATE productos SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+    },
+    async deleteProducto(id) {
+      db.prepare("DELETE FROM productos WHERE id = ?").run(id);
+    },
+
+    async getProveedores() {
+      return db.prepare("SELECT * FROM proveedores ORDER BY nombre ASC").all();
+    },
+    async getProveedorByNombreNormalizado(nombreNormalizado) {
+      return db.prepare("SELECT * FROM proveedores WHERE nombreNormalizado = ?").get(nombreNormalizado) || null;
+    },
+    async insertProveedor(row) {
+      db.prepare(
+        `INSERT INTO proveedores (id, nombre, nombreNormalizado, telefono, email, notas, creadoEn) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.nombre, row.nombreNormalizado, row.telefono, row.email, row.notas, row.creadoEn);
+    },
+    async updateProveedor(id, campos) {
+      const permitidos = ["nombre", "nombreNormalizado", "telefono", "email", "notas"];
+      const sets = [];
+      const args = [];
+      for (const campo of permitidos) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      args.push(id);
+      db.prepare(`UPDATE proveedores SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+    },
+
+    async getPreciosHistorial(productoId) {
+      return db.prepare("SELECT * FROM precios_historial WHERE productoId = ? ORDER BY tipo ASC, vigenteDesde ASC").all(productoId);
+    },
+    async upsertPrecioHistorial(row) {
+      db.prepare(
+        `INSERT INTO precios_historial (id, productoId, tipo, precio, vigenteDesde, creadoEn) VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.productoId, row.tipo, row.precio, row.vigenteDesde, row.creadoEn);
     },
 
     async getGastosByFecha(fecha) {
@@ -1265,6 +1510,15 @@ if (USE_TURSO) {
     },
     async deleteBalanceManual(fecha) {
       db.prepare("DELETE FROM balance_manual WHERE fecha = ?").run(fecha);
+    },
+    async deleteAllBalanceManual() {
+      db.prepare("DELETE FROM balance_manual").run();
+    },
+    async deleteAllComprasStock() {
+      db.prepare("DELETE FROM compras_stock").run();
+    },
+    async resetTodoElStock() {
+      db.prepare("UPDATE costos SET stock = 0").run();
     },
 
     async insertItem(row) {

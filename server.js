@@ -174,6 +174,23 @@ function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) 
   return actual === undefined ? null : actual;
 }
 
+// Último precio al que se vendió cada producto, separado en minorista/mayorista, para el
+// módulo de Inventario. No es una tabla nueva: se arma leyendo venta_items+ventas (que ya
+// tienen todo lo necesario), agrupando por nombre normalizado y quedándose con la fecha
+// más reciente de cada lado. "Mayorista" es exactamente el mismo criterio que ya usa el
+// resto de la app (metodo === "mayorista"); cualquier otro método cuenta como minorista.
+async function construirUltimosPreciosPorProducto() {
+  const items = await db.getAllItems(); // viene ordenado por creadoEn ASC
+  const porProducto = new Map();
+  for (const it of items) {
+    const key = normalizeNombre(it.producto);
+    if (!porProducto.has(key)) porProducto.set(key, { minorista: null, mayorista: null });
+    const tipo = it.metodo === "mayorista" ? "mayorista" : "minorista";
+    porProducto.get(key)[tipo] = { precio: it.precio, fecha: it.fecha, horaLabel: it.horaLabel };
+  }
+  return porProducto;
+}
+
 // Recalcula ganancia neta y bono de las ventas mayoristas YA GUARDADAS, con el costo
 // vigente hoy para cada producto. Se llama después de editar cualquier costo o
 // composición de combo: así, si Chino cargó un pedido mayorista antes de que se
@@ -1490,6 +1507,184 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // ---------- Inventario: productos enriquecidos, proveedores ----------
+    // Todo lo de acá abajo es ADITIVO: lee costos/compras_stock/venta_items/composicion
+    // tal como están hoy y los combina con la metadata nueva de "productos". Nunca
+    // escribe en compras_stock ni cambia cómo se registra una venta o un ingreso.
+
+    if (pathname === "/api/productos" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const dataset = await construirDatasetProductos();
+      return sendJson(res, 200, dataset);
+    }
+
+    if (pathname === "/api/productos/resumen" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const dataset = await construirDatasetProductos();
+      const activos = dataset.filter((p) => p.estado !== "discontinuado");
+      const r2 = (n) => Math.round(n * 100) / 100;
+      const capitalInvertido = activos.reduce((acc, p) => acc + p.capitalInvertido, 0);
+      const valorEstimado = activos.reduce((acc, p) => acc + p.valorEstimadoStock, 0);
+      return sendJson(res, 200, {
+        productosActivos: activos.length,
+        stockTotal: activos.reduce((acc, p) => acc + p.stock, 0),
+        capitalInvertido: r2(capitalInvertido),
+        valorEstimado: r2(valorEstimado),
+        gananciaPotencial: r2(valorEstimado - capitalInvertido),
+        stockBajo: activos.filter((p) => p.estadoStock === "bajo").length,
+        agotados: activos.filter((p) => p.estadoStock === "agotado").length,
+        sinClasificar: activos.filter((p) => !p.enriquecido).length,
+      });
+    }
+
+    if (pathname === "/api/productos" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const nombreIngresado = String(body.nombre || "").trim();
+      const costo = Number(body.costo);
+      const stockInicial = body.stockInicial !== undefined ? Number(body.stockInicial) : 0;
+
+      if (!nombreIngresado) return sendJson(res, 400, { error: "Falta el nombre del producto" });
+      if (!Number.isFinite(costo) || costo < 0) return sendJson(res, 400, { error: "Costo inválido" });
+      if (!Number.isFinite(stockInicial) || stockInicial < 0) return sendJson(res, 400, { error: "Stock inicial inválido" });
+
+      const nombreNormalizado = normalizeNombre(nombreIngresado);
+      if (await db.getProductoByNombreNormalizado(nombreNormalizado)) {
+        return sendJson(res, 409, { error: "Ya existe un producto con ese nombre" });
+      }
+
+      const costosActuales = await db.getCostos();
+      const producto = resolverProductoExistente(costosActuales, nombreIngresado);
+      const existeEnCostos = costosActuales.some((c) => c.producto === producto);
+      let fusionado = false;
+      if (!existeEnCostos) {
+        await db.upsertCosto(producto, costo);
+        await db.updateStock(producto, stockInicial);
+      } else {
+        // Ya había una fila de costos con este nombre (cargada desde Pedidos Mayoristas o
+        // Compras de Stock antes de que existiera Inventario): no se pisa su costo/stock
+        // real, solo se le agrega la metadata nueva.
+        fusionado = true;
+      }
+
+      const stockMinimo = body.stockMinimo !== undefined && body.stockMinimo !== null && body.stockMinimo !== "" ? Number(body.stockMinimo) : null;
+      const stockIdeal = body.stockIdeal !== undefined && body.stockIdeal !== null && body.stockIdeal !== "" ? Number(body.stockIdeal) : null;
+      const precioMinoristaActual = body.precioMinoristaActual !== undefined && body.precioMinoristaActual !== null && body.precioMinoristaActual !== "" ? Number(body.precioMinoristaActual) : null;
+      const precioMayoristaActual = body.precioMayoristaActual !== undefined && body.precioMayoristaActual !== null && body.precioMayoristaActual !== "" ? Number(body.precioMayoristaActual) : null;
+
+      const ahora = new Date().toISOString();
+      const row = {
+        id: crypto.randomUUID(),
+        nombre: producto,
+        nombreNormalizado,
+        marca: body.marca ? String(body.marca).trim() : null,
+        categoria: body.categoria ? String(body.categoria).trim() : null,
+        subcategoria: body.subcategoria ? String(body.subcategoria).trim() : null,
+        variante: body.variante ? String(body.variante).trim() : null,
+        sabor: body.sabor ? String(body.sabor).trim() : null,
+        tamano: body.tamano ? String(body.tamano).trim() : null,
+        sku: body.sku ? String(body.sku).trim() : null,
+        codigoBarra: body.codigoBarra ? String(body.codigoBarra).trim() : null,
+        proveedorId: body.proveedorId || null,
+        stockMinimo, stockIdeal, precioMinoristaActual, precioMayoristaActual,
+        imagenUrl: body.imagenUrl ? String(body.imagenUrl).trim() : null,
+        estado: "activo",
+        notas: body.notas ? String(body.notas).trim() : null,
+        creadoEn: ahora, actualizadoEn: ahora,
+      };
+      await db.insertProducto(row);
+      return sendJson(res, 201, { ...row, stock: existeEnCostos ? costosActuales.find((c) => c.producto === producto).stock || 0 : stockInicial, costo: existeEnCostos ? costosActuales.find((c) => c.producto === producto).costo : costo, fusionadoConCostoExistente: fusionado });
+    }
+
+    if (pathname.startsWith("/api/productos/") && req.method === "PATCH") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/productos/".length));
+      const p = await db.getProductoById(id);
+      if (!p) return sendJson(res, 404, { error: "Producto no encontrado" });
+      const body = await readJsonBody(req);
+      const ahoraIso = new Date().toISOString();
+      const hoy = getArgentinaNow().fecha;
+
+      // El costo sigue el mismo camino que ya dispara una compra al cambiarlo: queda
+      // historial y los combos/bonos mayoristas se recalculan con el valor nuevo.
+      if (body.costo !== undefined) {
+        const costo = Number(body.costo);
+        if (!Number.isFinite(costo) || costo < 0) return sendJson(res, 400, { error: "Costo inválido" });
+        const costosActuales = await db.getCostos();
+        const filaActual = costosActuales.find((c) => c.producto === p.nombre);
+        const costoAnterior = filaActual ? filaActual.costo : null;
+        await db.upsertCosto(p.nombre, costo);
+        await registrarHistorialCosto(p.nombre, costo, costoAnterior, hoy);
+        await recalcularCostosCombos();
+        await recalcularBonosMayoristas();
+      }
+
+      const campos = {};
+      for (const [campo, tipo] of [["marca", "texto"], ["categoria", "texto"], ["subcategoria", "texto"], ["variante", "texto"], ["sabor", "texto"], ["tamano", "texto"], ["sku", "texto"], ["codigoBarra", "texto"], ["imagenUrl", "texto"], ["notas", "texto"]]) {
+        if (body[campo] !== undefined) campos[campo] = body[campo] ? String(body[campo]).trim() : null;
+      }
+      for (const campo of ["stockMinimo", "stockIdeal"]) {
+        if (body[campo] !== undefined) {
+          if (body[campo] === null || body[campo] === "") { campos[campo] = null; continue; }
+          const v = Number(body[campo]);
+          if (!Number.isInteger(v) || v < 0) return sendJson(res, 400, { error: `${campo} inválido` });
+          campos[campo] = v;
+        }
+      }
+      if (body.proveedorId !== undefined) {
+        if (body.proveedorId && !(await db.getProductoById(body.proveedorId).catch(() => null)) && !(await db.getProveedores()).some((pr) => pr.id === body.proveedorId)) {
+          return sendJson(res, 400, { error: "Proveedor inválido" });
+        }
+        campos.proveedorId = body.proveedorId || null;
+      }
+      if (body.estado !== undefined) {
+        if (!["activo", "discontinuado"].includes(body.estado)) return sendJson(res, 400, { error: "Estado inválido" });
+        campos.estado = body.estado;
+      }
+      for (const campo of ["precioMinoristaActual", "precioMayoristaActual"]) {
+        if (body[campo] === undefined) continue;
+        const tipo = campo === "precioMinoristaActual" ? "minorista" : "mayorista";
+        if (body[campo] === null || body[campo] === "") { campos[campo] = null; continue; }
+        const v = Number(body[campo]);
+        if (!Number.isFinite(v) || v < 0) return sendJson(res, 400, { error: `${campo} inválido` });
+        campos[campo] = v;
+        if (v !== p[campo]) {
+          await db.upsertPrecioHistorial({ id: crypto.randomUUID(), productoId: p.id, tipo, precio: v, vigenteDesde: hoy, creadoEn: ahoraIso });
+        }
+      }
+
+      if (Object.keys(campos).length) {
+        campos.actualizadoEn = ahoraIso;
+        await db.updateProducto(p.id, campos);
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === "/api/proveedores" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      return sendJson(res, 200, await db.getProveedores());
+    }
+
+    if (pathname === "/api/proveedores" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const nombre = String(body.nombre || "").trim();
+      if (!nombre) return sendJson(res, 400, { error: "Falta el nombre del proveedor" });
+      const nombreNormalizado = normalizeNombre(nombre);
+      const existente = await db.getProveedorByNombreNormalizado(nombreNormalizado);
+      if (existente) return sendJson(res, 200, existente);
+      const row = {
+        id: crypto.randomUUID(),
+        nombre, nombreNormalizado,
+        telefono: body.telefono ? String(body.telefono).trim() : null,
+        email: body.email ? String(body.email).trim() : null,
+        notas: body.notas ? String(body.notas).trim() : null,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.insertProveedor(row);
+      return sendJson(res, 201, row);
+    }
+
     if (pathname === "/api/gastos" && req.method === "GET") {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
@@ -2001,6 +2196,25 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---------- Situación financiera (capital manual: transferencias, efectivo, deudas, etc.) ----------
+
+    // Diagnóstico temporal, de un solo uso: limpia el sistema viejo de Compras de Stock
+    // y Situación Financiera para arrancar Inventario de cero. Guarda el costo actual de
+    // cada producto (no lo toca) y pone el stock en 0 en todos, para recargarlo a mano
+    // desde Inventario. Se saca del código apenas se corre una vez.
+    if (pathname === "/api/debug/reset-inventario-legacy" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const [comprasAntes, balanceAntes, costosAntes] = await Promise.all([db.getAllCompras(), db.getAllBalanceManual(), db.getCostos()]);
+      await db.deleteAllComprasStock();
+      await db.deleteAllBalanceManual();
+      await db.resetTodoElStock();
+      return sendJson(res, 200, {
+        ok: true,
+        comprasStockBorradas: comprasAntes.length,
+        balanceManualBorrado: balanceAntes.length,
+        productosReseteados: costosAntes.length,
+        costosConservados: costosAntes.map((c) => ({ producto: c.producto, costo: c.costo })),
+      });
+    }
 
     if (pathname === "/api/balance" && req.method === "GET") {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
