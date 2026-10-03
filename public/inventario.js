@@ -183,7 +183,7 @@ function filaProducto(p) {
       <span class="inv-producto-nombre">${escapeHtml(p.nombre)}</span>
       ${p.marca ? `<span class="hint">${escapeHtml(p.marca)}</span>` : (!p.enriquecido ? `<span class="inv-sin-clasificar-tag">Tocá para completar datos</span>` : "")}
     </td>
-    <td>${p.stock.toLocaleString("es-AR")}</td>
+    <td class="inv-td-input">${inputInline(p.stock, "stock", { step: "1" })}</td>
     <td class="inv-td-input">${inputInline(p.costo, "costo")}</td>
     <td class="inv-td-input">${inputInline(p.stockMinimo, "stockMinimo", { step: "1" })}</td>
     <td class="inv-td-input">${inputInline(p.precioMinoristaActual, "precioMinoristaActual")}</td>
@@ -267,7 +267,7 @@ async function ensureProductoId(p) {
 async function guardarCampo(p, campo, valorCrudo, inputEl) {
   let valor = valorCrudo;
   const camposNumericos = ["costo", "stockMinimo", "stockIdeal", "precioMinoristaActual", "precioMayoristaActual"];
-  if (camposNumericos.includes(campo)) {
+  if (campo === "stock" || camposNumericos.includes(campo)) {
     valor = valorCrudo === "" ? null : Number(valorCrudo);
     if (valor !== null && (!Number.isFinite(valor) || valor < 0)) { alert("Valor inválido"); renderTabla(); return; }
   } else {
@@ -275,12 +275,24 @@ async function guardarCampo(p, campo, valorCrudo, inputEl) {
   }
 
   try {
-    const id = await ensureProductoId(p);
-    await api(`/api/productos/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [campo]: valor }),
-    });
+    // El stock vive en la tabla "costos" (no en "productos"): se edita con el mismo
+    // endpoint que ya usa el resto de la app para ajustes manuales, que además deja
+    // constancia en el historial de movimientos (compras_stock, tipo "ajuste").
+    if (campo === "stock") {
+      if (valor === null) { alert("El stock no puede quedar vacío."); renderTabla(); return; }
+      await api("/api/costos/stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ producto: p.nombre, stock: valor }),
+      });
+    } else {
+      const id = await ensureProductoId(p);
+      await api(`/api/productos/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [campo]: valor }),
+      });
+    }
     await cargarTodo();
   } catch (err) {
     alert("No se pudo guardar: " + err.message);

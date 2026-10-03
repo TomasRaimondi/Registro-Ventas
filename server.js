@@ -1338,8 +1338,8 @@ const server = http.createServer(async (req, res) => {
       await db.updateStock(producto, stock);
 
       // Deja constancia en el historial de movimientos: este endpoint pisa el stock
-      // directamente (lo usa el campo "Stock actual" de Rentabilidad), y antes no
-      // quedaba ningún rastro de estos cambios.
+      // directamente (lo usa la edición inline de la columna "Stock" en Inventario),
+      // y sin esto no quedaría ningún rastro de estos cambios.
       if (stock !== stockAntes) {
         const { fecha } = getArgentinaNow();
         await db.insertCompra({
@@ -1354,7 +1354,7 @@ const server = http.createServer(async (req, res) => {
           stockDespues: stock,
           proveedor: null,
           vencimiento: null,
-          nota: "Ajuste manual desde Rentabilidad (\"Stock actual\")",
+          nota: "Ajuste manual de stock desde Inventario",
           fecha,
           creadoEn: new Date().toISOString(),
         });
