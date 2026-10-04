@@ -26,6 +26,26 @@
   table.bal-historial th, table.bal-historial td { white-space: nowrap; }
   .bal-roi-positivo { color: var(--green); }
   .bal-roi-negativo { color: var(--red); }
+
+  .bal-deudas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-bottom: 20px; }
+  .bal-deudas-box { padding: 20px; }
+  .bal-deudas-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .bal-deudas-header h3 { margin: 0; font-size: 15px; }
+  .bal-deudas-total { font-size: 20px; font-weight: 700; font-family: "Bricolage Grotesque", sans-serif; color: var(--red); }
+  .bal-deudas-box[data-tipo="cobrar"] .bal-deudas-total { color: var(--green); }
+  .bal-deudas-lista { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .bal-deudas-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); }
+  .bal-deudas-item.saldada { opacity: .5; }
+  .bal-deudas-item .deuda-nombre { flex: 1; font-weight: 600; }
+  .bal-deudas-item .deuda-nombre.saldada-tachado { text-decoration: line-through; }
+  .bal-deudas-item .deuda-monto { font-variant-numeric: tabular-nums; }
+  .bal-deudas-item button { border: none; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px; }
+  .bal-deudas-item button:hover { color: var(--accent); }
+  .bal-deudas-item .deuda-borrar:hover { color: var(--red); }
+  .bal-deudas-vacio { font-size: 13px; color: var(--text-dim); padding: 4px 2px; }
+  .bal-deudas-add { display: flex; gap: 8px; flex-wrap: wrap; }
+  .bal-deudas-add .deuda-nombre-input { flex: 1; min-width: 140px; border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: 13px; }
+  .bal-deudas-add .deuda-monto-input { width: 110px; border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -78,19 +98,38 @@
       <h2>Realizar balance</h2>
       <p class="hint" style="text-align:left;">El valor de stock se toma automático y en vivo desde Inventario al momento de guardar — no hace falta cargarlo a mano. Completá el resto y quedará guardado como una foto fija de esta fecha.</p>
 
+      <div class="bal-deudas-grid">
+        <div class="card bal-deudas-box" data-tipo="pagar">
+          <div class="bal-deudas-header">
+            <h3>Deudas que yo debo pagar</h3>
+            <span class="bal-deudas-total" id="deudas-total-pagar">$0</span>
+          </div>
+          <div class="bal-deudas-lista" id="deudas-lista-pagar"></div>
+          <div class="bal-deudas-add">
+            <input type="text" class="deuda-nombre-input" placeholder="Ej: Fábrica, préstamo...">
+            <input type="number" class="deuda-monto-input" placeholder="Monto" min="0" step="0.01">
+            <button type="button" class="clear-btn deuda-add-btn" data-tipo="pagar">+ Agregar</button>
+          </div>
+        </div>
+        <div class="card bal-deudas-box" data-tipo="cobrar">
+          <div class="bal-deudas-header">
+            <h3>Deudas que me deben a mí</h3>
+            <span class="bal-deudas-total" id="deudas-total-cobrar">$0</span>
+          </div>
+          <div class="bal-deudas-lista" id="deudas-lista-cobrar"></div>
+          <div class="bal-deudas-add">
+            <input type="text" class="deuda-nombre-input" placeholder="Ej: Cliente mayorista...">
+            <input type="number" class="deuda-monto-input" placeholder="Monto" min="0" step="0.01">
+            <button type="button" class="clear-btn deuda-add-btn" data-tipo="cobrar">+ Agregar</button>
+          </div>
+        </div>
+      </div>
+
       <form id="bal-form">
         <div class="bal-form-grid">
           <div class="field">
             <label for="bal-fecha">Fecha</label>
             <input type="date" id="bal-fecha" required>
-          </div>
-          <div class="field">
-            <label for="bal-deudas-pagar">Deudas que yo debo pagar</label>
-            <div class="input-prefix"><span>$</span><input type="number" id="bal-deudas-pagar" min="0" step="0.01" value="0"></div>
-          </div>
-          <div class="field">
-            <label for="bal-deudas-cobrar">Deudas que me deben a mí</label>
-            <div class="input-prefix"><span>$</span><input type="number" id="bal-deudas-cobrar" min="0" step="0.01" value="0"></div>
           </div>
           <div class="field">
             <label for="bal-cuenta1">Capital en transferencia — Cuenta 1</label>

@@ -133,6 +133,16 @@ const SCHEMA = `
     nota TEXT,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS deudas (
+    id TEXT PRIMARY KEY,
+    tipo TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    monto REAL NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'activa',
+    notas TEXT,
+    creadoEn TEXT NOT NULL,
+    actualizadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS tablero_tareas (
     id TEXT PRIMARY KEY,
     texto TEXT NOT NULL,
@@ -955,6 +965,35 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM balance_manual WHERE fecha = ?", args: [fecha] });
     },
 
+    async getAllDeudas() {
+      const res = await client.execute("SELECT * FROM deudas ORDER BY creadoEn ASC");
+      return res.rows;
+    },
+    async insertDeuda(row) {
+      await client.execute({
+        sql: `INSERT INTO deudas (id, tipo, nombre, monto, estado, notas, creadoEn, actualizadoEn) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.tipo, row.nombre, row.monto, row.estado, row.notas, row.creadoEn, row.actualizadoEn],
+      });
+    },
+    async updateDeuda(id, campos) {
+      const sets = [];
+      const args = [];
+      for (const campo of ["nombre", "monto", "estado", "notas"]) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      sets.push("actualizadoEn = ?");
+      args.push(campos.actualizadoEn);
+      args.push(id);
+      await client.execute({ sql: `UPDATE deudas SET ${sets.join(", ")} WHERE id = ?`, args });
+    },
+    async deleteDeuda(id) {
+      await client.execute({ sql: "DELETE FROM deudas WHERE id = ?", args: [id] });
+    },
+
     async insertItem(row) {
       await client.execute({
         sql: `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`,
@@ -1551,6 +1590,33 @@ if (USE_TURSO) {
     },
     async deleteBalanceManual(fecha) {
       db.prepare("DELETE FROM balance_manual WHERE fecha = ?").run(fecha);
+    },
+
+    async getAllDeudas() {
+      return db.prepare("SELECT * FROM deudas ORDER BY creadoEn ASC").all();
+    },
+    async insertDeuda(row) {
+      db.prepare(
+        `INSERT INTO deudas (id, tipo, nombre, monto, estado, notas, creadoEn, actualizadoEn) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.tipo, row.nombre, row.monto, row.estado, row.notas, row.creadoEn, row.actualizadoEn);
+    },
+    async updateDeuda(id, campos) {
+      const sets = [];
+      const args = [];
+      for (const campo of ["nombre", "monto", "estado", "notas"]) {
+        if (Object.prototype.hasOwnProperty.call(campos, campo)) {
+          sets.push(`${campo} = ?`);
+          args.push(campos[campo]);
+        }
+      }
+      if (!sets.length) return;
+      sets.push("actualizadoEn = ?");
+      args.push(campos.actualizadoEn);
+      args.push(id);
+      db.prepare(`UPDATE deudas SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+    },
+    async deleteDeuda(id) {
+      db.prepare("DELETE FROM deudas WHERE id = ?").run(id);
     },
 
     async insertItem(row) {

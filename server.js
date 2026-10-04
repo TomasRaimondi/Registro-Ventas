@@ -1867,12 +1867,77 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 201, row);
     }
 
+    // ---------- Deudas (lista viva, independiente de cada balance) ----------
+    // Una deuda ("fábrica", "préstamo", etc.) se carga una sola vez y queda activa hasta
+    // que se salda o se borra — no hay que volver a tipear el monto en cada balance. El
+    // balance suma las activas de cada tipo al momento de guardar (igual que el valor de
+    // stock: se lee en vivo y se congela en la fila).
+
+    if (pathname === "/api/deudas" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      return sendJson(res, 200, await db.getAllDeudas());
+    }
+
+    if (pathname === "/api/deudas" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const tipo = body.tipo === "cobrar" ? "cobrar" : "pagar";
+      const nombre = String(body.nombre || "").trim();
+      const monto = Number(body.monto);
+      if (!nombre) return sendJson(res, 400, { error: "Falta el nombre de la deuda" });
+      if (!Number.isFinite(monto) || monto <= 0) return sendJson(res, 400, { error: "Monto inválido" });
+      const ahora = new Date().toISOString();
+      const row = {
+        id: crypto.randomUUID(),
+        tipo, nombre, monto,
+        estado: "activa",
+        notas: body.notas ? String(body.notas).trim() : null,
+        creadoEn: ahora, actualizadoEn: ahora,
+      };
+      await db.insertDeuda(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/deudas/") && req.method === "PATCH") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/deudas/".length));
+      const body = await readJsonBody(req);
+      const campos = {};
+      if (body.nombre !== undefined) {
+        const nombre = String(body.nombre || "").trim();
+        if (!nombre) return sendJson(res, 400, { error: "El nombre no puede quedar vacío" });
+        campos.nombre = nombre;
+      }
+      if (body.monto !== undefined) {
+        const monto = Number(body.monto);
+        if (!Number.isFinite(monto) || monto <= 0) return sendJson(res, 400, { error: "Monto inválido" });
+        campos.monto = monto;
+      }
+      if (body.estado !== undefined) {
+        if (!["activa", "saldada"].includes(body.estado)) return sendJson(res, 400, { error: "Estado inválido" });
+        campos.estado = body.estado;
+      }
+      if (body.notas !== undefined) campos.notas = body.notas ? String(body.notas).trim() : null;
+      if (Object.keys(campos).length) {
+        campos.actualizadoEn = new Date().toISOString();
+        await db.updateDeuda(id, campos);
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname.startsWith("/api/deudas/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const id = decodeURIComponent(pathname.slice("/api/deudas/".length));
+      await db.deleteDeuda(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ---------- Balance (patrimonio neto) ----------
-    // Cada balance queda guardado como una foto fija a esa fecha: el valor de stock se
-    // calcula en el momento (mismo capital invertido que muestra Inventario) y se congela
-    // en la fila, junto con el patrimonio neto ya calculado, para que el histórico no
-    // cambie después aunque el stock se siga moviendo. Esto es el "dato" (los campos que
-    // cargó el dueño) y la "métrica" (valorStock/patrimonioNeto) en el mismo registro.
+    // Cada balance queda guardado como una foto fija a esa fecha: el valor de stock y el
+    // total de deudas activas (pagar/cobrar) se calculan en el momento y se congelan en
+    // la fila, junto con el patrimonio neto ya calculado, para que el histórico no cambie
+    // después aunque el stock o las deudas se sigan moviendo. Esto es el "dato" (lo que
+    // cargó el dueño) y la "métrica" (valorStock/deudas/patrimonioNeto) en el mismo registro.
 
     if (pathname === "/api/balance" && req.method === "GET") {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
@@ -1891,14 +1956,17 @@ const server = http.createServer(async (req, res) => {
       const capitalCuenta1 = num(body.capitalCuenta1);
       const capitalCuenta2 = num(body.capitalCuenta2);
       const capitalEfectivo = num(body.efectivo);
-      const deudasPagar = num(body.deudasPagar);
-      const deudasCobrar = num(body.deudasCobrar);
       const inversionInicial = num(body.inversionBase);
       const nota = body.nota ? String(body.nota).trim() : null;
 
       const dataset = await construirDatasetProductos();
       const activos = dataset.filter((p) => p.estado !== "discontinuado");
       const valorStock = Math.round(activos.reduce((acc, p) => acc + p.capitalInvertido, 0) * 100) / 100;
+
+      const todasLasDeudas = await db.getAllDeudas();
+      const deudasActivas = todasLasDeudas.filter((d) => d.estado === "activa");
+      const deudasPagar = Math.round(deudasActivas.filter((d) => d.tipo === "pagar").reduce((acc, d) => acc + d.monto, 0) * 100) / 100;
+      const deudasCobrar = Math.round(deudasActivas.filter((d) => d.tipo === "cobrar").reduce((acc, d) => acc + d.monto, 0) * 100) / 100;
 
       const patrimonioNeto = Math.round(
         (valorStock + capitalCuenta1 + capitalCuenta2 + capitalEfectivo + deudasCobrar - deudasPagar) * 100
