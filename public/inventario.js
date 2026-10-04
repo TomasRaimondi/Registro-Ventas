@@ -99,7 +99,7 @@ async function cargarTodo() {
     renderTabla();
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -155,7 +155,7 @@ function renderTabla() {
   const lista = aplicarFiltrosYOrden(productosGlobal);
 
   if (!lista.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">No hay productos que coincidan.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">No hay productos que coincidan.</td></tr>`;
     return;
   }
 
@@ -188,6 +188,7 @@ function filaProducto(p) {
     <td class="inv-td-input">${inputInline(p.stockMinimo, "stockMinimo", { step: "1" })}</td>
     <td class="inv-td-input">${inputInline(p.precioMinoristaActual, "precioMinoristaActual")}</td>
     <td class="inv-td-input">${inputInline(p.precioMayoristaActual, "precioMayoristaActual")}</td>
+    <td title="Stock × costo">${money(p.capitalInvertido)}</td>
     <td title="${escapeHtml(p.metodoValorEstimado)}">${money(p.valorEstimadoStock)}</td>
     <td>${estadoBadge(p)}</td>
   `;
@@ -216,7 +217,7 @@ function filaDetalle(p) {
   const tr = document.createElement("tr");
   tr.className = "inv-fila-detalle";
   tr.innerHTML = `
-    <td colspan="8">
+    <td colspan="9">
       <div class="inv-detalle-grid">
         ${campoDetalleTexto("Marca", "marca", p.marca)}
         ${campoDetalleTexto("Categoría", "categoria", p.categoria)}
