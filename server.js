@@ -217,7 +217,13 @@ async function construirDatasetProductos() {
     .map((c) => {
       const key = normalizeNombre(c.producto);
       const meta = productosPorNombre.get(key) || null;
-      const stock = Number(c.stock) || 0;
+      // "stock" (columna de siempre) es el stock físico en el local; "stockDeposito" es
+      // nuevo y arranca en 0 para todo lo cargado antes de separar las dos ubicaciones.
+      // El total de las dos es lo que importa para capital invertido/valor estimado/
+      // alertas de reposición (da igual en qué ubicación esté, sigue siendo stock propio).
+      const stockLocal = Number(c.stock) || 0;
+      const stockDeposito = Number(c.stockDeposito) || 0;
+      const stock = stockLocal + stockDeposito;
       const costo = Number(c.costo) || 0;
       const ultimos = ultimosPrecios.get(key) || { minorista: null, mayorista: null, cantidadMinorista: 0, cantidadMayorista: 0 };
 
@@ -266,6 +272,8 @@ async function construirDatasetProductos() {
         notas: meta ? meta.notas : null,
         costo,
         stock,
+        stockLocal,
+        stockDeposito,
         precioMinoristaActual: meta && meta.precioMinoristaActual != null ? Number(meta.precioMinoristaActual) : null,
         precioMayoristaActual: meta && meta.precioMayoristaActual != null ? Number(meta.precioMayoristaActual) : null,
         ultimoPrecioMinorista: ultimos.minorista,
@@ -1375,6 +1383,86 @@ const server = http.createServer(async (req, res) => {
       }
 
       return sendJson(res, 200, { ok: true, producto, stock });
+    }
+
+    // Mismo patrón que /api/costos/stock (pisa el valor directo con rastro de auditoría),
+    // pero para la columna nueva "stockDeposito". No toca "stock" (local) para nada: son
+    // dos ubicaciones físicas independientes, cada una se edita con su propio endpoint.
+    if (pathname === "/api/costos/stock-deposito" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const productoIngresado = String(body.producto || "").trim();
+      const stockDeposito = Number(body.stockDeposito);
+
+      if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
+      if (!Number.isFinite(stockDeposito) || stockDeposito < 0) return sendJson(res, 400, { error: "Stock inválido" });
+
+      const costosActuales = await db.getCostos();
+      const producto = resolverProductoExistente(costosActuales, productoIngresado);
+      const costoRow = costosActuales.find((c) => c.producto === producto);
+      const stockDepositoAntes = costoRow ? costoRow.stockDeposito || 0 : 0;
+
+      await db.updateStockDeposito(producto, stockDeposito);
+
+      return sendJson(res, 200, { ok: true, producto, stockDeposito, stockDepositoAntes });
+    }
+
+    // Traspaso de unidades entre el local y el depósito: resta de una ubicación y suma en
+    // la otra de forma atómica (en vez de editar las dos columnas a mano, lo que podría
+    // desincronizarse si cambia algo entre medio). Deja un registro "traspaso" en
+    // compras_stock para que quede rastro, igual que un ajuste manual de stock.
+    if (pathname === "/api/costos/traspaso" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const productoIngresado = String(body.producto || "").trim();
+      const cantidad = Number(body.cantidad);
+      const direccion = body.direccion;
+
+      if (!productoIngresado) return sendJson(res, 400, { error: "Falta el producto" });
+      if (!Number.isInteger(cantidad) || cantidad <= 0) return sendJson(res, 400, { error: "Cantidad inválida" });
+      if (!["local-a-deposito", "deposito-a-local"].includes(direccion)) return sendJson(res, 400, { error: "Dirección inválida" });
+
+      const costosActuales = await db.getCostos();
+      const producto = resolverProductoExistente(costosActuales, productoIngresado);
+      const costoRow = costosActuales.find((c) => c.producto === producto);
+      const stockLocalAntes = costoRow ? costoRow.stock || 0 : 0;
+      const stockDepositoAntes = costoRow ? costoRow.stockDeposito || 0 : 0;
+
+      let stockLocalDespues, stockDepositoDespues;
+      if (direccion === "local-a-deposito") {
+        if (cantidad > stockLocalAntes) return sendJson(res, 400, { error: `No hay ${cantidad} unidades en el local (hay ${stockLocalAntes})` });
+        stockLocalDespues = stockLocalAntes - cantidad;
+        stockDepositoDespues = stockDepositoAntes + cantidad;
+      } else {
+        if (cantidad > stockDepositoAntes) return sendJson(res, 400, { error: `No hay ${cantidad} unidades en el depósito (hay ${stockDepositoAntes})` });
+        stockLocalDespues = stockLocalAntes + cantidad;
+        stockDepositoDespues = stockDepositoAntes - cantidad;
+      }
+
+      await db.updateStock(producto, stockLocalDespues);
+      await db.updateStockDeposito(producto, stockDepositoDespues);
+
+      const { fecha } = getArgentinaNow();
+      await db.insertCompra({
+        id: crypto.randomUUID(),
+        loteId: null,
+        tipo: "traspaso",
+        producto,
+        cantidad: direccion === "local-a-deposito" ? -cantidad : cantidad,
+        precioUnitario: null,
+        costoTotal: null,
+        stockAntes: stockLocalAntes,
+        stockDespues: stockLocalDespues,
+        proveedor: null,
+        vencimiento: null,
+        nota: direccion === "local-a-deposito"
+          ? `Traspaso a depósito: ${cantidad} unidades`
+          : `Traspaso a local: ${cantidad} unidades`,
+        fecha,
+        creadoEn: new Date().toISOString(),
+      });
+
+      return sendJson(res, 200, { ok: true, producto, stockLocal: stockLocalDespues, stockDeposito: stockDepositoDespues });
     }
 
     // ---------- Composición de combos (para no duplicar stock entre combo y componentes) ----------

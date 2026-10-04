@@ -388,6 +388,17 @@ async function migrarStock(execFn) {
   }
 }
 
+// Migración aditiva: separa el stock en "local" (la columna "stock" de siempre, que hasta
+// ahora representaba todo lo que había) y "depósito" (nueva columna, arranca en 0 porque
+// antes no se trackeaba nada ahí — todo lo cargado hasta hoy estaba físicamente en el local).
+async function migrarStockDeposito(execFn) {
+  try {
+    await execFn("ALTER TABLE costos ADD COLUMN stockDeposito INTEGER DEFAULT 0");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 // Migración aditiva: agrega "loteId" a compras_stock para poder agrupar varios productos
 // cargados en una misma compra. Las filas viejas quedan con loteId NULL (se agrupan solas).
 async function migrarLoteId(execFn) {
@@ -485,6 +496,7 @@ if (USE_TURSO) {
         await client.execute(stmt);
       }
       await migrarStock((sql) => client.execute(sql));
+      await migrarStockDeposito((sql) => client.execute(sql));
       await migrarLoteId((sql) => client.execute(sql));
       await migrarCliente((sql) => client.execute(sql));
       await migrarEnvio((sql) => client.execute(sql));
@@ -567,6 +579,9 @@ if (USE_TURSO) {
     },
     async updateStock(producto, stock) {
       await client.execute({ sql: "UPDATE costos SET stock = ? WHERE producto = ?", args: [stock, producto] });
+    },
+    async updateStockDeposito(producto, stockDeposito) {
+      await client.execute({ sql: "UPDATE costos SET stockDeposito = ? WHERE producto = ?", args: [stockDeposito, producto] });
     },
     async decrementStock(producto, cantidad) {
       await client.execute({
@@ -1136,6 +1151,7 @@ if (USE_TURSO) {
     async init() {
       db.exec(SCHEMA);
       await migrarStock(async (sql) => db.exec(sql));
+      await migrarStockDeposito(async (sql) => db.exec(sql));
       await migrarLoteId(async (sql) => db.exec(sql));
       await migrarCliente(async (sql) => db.exec(sql));
       await migrarEnvio(async (sql) => db.exec(sql));
@@ -1205,6 +1221,9 @@ if (USE_TURSO) {
     },
     async updateStock(producto, stock) {
       db.prepare("UPDATE costos SET stock = ? WHERE producto = ?").run(stock, producto);
+    },
+    async updateStockDeposito(producto, stockDeposito) {
+      db.prepare("UPDATE costos SET stockDeposito = ? WHERE producto = ?").run(stockDeposito, producto);
     },
     async decrementStock(producto, cantidad) {
       db.prepare("UPDATE costos SET stock = MAX(0, stock - ?) WHERE producto = ?").run(cantidad, producto);

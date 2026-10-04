@@ -54,6 +54,11 @@
   .inv-ultimo-precio strong { color: var(--text); }
   .inv-metodo-estimacion { font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
 
+  .inv-traspaso { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--card-border); }
+  .inv-traspaso label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 6px; }
+  .inv-traspaso-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .inv-traspaso-cantidad { width: 90px; border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: 13px; }
+
   .inv-modal .modal-card { max-width: 520px; }
   .inv-modal .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .inv-modal .field-row .field { flex: 1; min-width: 140px; }
@@ -165,7 +170,8 @@
           <thead>
             <tr>
               <th class="col-producto">Producto</th>
-              <th>Stock</th>
+              <th>Local</th>
+              <th>Depós.</th>
               <th>Costo</th>
               <th>Mín.</th>
               <th>Minorista</th>
@@ -175,7 +181,7 @@
               <th>Estado</th>
             </tr>
           </thead>
-          <tbody id="inv-body"><tr class="empty-row"><td colspan="9">Cargando...</td></tr></tbody>
+          <tbody id="inv-body"><tr class="empty-row"><td colspan="10">Cargando...</td></tr></tbody>
         </table>
       </div>
     </section>

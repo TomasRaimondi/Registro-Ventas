@@ -99,7 +99,7 @@ async function cargarTodo() {
     renderTabla();
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="10">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -155,7 +155,7 @@ function renderTabla() {
   const lista = aplicarFiltrosYOrden(productosGlobal);
 
   if (!lista.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">No hay productos que coincidan.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="10">No hay productos que coincidan.</td></tr>`;
     return;
   }
 
@@ -183,7 +183,8 @@ function filaProducto(p) {
       <span class="inv-producto-nombre">${escapeHtml(p.nombre)}</span>
       ${p.marca ? `<span class="hint">${escapeHtml(p.marca)}</span>` : (!p.enriquecido ? `<span class="inv-sin-clasificar-tag">Tocá para completar datos</span>` : "")}
     </td>
-    <td class="inv-td-input">${inputInline(p.stock, "stock", { step: "1" })}</td>
+    <td class="inv-td-input">${inputInline(p.stockLocal, "stockLocal", { step: "1" })}</td>
+    <td class="inv-td-input">${inputInline(p.stockDeposito, "stockDeposito", { step: "1" })}</td>
     <td class="inv-td-input">${inputInline(p.costo, "costo")}</td>
     <td class="inv-td-input">${inputInline(p.stockMinimo, "stockMinimo", { step: "1" })}</td>
     <td class="inv-td-input">${inputInline(p.precioMinoristaActual, "precioMinoristaActual")}</td>
@@ -218,7 +219,15 @@ function filaDetalle(p) {
   const tr = document.createElement("tr");
   tr.className = "inv-fila-detalle";
   tr.innerHTML = `
-    <td colspan="9">
+    <td colspan="10">
+      <div class="inv-traspaso">
+        <label>Traspaso de stock (local: ${p.stockLocal} / depósito: ${p.stockDeposito})</label>
+        <div class="inv-traspaso-row">
+          <input type="number" class="inv-traspaso-cantidad" min="1" step="1" placeholder="Cantidad">
+          <button type="button" class="clear-btn inv-traspaso-btn" data-direccion="local-a-deposito">Local → Depósito</button>
+          <button type="button" class="clear-btn inv-traspaso-btn" data-direccion="deposito-a-local">Depósito → Local</button>
+        </div>
+      </div>
       <div class="inv-detalle-grid">
         ${campoDetalleTexto("Marca", "marca", p.marca)}
         ${campoDetalleTexto("Categoría", "categoria", p.categoria)}
@@ -268,8 +277,9 @@ async function ensureProductoId(p) {
 
 async function guardarCampo(p, campo, valorCrudo, inputEl) {
   let valor = valorCrudo;
+  const camposStock = ["stockLocal", "stockDeposito"];
   const camposNumericos = ["costo", "stockMinimo", "stockIdeal", "precioMinoristaActual", "precioMayoristaActual"];
-  if (campo === "stock" || camposNumericos.includes(campo)) {
+  if (camposStock.includes(campo) || camposNumericos.includes(campo)) {
     valor = valorCrudo === "" ? null : Number(valorCrudo);
     if (valor !== null && (!Number.isFinite(valor) || valor < 0)) { alert("Valor inválido"); renderTabla(); return; }
   } else {
@@ -277,15 +287,17 @@ async function guardarCampo(p, campo, valorCrudo, inputEl) {
   }
 
   try {
-    // El stock vive en la tabla "costos" (no en "productos"): se edita con el mismo
-    // endpoint que ya usa el resto de la app para ajustes manuales, que además deja
-    // constancia en el historial de movimientos (compras_stock, tipo "ajuste").
-    if (campo === "stock") {
+    // El stock (local y depósito) vive en la tabla "costos" (no en "productos"): se edita
+    // con los mismos endpoints que ya usa el resto de la app para ajustes manuales, que
+    // además dejan constancia en el historial de movimientos (compras_stock).
+    if (campo === "stockLocal" || campo === "stockDeposito") {
       if (valor === null) { alert("El stock no puede quedar vacío."); renderTabla(); return; }
-      await api("/api/costos/stock", {
+      const url = campo === "stockLocal" ? "/api/costos/stock" : "/api/costos/stock-deposito";
+      const bodyKey = campo === "stockLocal" ? "stock" : "stockDeposito";
+      await api(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ producto: p.nombre, stock: valor }),
+        body: JSON.stringify({ producto: p.nombre, [bodyKey]: valor }),
       });
     } else {
       const id = await ensureProductoId(p);
@@ -299,6 +311,19 @@ async function guardarCampo(p, campo, valorCrudo, inputEl) {
   } catch (err) {
     alert("No se pudo guardar: " + err.message);
     renderTabla();
+  }
+}
+
+async function hacerTraspaso(p, cantidad, direccion) {
+  try {
+    await api("/api/costos/traspaso", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ producto: p.nombre, cantidad, direccion }),
+    });
+    await cargarTodo();
+  } catch (err) {
+    alert("No se pudo hacer el traspaso: " + err.message);
   }
 }
 
@@ -332,6 +357,20 @@ document.getElementById("inv-body").addEventListener("click", async (e) => {
   } catch (err) {
     alert("No se pudo actualizar: " + err.message);
   }
+});
+
+document.getElementById("inv-body").addEventListener("click", (e) => {
+  const btn = e.target.closest(".inv-traspaso-btn");
+  if (!btn) return;
+  e.stopPropagation();
+  const tr = btn.closest("tr").previousElementSibling;
+  const key = tr.dataset.key;
+  const p = productosGlobal.find((x) => keyDe(x) === key);
+  if (!p) return;
+  const cantidadInput = btn.closest(".inv-traspaso-row").querySelector(".inv-traspaso-cantidad");
+  const cantidad = parseInt(cantidadInput.value, 10);
+  if (!Number.isInteger(cantidad) || cantidad <= 0) { alert("Ingresá una cantidad válida."); return; }
+  hacerTraspaso(p, cantidad, btn.dataset.direccion);
 });
 
 document.getElementById("inv-buscador").addEventListener("input", renderTabla);
