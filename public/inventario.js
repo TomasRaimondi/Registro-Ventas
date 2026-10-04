@@ -208,9 +208,10 @@ function campoDetalleTexto(label, campo, valor) {
   `;
 }
 
-function formatUltimoPrecio(u) {
+function formatUltimoPrecio(u, cantidad) {
   if (!u) return `<span class="hint">Sin ventas registradas</span>`;
-  return `<strong>${money(u.precio)}</strong> — ${escapeHtml(u.fecha)}`;
+  const vecesTxt = cantidad === 1 ? "1 vez" : `${cantidad} veces`;
+  return `<strong>${money(u.precio)}</strong> — ${escapeHtml(u.fecha)} <span class="hint">(vendido ${vecesTxt})</span>`;
 }
 
 function filaDetalle(p) {
@@ -236,8 +237,8 @@ function filaDetalle(p) {
         <label>Notas</label>
         <input type="text" class="inv-input inv-input-texto" data-campo="notas" value="${escapeHtml(p.notas || "")}">
       </div>
-      <div class="inv-ultimo-precio">Último precio minorista vendido: ${formatUltimoPrecio(p.ultimoPrecioMinorista)}</div>
-      <div class="inv-ultimo-precio">Último precio mayorista vendido: ${formatUltimoPrecio(p.ultimoPrecioMayorista)}</div>
+      <div class="inv-ultimo-precio">Último precio minorista vendido: ${formatUltimoPrecio(p.ultimoPrecioMinorista, p.cantidadVentasMinorista)}</div>
+      <div class="inv-ultimo-precio">Último precio mayorista vendido: ${formatUltimoPrecio(p.ultimoPrecioMayorista, p.cantidadVentasMayorista)}</div>
       <div class="inv-metodo-estimacion">Valor de stock estimado con: ${escapeHtml(p.metodoValorEstimado)}</div>
       <button type="button" class="clear-btn inv-toggle-estado" style="margin-top:12px; width:auto; padding:8px 16px;" data-estado="${p.estado === "discontinuado" ? "activo" : "discontinuado"}">
         ${p.estado === "discontinuado" ? "Reactivar producto" : "Marcar como discontinuado"}

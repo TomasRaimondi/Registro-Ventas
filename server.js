@@ -174,19 +174,23 @@ function calcularCostoHistorico(producto, fecha, indice, visitados = new Set()) 
   return actual === undefined ? null : actual;
 }
 
-// Último precio al que se vendió cada producto, separado en minorista/mayorista, para el
-// módulo de Inventario. No es una tabla nueva: se arma leyendo venta_items+ventas (que ya
-// tienen todo lo necesario), agrupando por nombre normalizado y quedándose con la fecha
-// más reciente de cada lado. "Mayorista" es exactamente el mismo criterio que ya usa el
-// resto de la app (metodo === "mayorista"); cualquier otro método cuenta como minorista.
+// Último precio al que se vendió cada producto, separado en minorista/mayorista, más
+// cuántas veces se vendió por cada canal históricamente (para ponderar el promedio, ver
+// construirDatasetProductos). No es una tabla nueva: se arma leyendo venta_items+ventas
+// (que ya tienen todo lo necesario), agrupando por nombre normalizado. "Mayorista" es
+// exactamente el mismo criterio que ya usa el resto de la app (metodo === "mayorista");
+// cualquier otro método cuenta como minorista.
 async function construirUltimosPreciosPorProducto() {
   const items = await db.getAllItems(); // viene ordenado por creadoEn ASC
   const porProducto = new Map();
   for (const it of items) {
     const key = normalizeNombre(it.producto);
-    if (!porProducto.has(key)) porProducto.set(key, { minorista: null, mayorista: null });
+    if (!porProducto.has(key)) porProducto.set(key, { minorista: null, mayorista: null, cantidadMinorista: 0, cantidadMayorista: 0 });
+    const grupo = porProducto.get(key);
     const tipo = it.metodo === "mayorista" ? "mayorista" : "minorista";
-    porProducto.get(key)[tipo] = { precio: it.precio, fecha: it.fecha, horaLabel: it.horaLabel };
+    grupo[tipo] = { precio: it.precio, fecha: it.fecha, horaLabel: it.horaLabel };
+    if (tipo === "mayorista") grupo.cantidadMayorista++;
+    else grupo.cantidadMinorista++;
   }
   return porProducto;
 }
@@ -215,12 +219,20 @@ async function construirDatasetProductos() {
       const meta = productosPorNombre.get(key) || null;
       const stock = Number(c.stock) || 0;
       const costo = Number(c.costo) || 0;
-      const ultimos = ultimosPrecios.get(key) || { minorista: null, mayorista: null };
+      const ultimos = ultimosPrecios.get(key) || { minorista: null, mayorista: null, cantidadMinorista: 0, cantidadMayorista: 0 };
 
       let precioEstimadoUnitario, metodoValorEstimado;
       if (ultimos.minorista && ultimos.mayorista) {
-        precioEstimadoUnitario = (ultimos.minorista.precio + ultimos.mayorista.precio) / 2;
-        metodoValorEstimado = "Promedio de últimos precios de venta (minorista y mayorista)";
+        // Promedio ponderado por cuántas veces se vendió históricamente por cada canal,
+        // no un 50/50 fijo: un producto que casi siempre se vende mayorista (más barato)
+        // tiene que valuarse más cerca de ese precio, no de un punto medio artificial que
+        // no refleja cómo se vende en la realidad.
+        const totalVentas = ultimos.cantidadMinorista + ultimos.cantidadMayorista;
+        const pesoMinorista = ultimos.cantidadMinorista / totalVentas;
+        const pesoMayorista = ultimos.cantidadMayorista / totalVentas;
+        precioEstimadoUnitario = ultimos.minorista.precio * pesoMinorista + ultimos.mayorista.precio * pesoMayorista;
+        const pctMinorista = Math.round(pesoMinorista * 100);
+        metodoValorEstimado = `Promedio ponderado por volumen histórico: ${pctMinorista}% minorista / ${100 - pctMinorista}% mayorista (${totalVentas} ventas registradas)`;
       } else if (ultimos.minorista || ultimos.mayorista) {
         precioEstimadoUnitario = (ultimos.minorista || ultimos.mayorista).precio;
         metodoValorEstimado = ultimos.minorista ? "Último precio de venta minorista" : "Último precio de venta mayorista";
@@ -258,6 +270,8 @@ async function construirDatasetProductos() {
         precioMayoristaActual: meta && meta.precioMayoristaActual != null ? Number(meta.precioMayoristaActual) : null,
         ultimoPrecioMinorista: ultimos.minorista,
         ultimoPrecioMayorista: ultimos.mayorista,
+        cantidadVentasMinorista: ultimos.cantidadMinorista,
+        cantidadVentasMayorista: ultimos.cantidadMayorista,
         valorEstimadoStock: Math.round(precioEstimadoUnitario * stock * 100) / 100,
         metodoValorEstimado,
         capitalInvertido: Math.round(costo * stock * 100) / 100,
