@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balance</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#EEF2F0">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Platense Fit">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<script src="nav-menu.js"></script>
+<style>
+  .bal-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .bal-preview { display: flex; flex-wrap: wrap; gap: 20px; align-items: baseline; padding: 16px 20px; border-radius: 12px; background: var(--bg-soft); border: 1px solid var(--card-border); margin-bottom: 18px; }
+  .bal-preview .bal-preview-item { display: flex; flex-direction: column; gap: 2px; }
+  .bal-preview .bal-preview-item label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .03em; }
+  .bal-preview .bal-preview-item .valor { font-size: 22px; font-weight: 700; font-family: "Bricolage Grotesque", sans-serif; }
+
+  table.bal-historial th, table.bal-historial td { white-space: nowrap; }
+  .bal-roi-positivo { color: var(--green); }
+  .bal-roi-negativo { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Balance</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">Registro de Ventas</a>
+    <a href="/inventario.html" class="link-btn">Inventario</a>
+    <div id="app-nav"></div>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide">
+
+  <!-- Login -->
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <!-- Contenido protegido -->
+  <div id="app-content" style="display:none;">
+
+    <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px;">
+      <div class="card metric-card metric-card-wide">
+        <span class="label">Valor de stock en tiempo real</span>
+        <span class="big-number" id="stat-valor-stock-vivo">$0</span>
+        <span class="metric-sub">stock × costo, según Inventario ahora mismo</span>
+      </div>
+      <div class="card metric-card metric-card-wide">
+        <span class="label">Último balance registrado</span>
+        <span class="big-number" id="stat-ultimo-patrimonio">—</span>
+        <span class="metric-sub" id="stat-ultimo-fecha">Todavía no hiciste ningún balance</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Realizar balance</h2>
+      <p class="hint" style="text-align:left;">El valor de stock se toma automático y en vivo desde Inventario al momento de guardar — no hace falta cargarlo a mano. Completá el resto y quedará guardado como una foto fija de esta fecha.</p>
+
+      <form id="bal-form">
+        <div class="bal-form-grid">
+          <div class="field">
+            <label for="bal-fecha">Fecha</label>
+            <input type="date" id="bal-fecha" required>
+          </div>
+          <div class="field">
+            <label for="bal-deudas-pagar">Deudas que yo debo pagar</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="bal-deudas-pagar" min="0" step="0.01" value="0"></div>
+          </div>
+          <div class="field">
+            <label for="bal-deudas-cobrar">Deudas que me deben a mí</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="bal-deudas-cobrar" min="0" step="0.01" value="0"></div>
+          </div>
+          <div class="field">
+            <label for="bal-cuenta1">Capital en transferencia — Cuenta 1</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="bal-cuenta1" min="0" step="0.01" value="0"></div>
+          </div>
+          <div class="field">
+            <label for="bal-cuenta2">Capital en transferencia — Cuenta 2</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="bal-cuenta2" min="0" step="0.01" value="0"></div>
+          </div>
+          <div class="field">
+            <label for="bal-efectivo">Efectivo</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="bal-efectivo" min="0" step="0.01" value="0"></div>
+          </div>
+          <div class="field">
+            <label for="bal-inversion-base">Inversión base</label>
+            <div class="input-prefix"><span>$</span><input type="number" id="bal-inversion-base" min="0" step="0.01" value="0"></div>
+          </div>
+        </div>
+
+        <div class="bal-preview">
+          <div class="bal-preview-item">
+            <label>Valor de stock (en vivo)</label>
+            <span class="valor" id="preview-valor-stock">$0</span>
+          </div>
+          <div class="bal-preview-item">
+            <label>Patrimonio neto</label>
+            <span class="valor" id="preview-patrimonio">$0</span>
+          </div>
+          <div class="bal-preview-item">
+            <label>ROI vs. inversión base</label>
+            <span class="valor" id="preview-roi">—</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="bal-nota">Nota <span class="opcional">(opcional)</span></label>
+          <input type="text" id="bal-nota" placeholder="Ej: antes de pagar proveedores">
+        </div>
+
+        <button type="submit" class="submit-btn" id="bal-submit-btn">Guardar balance</button>
+        <p class="hint error-hint" id="bal-error" style="display:none;"></p>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Historial de balances</h2>
+      <div class="table-wrap">
+        <table class="bal-historial">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Stock</th>
+              <th>Cuenta 1</th>
+              <th>Cuenta 2</th>
+              <th>Efectivo</th>
+              <th>Deudas (debo)</th>
+              <th>Deudas (me deben)</th>
+              <th>Inversión base</th>
+              <th>Patrimonio neto</th>
+              <th>ROI</th>
+              <th>Nota</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="bal-historial-body"><tr class="empty-row"><td colspan="12">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="balance.js"></script>
+</body>
+</html>

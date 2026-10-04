@@ -399,6 +399,29 @@ async function migrarStockDeposito(execFn) {
   }
 }
 
+// Migración aditiva: la tabla "balance_manual" ya existía (de la vieja Situación
+// Financiera, borrada) pero con otras columnas (capital en un solo monto, deudas sin
+// separar a favor/en contra, sin valor de stock). Se agregan las columnas que necesita
+// el balance nuevo; las columnas viejas quedan sin usar (no hay filas viejas que migrar,
+// se vaciaron antes de rehacer esta pantalla).
+async function migrarBalanceCamposNuevos(execFn) {
+  const columnas = [
+    "ALTER TABLE balance_manual ADD COLUMN capitalCuenta1 REAL DEFAULT 0",
+    "ALTER TABLE balance_manual ADD COLUMN capitalCuenta2 REAL DEFAULT 0",
+    "ALTER TABLE balance_manual ADD COLUMN deudasPagar REAL DEFAULT 0",
+    "ALTER TABLE balance_manual ADD COLUMN deudasCobrar REAL DEFAULT 0",
+    "ALTER TABLE balance_manual ADD COLUMN valorStock REAL DEFAULT 0",
+    "ALTER TABLE balance_manual ADD COLUMN patrimonioNeto REAL DEFAULT 0",
+  ];
+  for (const sql of columnas) {
+    try {
+      await execFn(sql);
+    } catch (e) {
+      // La columna ya existe: no hacer nada.
+    }
+  }
+}
+
 // Migración aditiva: agrega "loteId" a compras_stock para poder agrupar varios productos
 // cargados en una misma compra. Las filas viejas quedan con loteId NULL (se agrupan solas).
 async function migrarLoteId(execFn) {
@@ -497,6 +520,7 @@ if (USE_TURSO) {
       }
       await migrarStock((sql) => client.execute(sql));
       await migrarStockDeposito((sql) => client.execute(sql));
+      await migrarBalanceCamposNuevos((sql) => client.execute(sql));
       await migrarLoteId((sql) => client.execute(sql));
       await migrarCliente((sql) => client.execute(sql));
       await migrarEnvio((sql) => client.execute(sql));
@@ -912,16 +936,19 @@ if (USE_TURSO) {
     async upsertBalanceManual(row) {
       await client.execute({
         sql: `INSERT INTO balance_manual
-              (fecha, capitalTransferencia, capitalEfectivo, capitalEnProceso, deudas, inversionInicial, nota, creadoEn)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              (fecha, capitalCuenta1, capitalCuenta2, capitalEfectivo, deudasPagar, deudasCobrar, inversionInicial, valorStock, patrimonioNeto, nota, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(fecha) DO UPDATE SET
-                capitalTransferencia = excluded.capitalTransferencia,
+                capitalCuenta1 = excluded.capitalCuenta1,
+                capitalCuenta2 = excluded.capitalCuenta2,
                 capitalEfectivo = excluded.capitalEfectivo,
-                capitalEnProceso = excluded.capitalEnProceso,
-                deudas = excluded.deudas,
+                deudasPagar = excluded.deudasPagar,
+                deudasCobrar = excluded.deudasCobrar,
                 inversionInicial = excluded.inversionInicial,
+                valorStock = excluded.valorStock,
+                patrimonioNeto = excluded.patrimonioNeto,
                 nota = excluded.nota`,
-        args: [row.fecha, row.capitalTransferencia, row.capitalEfectivo, row.capitalEnProceso, row.deudas, row.inversionInicial, row.nota || null, row.creadoEn],
+        args: [row.fecha, row.capitalCuenta1, row.capitalCuenta2, row.capitalEfectivo, row.deudasPagar, row.deudasCobrar, row.inversionInicial, row.valorStock, row.patrimonioNeto, row.nota || null, row.creadoEn],
       });
     },
     async deleteBalanceManual(fecha) {
@@ -1152,6 +1179,7 @@ if (USE_TURSO) {
       db.exec(SCHEMA);
       await migrarStock(async (sql) => db.exec(sql));
       await migrarStockDeposito(async (sql) => db.exec(sql));
+      await migrarBalanceCamposNuevos(async (sql) => db.exec(sql));
       await migrarLoteId(async (sql) => db.exec(sql));
       await migrarCliente(async (sql) => db.exec(sql));
       await migrarEnvio(async (sql) => db.exec(sql));
@@ -1507,16 +1535,19 @@ if (USE_TURSO) {
     async upsertBalanceManual(row) {
       db.prepare(
         `INSERT INTO balance_manual
-         (fecha, capitalTransferencia, capitalEfectivo, capitalEnProceso, deudas, inversionInicial, nota, creadoEn)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         (fecha, capitalCuenta1, capitalCuenta2, capitalEfectivo, deudasPagar, deudasCobrar, inversionInicial, valorStock, patrimonioNeto, nota, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(fecha) DO UPDATE SET
-           capitalTransferencia = excluded.capitalTransferencia,
+           capitalCuenta1 = excluded.capitalCuenta1,
+           capitalCuenta2 = excluded.capitalCuenta2,
            capitalEfectivo = excluded.capitalEfectivo,
-           capitalEnProceso = excluded.capitalEnProceso,
-           deudas = excluded.deudas,
+           deudasPagar = excluded.deudasPagar,
+           deudasCobrar = excluded.deudasCobrar,
            inversionInicial = excluded.inversionInicial,
+           valorStock = excluded.valorStock,
+           patrimonioNeto = excluded.patrimonioNeto,
            nota = excluded.nota`
-      ).run(row.fecha, row.capitalTransferencia, row.capitalEfectivo, row.capitalEnProceso, row.deudas, row.inversionInicial, row.nota || null, row.creadoEn);
+      ).run(row.fecha, row.capitalCuenta1, row.capitalCuenta2, row.capitalEfectivo, row.deudasPagar, row.deudasCobrar, row.inversionInicial, row.valorStock, row.patrimonioNeto, row.nota || null, row.creadoEn);
     },
     async deleteBalanceManual(fecha) {
       db.prepare("DELETE FROM balance_manual WHERE fecha = ?").run(fecha);

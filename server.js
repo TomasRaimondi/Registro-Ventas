@@ -1867,6 +1867,59 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 201, row);
     }
 
+    // ---------- Balance (patrimonio neto) ----------
+    // Cada balance queda guardado como una foto fija a esa fecha: el valor de stock se
+    // calcula en el momento (mismo capital invertido que muestra Inventario) y se congela
+    // en la fila, junto con el patrimonio neto ya calculado, para que el histórico no
+    // cambie después aunque el stock se siga moviendo. Esto es el "dato" (los campos que
+    // cargó el dueño) y la "métrica" (valorStock/patrimonioNeto) en el mismo registro.
+
+    if (pathname === "/api/balance" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const filas = await db.getAllBalanceManual();
+      return sendJson(res, 200, filas);
+    }
+
+    if (pathname === "/api/balance" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const body = await readJsonBody(req);
+      const fecha = typeof body.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha)
+        ? body.fecha
+        : getArgentinaNow().fecha;
+
+      const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+      const capitalCuenta1 = num(body.capitalCuenta1);
+      const capitalCuenta2 = num(body.capitalCuenta2);
+      const capitalEfectivo = num(body.efectivo);
+      const deudasPagar = num(body.deudasPagar);
+      const deudasCobrar = num(body.deudasCobrar);
+      const inversionInicial = num(body.inversionBase);
+      const nota = body.nota ? String(body.nota).trim() : null;
+
+      const dataset = await construirDatasetProductos();
+      const activos = dataset.filter((p) => p.estado !== "discontinuado");
+      const valorStock = Math.round(activos.reduce((acc, p) => acc + p.capitalInvertido, 0) * 100) / 100;
+
+      const patrimonioNeto = Math.round(
+        (valorStock + capitalCuenta1 + capitalCuenta2 + capitalEfectivo + deudasCobrar - deudasPagar) * 100
+      ) / 100;
+
+      const row = {
+        fecha, capitalCuenta1, capitalCuenta2, capitalEfectivo, deudasPagar, deudasCobrar,
+        inversionInicial, valorStock, patrimonioNeto, nota,
+        creadoEn: new Date().toISOString(),
+      };
+      await db.upsertBalanceManual(row);
+      return sendJson(res, 201, row);
+    }
+
+    if (pathname.startsWith("/api/balance/") && req.method === "DELETE") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const fecha = decodeURIComponent(pathname.slice("/api/balance/".length));
+      await db.deleteBalanceManual(fecha);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (pathname === "/api/gastos" && req.method === "GET") {
       if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
       const fecha = query.get("fecha") || getArgentinaNow().fecha;
