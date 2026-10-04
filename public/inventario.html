@@ -60,6 +60,8 @@
   .inv-traspaso-cantidad { width: 90px; border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: 13px; }
 
   .inv-modal .modal-card { max-width: 520px; }
+  .ev-modal-card { max-width: 920px; }
+  .ev-modal-card table th, .ev-modal-card table td { white-space: nowrap; font-size: 12px; }
   .inv-modal .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .inv-modal .field-row .field { flex: 1; min-width: 140px; }
   .inv-ingreso-items { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
@@ -282,6 +284,54 @@
       <button type="submit" class="submit-btn" id="ni-submit-btn">Confirmar ingreso</button>
       <p class="hint error-hint" id="ni-error" style="display:none;"></p>
     </form>
+  </div>
+</div>
+
+<!-- Modal: Evolución de producto -->
+<div id="modal-evolucion" class="modal-overlay inv-modal" style="display:none;">
+  <div class="card modal-card ev-modal-card">
+    <button type="button" class="modal-cerrar" id="ev-cerrar-btn" aria-label="Cerrar">×</button>
+    <h2 id="ev-titulo">Evolución del producto</h2>
+    <p class="hint" style="text-align:left;">Cada venta usa el costo vigente el día que se vendió, no el costo de hoy — el margen histórico no se mueve si cambiás un costo ahora.</p>
+
+    <div class="periodo-tabs" id="ev-periodo-tabs">
+      <button type="button" class="periodo-tab active" data-periodo="dia">Día</button>
+      <button type="button" class="periodo-tab" data-periodo="semana">Semana</button>
+      <button type="button" class="periodo-tab" data-periodo="mes">Mes</button>
+    </div>
+
+    <div class="chart-legend">
+      <span class="legend-item"><span class="legend-dot legend-dot-minorista"></span>Minorista</span>
+      <span class="legend-item"><span class="legend-dot legend-dot-mayorista"></span>Mayorista</span>
+    </div>
+    <div class="chart chart-tall" id="ev-chart"></div>
+
+    <div class="table-wrap">
+      <table id="ev-tabla">
+        <thead>
+          <tr>
+            <th>Período</th>
+            <th>Unid. minorista</th>
+            <th>Unid. mayorista</th>
+            <th>Volumen minorista</th>
+            <th>Volumen mayorista</th>
+            <th>Ganancia minorista</th>
+            <th>Ganancia mayorista</th>
+            <th>Retorno minorista</th>
+            <th>Retorno mayorista</th>
+          </tr>
+        </thead>
+        <tbody id="ev-tabla-body"></tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:22px;">Evolución de costo</h3>
+    <div class="table-wrap">
+      <table id="ev-costo-tabla">
+        <thead><tr><th>Vigente desde</th><th>Costo</th></tr></thead>
+        <tbody id="ev-costo-tabla-body"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 

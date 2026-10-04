@@ -249,9 +249,12 @@ function filaDetalle(p) {
       <div class="inv-ultimo-precio">Último precio minorista vendido: ${formatUltimoPrecio(p.ultimoPrecioMinorista, p.cantidadVentasMinorista)}</div>
       <div class="inv-ultimo-precio">Último precio mayorista vendido: ${formatUltimoPrecio(p.ultimoPrecioMayorista, p.cantidadVentasMayorista)}</div>
       <div class="inv-metodo-estimacion">Valor de stock estimado con: ${escapeHtml(p.metodoValorEstimado)}</div>
-      <button type="button" class="clear-btn inv-toggle-estado" style="margin-top:12px; width:auto; padding:8px 16px;" data-estado="${p.estado === "discontinuado" ? "activo" : "discontinuado"}">
-        ${p.estado === "discontinuado" ? "Reactivar producto" : "Marcar como discontinuado"}
-      </button>
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+        <button type="button" class="clear-btn inv-ver-evolucion" style="width:auto; padding:8px 16px;">📈 Ver evolución</button>
+        <button type="button" class="clear-btn inv-toggle-estado" style="width:auto; padding:8px 16px;" data-estado="${p.estado === "discontinuado" ? "activo" : "discontinuado"}">
+          ${p.estado === "discontinuado" ? "Reactivar producto" : "Marcar como discontinuado"}
+        </button>
+      </div>
     </td>
   `;
   tr.addEventListener("click", (e) => e.stopPropagation());
@@ -578,5 +581,138 @@ document.getElementById("ni-form").addEventListener("submit", async (e) => {
     errorHint.style.display = "block";
   }
 });
+
+// ---------- Modal: Evolución de producto ----------
+
+const modalEvolucion = document.getElementById("modal-evolucion");
+let evolucionActual = null; // último resultado de /evolucion, para cambiar de pestaña sin volver a pedirlo
+let evolucionPeriodo = "dia";
+
+document.getElementById("inv-body").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".inv-ver-evolucion");
+  if (!btn) return;
+  e.stopPropagation();
+  const tr = btn.closest("tr").previousElementSibling;
+  const key = tr.dataset.key;
+  const p = productosGlobal.find((x) => keyDe(x) === key);
+  if (!p) return;
+  abrirModalEvolucion(p);
+});
+
+async function abrirModalEvolucion(p) {
+  document.getElementById("ev-titulo").textContent = `Evolución — ${p.nombre}`;
+  document.getElementById("ev-chart").innerHTML = "";
+  document.getElementById("ev-tabla-body").innerHTML = `<tr class="empty-row"><td colspan="9">Cargando...</td></tr>`;
+  document.getElementById("ev-costo-tabla-body").innerHTML = "";
+  evolucionPeriodo = "dia";
+  document.querySelectorAll("#ev-periodo-tabs .periodo-tab").forEach((b) => b.classList.toggle("active", b.dataset.periodo === "dia"));
+  modalEvolucion.style.display = "flex";
+  try {
+    evolucionActual = await api(`/api/inventario/producto/${encodeURIComponent(p.nombre)}/evolucion`);
+    renderEvolucion();
+  } catch (err) {
+    document.getElementById("ev-tabla-body").innerHTML = `<tr class="empty-row"><td colspan="9">Error al cargar: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function cerrarModalEvolucion() {
+  modalEvolucion.style.display = "none";
+}
+
+document.getElementById("ev-cerrar-btn").addEventListener("click", cerrarModalEvolucion);
+modalEvolucion.addEventListener("click", (e) => { if (e.target === modalEvolucion) cerrarModalEvolucion(); });
+
+document.querySelectorAll("#ev-periodo-tabs .periodo-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    evolucionPeriodo = btn.dataset.periodo;
+    document.querySelectorAll("#ev-periodo-tabs .periodo-tab").forEach((b) => b.classList.toggle("active", b === btn));
+    renderEvolucion();
+  });
+});
+
+function labelPeriodo(row) {
+  if (row.fecha) return row.fecha.slice(5); // MM-DD, alcanza para el eje del gráfico
+  if (row.semana) return "sem " + row.semana.slice(5);
+  return row.mes;
+}
+
+function renderDualBarChartEvolucion(container, filas) {
+  container.innerHTML = "";
+  if (!filas.length) return;
+  const maxAbs = Math.max(...filas.map((f) => f.volumenMinorista + f.volumenMayorista), 1);
+  filas.forEach((f) => {
+    const total = f.volumenMinorista + f.volumenMayorista;
+    const wrap = document.createElement("div");
+    wrap.className = "chart-bar-wrap";
+
+    const totalLabel = document.createElement("span");
+    totalLabel.className = "chart-bar-value";
+    totalLabel.textContent = money(total);
+    wrap.appendChild(totalLabel);
+
+    const pair = document.createElement("div");
+    pair.className = "chart-bar-pair";
+
+    const barA = document.createElement("div");
+    barA.className = "chart-bar";
+    barA.style.height = Math.max((f.volumenMinorista / maxAbs) * 100, f.volumenMinorista !== 0 ? 4 : 1) + "%";
+    barA.title = `${labelPeriodo(f)} — Minorista: ${money(f.volumenMinorista)}`;
+
+    const barB = document.createElement("div");
+    barB.className = "chart-bar chart-bar-mayorista";
+    barB.style.height = Math.max((f.volumenMayorista / maxAbs) * 100, f.volumenMayorista !== 0 ? 4 : 1) + "%";
+    barB.title = `${labelPeriodo(f)} — Mayorista: ${money(f.volumenMayorista)}`;
+
+    pair.appendChild(barA);
+    pair.appendChild(barB);
+
+    const hLabel = document.createElement("span");
+    hLabel.className = "chart-bar-label";
+    hLabel.textContent = labelPeriodo(f);
+
+    wrap.appendChild(pair);
+    wrap.appendChild(hLabel);
+    container.appendChild(wrap);
+  });
+}
+
+function pctTexto(v) {
+  return v === null ? "—" : v.toFixed(1) + "%";
+}
+
+function renderEvolucion() {
+  if (!evolucionActual) return;
+  const filas = evolucionActual[evolucionPeriodo === "dia" ? "porDia" : evolucionPeriodo === "semana" ? "porSemana" : "porMes"];
+
+  renderDualBarChartEvolucion(document.getElementById("ev-chart"), filas);
+
+  const tbody = document.getElementById("ev-tabla-body");
+  if (!filas.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">Todavía no hay ventas registradas de este producto.</td></tr>`;
+  } else {
+    tbody.innerHTML = [...filas].reverse().map((f) => `
+      <tr>
+        <td><strong>${escapeHtml(labelPeriodo(f))}</strong></td>
+        <td>${f.unidadesMinorista}</td>
+        <td>${f.unidadesMayorista}</td>
+        <td>${money(f.volumenMinorista)}</td>
+        <td>${money(f.volumenMayorista)}</td>
+        <td>${money(f.gananciaMinorista)}</td>
+        <td>${money(f.gananciaMayorista)}</td>
+        <td>${pctTexto(f.retornoMinorista)}</td>
+        <td>${pctTexto(f.retornoMayorista)}</td>
+      </tr>
+    `).join("");
+  }
+
+  const costoBody = document.getElementById("ev-costo-tabla-body");
+  if (!evolucionActual.costoHistorial.length) {
+    costoBody.innerHTML = `<tr class="empty-row"><td colspan="2">Sin historial de costo todavía.</td></tr>`;
+  } else {
+    costoBody.innerHTML = [...evolucionActual.costoHistorial].reverse().map((c) => `
+      <tr><td>${escapeHtml(c.vigenteDesde)}</td><td>${money(c.costo)}</td></tr>
+    `).join("");
+  }
+}
 
 checkAuth();

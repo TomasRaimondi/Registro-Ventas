@@ -289,6 +289,98 @@ async function construirDatasetProductos() {
     });
 }
 
+// Lunes de la semana a la que pertenece "fechaStr" (YYYY-MM-DD), mismo criterio que ya
+// usa Reportes del lado del cliente — se reimplementa acá (función pura, sin DOM) para
+// poder agrupar por semana del lado del servidor en la evolución por producto.
+function getWeekStart(fechaStr) {
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  date.setUTCDate(date.getUTCDate() + diff);
+  return date.toISOString().slice(0, 10);
+}
+
+// Evolución histórica de un solo producto para el panel "Ver evolución" de Inventario:
+// costo a lo largo del tiempo (costos_historial) + volumen/ganancia/retorno por canal,
+// agrupado por día, semana y mes a la vez (el frontend elige qué mostrar sin pedir de
+// nuevo). Cada venta usa el costo vigente EL DÍA que se vendió (igual que en Reportes),
+// no el costo actual, para que el margen histórico no se mueva si el costo cambia hoy.
+async function construirEvolucionProducto(nombreProducto) {
+  const [items, costosHistorialTodos, indiceCosto] = await Promise.all([
+    db.getAllItems(),
+    db.getCostosHistorial(),
+    construirIndiceCostoHistorico(),
+  ]);
+
+  const key = normalizeNombre(nombreProducto);
+  const itemsProducto = items.filter((it) => normalizeNombre(it.producto) === key);
+
+  const costoHistorial = costosHistorialTodos
+    .filter((c) => normalizeNombre(c.producto) === key)
+    .sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde))
+    .map((c) => ({ vigenteDesde: c.vigenteDesde, costo: c.costo }));
+
+  function grupoVacio() {
+    return { unidadesMinorista: 0, unidadesMayorista: 0, volumenMinorista: 0, volumenMayorista: 0, costoTotalMinorista: 0, costoTotalMayorista: 0 };
+  }
+
+  const porDiaMap = new Map();
+  const porSemanaMap = new Map();
+  const porMesMap = new Map();
+
+  for (const it of itemsProducto) {
+    const costoEnVenta = calcularCostoHistorico(it.producto, it.fecha, indiceCosto);
+    const esMayorista = it.metodo === "mayorista";
+    const semana = getWeekStart(it.fecha);
+    const mes = it.fecha.slice(0, 7);
+
+    for (const [mapa, keyPeriodo] of [[porDiaMap, it.fecha], [porSemanaMap, semana], [porMesMap, mes]]) {
+      if (!mapa.has(keyPeriodo)) mapa.set(keyPeriodo, grupoVacio());
+      const g = mapa.get(keyPeriodo);
+      if (esMayorista) {
+        g.unidadesMayorista += 1;
+        g.volumenMayorista += it.precio;
+        if (costoEnVenta !== null) g.costoTotalMayorista += costoEnVenta;
+      } else {
+        g.unidadesMinorista += 1;
+        g.volumenMinorista += it.precio;
+        if (costoEnVenta !== null) g.costoTotalMinorista += costoEnVenta;
+      }
+    }
+  }
+
+  function cerrarPeriodos(mapa, campoPeriodo, limite) {
+    const r2 = (n) => Math.round(n * 100) / 100;
+    return [...mapa.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-limite)
+      .map(([periodo, g]) => {
+        const gananciaMinorista = g.volumenMinorista - g.costoTotalMinorista;
+        const gananciaMayorista = g.volumenMayorista - g.costoTotalMayorista;
+        return {
+          [campoPeriodo]: periodo,
+          unidadesMinorista: g.unidadesMinorista,
+          unidadesMayorista: g.unidadesMayorista,
+          volumenMinorista: r2(g.volumenMinorista),
+          volumenMayorista: r2(g.volumenMayorista),
+          gananciaMinorista: r2(gananciaMinorista),
+          gananciaMayorista: r2(gananciaMayorista),
+          retornoMinorista: g.volumenMinorista > 0 ? r2((gananciaMinorista / g.volumenMinorista) * 100) : null,
+          retornoMayorista: g.volumenMayorista > 0 ? r2((gananciaMayorista / g.volumenMayorista) * 100) : null,
+        };
+      });
+  }
+
+  return {
+    producto: nombreProducto,
+    costoHistorial,
+    porDia: cerrarPeriodos(porDiaMap, "fecha", 30),
+    porSemana: cerrarPeriodos(porSemanaMap, "semana", 16),
+    porMes: cerrarPeriodos(porMesMap, "mes", 12),
+  };
+}
+
 // Recalcula ganancia neta y bono de las ventas mayoristas YA GUARDADAS, con el costo
 // vigente hoy para cada producto. Se llama después de editar cualquier costo o
 // composición de combo: así, si Chino cargó un pedido mayorista antes de que se
@@ -1717,6 +1809,13 @@ const server = http.createServer(async (req, res) => {
         agotados: activos.filter((p) => p.estadoStock === "agotado").length,
         sinClasificar: activos.filter((p) => !p.enriquecido).length,
       });
+    }
+
+    if (pathname.startsWith("/api/inventario/producto/") && pathname.endsWith("/evolucion") && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const nombre = decodeURIComponent(pathname.slice("/api/inventario/producto/".length, -"/evolucion".length));
+      if (!nombre) return sendJson(res, 400, { error: "Falta el producto" });
+      return sendJson(res, 200, await construirEvolucionProducto(nombre));
     }
 
     if (pathname === "/api/productos" && req.method === "POST") {
