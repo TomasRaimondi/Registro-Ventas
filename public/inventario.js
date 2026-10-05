@@ -642,7 +642,7 @@ function labelPeriodo(row) {
 // sumarTotal es true, arriba de cada par se muestra el total (tiene sentido para
 // unidades/volumen); para precio promedio no (promediar dos promedios no significa
 // nada), así que ahí solo se ven las dos barras con su valor en el tooltip.
-function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue = money, sumarTotal = true } = {}) {
+function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue = money, sumarTotal = true, subLabelFn = null } = {}) {
   container.innerHTML = "";
   if (!filas.length) return;
   const maxAbs = Math.max(
@@ -659,6 +659,13 @@ function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue
     totalLabel.className = "chart-bar-value";
     totalLabel.textContent = sumarTotal ? formatValue(valueA + valueB) : "";
     wrap.appendChild(totalLabel);
+
+    if (subLabelFn) {
+      const subLabel = document.createElement("span");
+      subLabel.className = "chart-bar-sub-label";
+      subLabel.textContent = subLabelFn(valueA, valueB);
+      wrap.appendChild(subLabel);
+    }
 
     const pair = document.createElement("div");
     pair.className = "chart-bar-pair";
@@ -690,6 +697,62 @@ function pctTexto(v) {
   return v === null ? "—" : v.toFixed(1) + "%";
 }
 
+// Gráfico de línea (minorista vs. mayorista) para la tendencia de precio promedio: a
+// diferencia de las barras, una línea muestra de un vistazo si el precio viene subiendo
+// o bajando, que es justo lo que se quiere comparar acá. Eje Y con grilla y valores en $,
+// eje X con el período de cada punto. SVG con viewBox 0-100 (no en píxeles reales) para
+// no tener que recalcular nada al resize; los ejes van como HTML aparte, no texto SVG,
+// así no se estiran cuando el gráfico no es cuadrado.
+function renderLineChartEvolucion(container, filas, { getA, getB }) {
+  container.innerHTML = "";
+  if (!filas.length) return;
+
+  const valores = filas.flatMap((f) => [getA(f), getB(f)]).filter((v) => v !== null && v !== undefined);
+  const maxVal = Math.max(...valores, 1);
+  const n = filas.length;
+  const xDe = (i) => (n > 1 ? (i / (n - 1)) * 100 : 50);
+  const yDe = (v) => 100 - (v / maxVal) * 100;
+
+  function puntos(getFn) {
+    return filas.map((f, i) => {
+      const v = getFn(f);
+      return v === null || v === undefined ? null : { x: xDe(i), y: yDe(v), v, f };
+    });
+  }
+
+  const puntosA = puntos(getA);
+  const puntosB = puntos(getB);
+
+  const lineaSvg = (pts) => pts.filter(Boolean).map((p) => `${p.x},${p.y}`).join(" ");
+  // Los puntos van como <span> absolutos aparte del SVG (no <circle> adentro del
+  // viewBox estirado), para que queden redondos de verdad sin importar qué tan
+  // ancho/bajo sea el recuadro — ver nota en el CSS de .ev-line-dot.
+  const dotsHtml = (pts, clase) => pts.filter(Boolean).map((p) =>
+    `<span class="ev-line-dot ${clase}" style="left:${p.x}%; top:${p.y}%;" title="${escapeHtml(labelPeriodo(p.f))} — ${money(p.v)}"></span>`
+  ).join("");
+
+  const gridSvg = [0, 25, 50, 75, 100].map((gy) => `<line x1="0" y1="${gy}" x2="100" y2="${gy}" class="ev-line-grid" />`).join("");
+
+  const yAxisHtml = [4, 3, 2, 1, 0].map((n4) => `<span>${money((maxVal / 4) * n4)}</span>`).join("");
+  const xAxisHtml = filas.map((f) => `<span>${escapeHtml(labelPeriodo(f))}</span>`).join("");
+
+  container.innerHTML = `
+    <div class="ev-line-plot">
+      <div class="ev-line-yaxis">${yAxisHtml}</div>
+      <div class="ev-line-svg-box">
+        <svg class="ev-line-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          ${gridSvg}
+          <polyline points="${lineaSvg(puntosA)}" class="ev-line-a" />
+          <polyline points="${lineaSvg(puntosB)}" class="ev-line-b" />
+        </svg>
+        ${dotsHtml(puntosA, "ev-line-dot-a")}
+        ${dotsHtml(puntosB, "ev-line-dot-b")}
+      </div>
+    </div>
+    <div class="ev-line-xaxis">${xAxisHtml}</div>
+  `;
+}
+
 function renderEvolucion() {
   if (!evolucionActual) return;
   const filas = evolucionActual[evolucionPeriodo === "dia" ? "porDia" : evolucionPeriodo === "semana" ? "porSemana" : "porMes"];
@@ -698,6 +761,7 @@ function renderEvolucion() {
     getA: (f) => f.unidadesMinorista,
     getB: (f) => f.unidadesMayorista,
     formatValue: (n) => String(n),
+    subLabelFn: (min, may) => `${min} min · ${may} may`,
   });
 
   renderDualBarChartEvolucion(document.getElementById("ev-chart-volumen"), filas, {
@@ -706,11 +770,9 @@ function renderEvolucion() {
     formatValue: money,
   });
 
-  renderDualBarChartEvolucion(document.getElementById("ev-chart-precio"), filas, {
-    getA: (f) => f.unidadesMinorista > 0 ? f.volumenMinorista / f.unidadesMinorista : 0,
-    getB: (f) => f.unidadesMayorista > 0 ? f.volumenMayorista / f.unidadesMayorista : 0,
-    formatValue: money,
-    sumarTotal: false,
+  renderLineChartEvolucion(document.getElementById("ev-chart-precio"), filas, {
+    getA: (f) => f.unidadesMinorista > 0 ? f.volumenMinorista / f.unidadesMinorista : null,
+    getB: (f) => f.unidadesMayorista > 0 ? f.volumenMayorista / f.unidadesMayorista : null,
   });
 
   const tbody = document.getElementById("ev-tabla-body");

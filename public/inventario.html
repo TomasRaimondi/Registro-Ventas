@@ -65,6 +65,29 @@
   .ev-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 10px; }
   .ev-chart-box h3 { margin: 0 0 8px; font-size: 14px; }
   .ev-chart-compact { height: 130px; }
+  /* Colores sólidos en vez del degradé genérico de .chart-bar/.chart-bar-mayorista
+     (compartido con Reportes, no se toca esa regla global): acá dos tonos bien
+     distinguibles, sin degradé, más "formales" para un panel de números del negocio. */
+  .ev-chart-compact .chart-bar { background: var(--accent); }
+  .ev-chart-compact .chart-bar-mayorista { background: var(--orange); }
+
+  .ev-line-chart-wrap { height: 130px; display: flex; flex-direction: column; }
+  .card-chart-maximizada .ev-line-chart-wrap { height: 62vh !important; }
+  .ev-line-plot { flex: 1; display: flex; gap: 8px; min-height: 0; }
+  .ev-line-yaxis { display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--text-dim); text-align: right; width: 54px; flex-shrink: 0; padding: 2px 0; }
+  .ev-line-svg-box { flex: 1; position: relative; min-width: 0; }
+  .ev-line-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ev-line-grid { stroke: var(--card-border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .ev-line-a { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .ev-line-b { fill: none; stroke: var(--orange); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  /* Puntos como <span> aparte, no dentro del SVG estirado: adentro del viewBox 0-100
+     quedaban ovalados en vez de redondos cuando el contenedor es mucho más ancho que
+     alto (pasa seguido acá, sobre todo en pantalla completa). */
+  .ev-line-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; transform: translate(-50%, -50%); }
+  .ev-line-dot-a { background: var(--accent); }
+  .ev-line-dot-b { background: var(--orange); }
+  .ev-line-xaxis { display: flex; font-size: 10px; color: var(--text-dim); margin-top: 6px; padding-left: 62px; gap: 2px; }
+  .ev-line-xaxis span { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inv-modal .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .inv-modal .field-row .field { flex: 1; min-width: 140px; }
   .inv-ingreso-items { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
@@ -328,7 +351,7 @@
           <h3>Precio promedio</h3>
           <button type="button" class="chart-toolbar-btn chart-zoom-btn">⛶ Agrandar</button>
         </div>
-        <div class="chart ev-chart-compact" id="ev-chart-precio"></div>
+        <div class="ev-line-chart-wrap" id="ev-chart-precio"></div>
       </div>
     </div>
     <p class="hint" style="text-align:left;">Precio promedio: compara cómo evolucionó el precio al que se vendió en promedio por minorista vs. por mayorista en cada período.</p>
