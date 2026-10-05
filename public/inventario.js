@@ -600,7 +600,9 @@ document.getElementById("inv-body").addEventListener("click", async (e) => {
 
 async function abrirModalEvolucion(p) {
   document.getElementById("ev-titulo").textContent = `Evolución — ${p.nombre}`;
-  document.getElementById("ev-chart").innerHTML = "";
+  document.getElementById("ev-chart-unidades").innerHTML = "";
+  document.getElementById("ev-chart-volumen").innerHTML = "";
+  document.getElementById("ev-chart-precio").innerHTML = "";
   document.getElementById("ev-tabla-body").innerHTML = `<tr class="empty-row"><td colspan="9">Cargando...</td></tr>`;
   document.getElementById("ev-costo-tabla-body").innerHTML = "";
   evolucionPeriodo = "dia";
@@ -635,18 +637,27 @@ function labelPeriodo(row) {
   return row.mes;
 }
 
-function renderDualBarChartEvolucion(container, filas) {
+// Gráfico de barras pareadas (minorista/mayorista) genérico, reutilizado para las tres
+// tendencias del modal de evolución: unidades, volumen y precio promedio. Cuando
+// sumarTotal es true, arriba de cada par se muestra el total (tiene sentido para
+// unidades/volumen); para precio promedio no (promediar dos promedios no significa
+// nada), así que ahí solo se ven las dos barras con su valor en el tooltip.
+function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue = money, sumarTotal = true } = {}) {
   container.innerHTML = "";
   if (!filas.length) return;
-  const maxAbs = Math.max(...filas.map((f) => f.volumenMinorista + f.volumenMayorista), 1);
+  const maxAbs = Math.max(
+    ...filas.map((f) => sumarTotal ? Math.abs(getA(f)) + Math.abs(getB(f)) : Math.max(Math.abs(getA(f)), Math.abs(getB(f)))),
+    1
+  );
   filas.forEach((f) => {
-    const total = f.volumenMinorista + f.volumenMayorista;
+    const valueA = getA(f);
+    const valueB = getB(f);
     const wrap = document.createElement("div");
     wrap.className = "chart-bar-wrap";
 
     const totalLabel = document.createElement("span");
     totalLabel.className = "chart-bar-value";
-    totalLabel.textContent = money(total);
+    totalLabel.textContent = sumarTotal ? formatValue(valueA + valueB) : "";
     wrap.appendChild(totalLabel);
 
     const pair = document.createElement("div");
@@ -654,13 +665,13 @@ function renderDualBarChartEvolucion(container, filas) {
 
     const barA = document.createElement("div");
     barA.className = "chart-bar";
-    barA.style.height = Math.max((f.volumenMinorista / maxAbs) * 100, f.volumenMinorista !== 0 ? 4 : 1) + "%";
-    barA.title = `${labelPeriodo(f)} — Minorista: ${money(f.volumenMinorista)}`;
+    barA.style.height = Math.max((Math.abs(valueA) / maxAbs) * 100, valueA !== 0 ? 4 : 1) + "%";
+    barA.title = `${labelPeriodo(f)} — Minorista: ${formatValue(valueA)}`;
 
     const barB = document.createElement("div");
     barB.className = "chart-bar chart-bar-mayorista";
-    barB.style.height = Math.max((f.volumenMayorista / maxAbs) * 100, f.volumenMayorista !== 0 ? 4 : 1) + "%";
-    barB.title = `${labelPeriodo(f)} — Mayorista: ${money(f.volumenMayorista)}`;
+    barB.style.height = Math.max((Math.abs(valueB) / maxAbs) * 100, valueB !== 0 ? 4 : 1) + "%";
+    barB.title = `${labelPeriodo(f)} — Mayorista: ${formatValue(valueB)}`;
 
     pair.appendChild(barA);
     pair.appendChild(barB);
@@ -683,7 +694,24 @@ function renderEvolucion() {
   if (!evolucionActual) return;
   const filas = evolucionActual[evolucionPeriodo === "dia" ? "porDia" : evolucionPeriodo === "semana" ? "porSemana" : "porMes"];
 
-  renderDualBarChartEvolucion(document.getElementById("ev-chart"), filas);
+  renderDualBarChartEvolucion(document.getElementById("ev-chart-unidades"), filas, {
+    getA: (f) => f.unidadesMinorista,
+    getB: (f) => f.unidadesMayorista,
+    formatValue: (n) => String(n),
+  });
+
+  renderDualBarChartEvolucion(document.getElementById("ev-chart-volumen"), filas, {
+    getA: (f) => f.volumenMinorista,
+    getB: (f) => f.volumenMayorista,
+    formatValue: money,
+  });
+
+  renderDualBarChartEvolucion(document.getElementById("ev-chart-precio"), filas, {
+    getA: (f) => f.unidadesMinorista > 0 ? f.volumenMinorista / f.unidadesMinorista : 0,
+    getB: (f) => f.unidadesMayorista > 0 ? f.volumenMayorista / f.unidadesMayorista : 0,
+    formatValue: money,
+    sumarTotal: false,
+  });
 
   const tbody = document.getElementById("ev-tabla-body");
   if (!filas.length) {
