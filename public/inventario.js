@@ -257,7 +257,6 @@ function filaDetalle(p) {
       </div>
     </td>
   `;
-  tr.addEventListener("click", (e) => e.stopPropagation());
   return tr;
 }
 
