@@ -60,8 +60,11 @@
   .inv-traspaso-cantidad { width: 90px; border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: 13px; }
 
   .inv-modal .modal-card { max-width: 520px; }
-  .ev-modal-card { max-width: 920px; }
+  .inv-modal .ev-modal-card { max-width: 1100px; max-height: 88vh; overflow-y: auto; }
   .ev-modal-card table th, .ev-modal-card table td { white-space: nowrap; font-size: 12px; }
+  .ev-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 10px; }
+  .ev-chart-box h3 { margin: 0 0 8px; font-size: 14px; }
+  .ev-chart-compact { height: 130px; }
   .inv-modal .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .inv-modal .field-row .field { flex: 1; min-width: 140px; }
   .inv-ingreso-items { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
@@ -305,15 +308,21 @@
       <span class="legend-item"><span class="legend-dot legend-dot-mayorista"></span>Mayorista</span>
     </div>
 
-    <h3>Unidades vendidas</h3>
-    <div class="chart chart-tall" id="ev-chart-unidades"></div>
-
-    <h3 style="margin-top:18px;">Volumen de ventas</h3>
-    <div class="chart chart-tall" id="ev-chart-volumen"></div>
-
-    <h3 style="margin-top:18px;">Precio promedio de venta</h3>
-    <p class="hint" style="text-align:left; margin-top:-4px;">Compara cómo evolucionó el precio al que se vendió en promedio por minorista vs. por mayorista en cada período.</p>
-    <div class="chart chart-tall" id="ev-chart-precio"></div>
+    <div class="ev-charts-grid">
+      <div class="ev-chart-box">
+        <h3>Unidades vendidas</h3>
+        <div class="chart ev-chart-compact" id="ev-chart-unidades"></div>
+      </div>
+      <div class="ev-chart-box">
+        <h3>Volumen de ventas</h3>
+        <div class="chart ev-chart-compact" id="ev-chart-volumen"></div>
+      </div>
+      <div class="ev-chart-box">
+        <h3>Precio promedio</h3>
+        <div class="chart ev-chart-compact" id="ev-chart-precio"></div>
+      </div>
+    </div>
+    <p class="hint" style="text-align:left;">Precio promedio: compara cómo evolucionó el precio al que se vendió en promedio por minorista vs. por mayorista en cada período.</p>
 
     <div class="table-wrap" style="margin-top:18px;">
       <table id="ev-tabla">
