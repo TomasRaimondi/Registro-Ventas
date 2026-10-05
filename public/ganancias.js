@@ -257,12 +257,12 @@ function escapeHtml(str) {
 }
 
 async function renderAll() {
-  let items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas;
+  let items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas, ventas;
   try {
     const hora = await api("/api/hora");
     hoyFechaCache = hora.fecha;
     const fechaActiva = fechaSeleccionada || hoyFechaCache;
-    [items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas] = await Promise.all([
+    [items, costos, gastos, salarios, composicion, comisionesMinoristas, bonosMayoristas, ventas] = await Promise.all([
       api("/api/venta-items?fecha=" + encodeURIComponent(fechaActiva)),
       api("/api/costos"),
       api("/api/gastos?fecha=" + encodeURIComponent(fechaActiva)),
@@ -270,6 +270,7 @@ async function renderAll() {
       api("/api/composicion"),
       api("/api/comisiones-minoristas"),
       api("/api/bonos-mayoristas"),
+      api("/api/ventas?fecha=" + encodeURIComponent(fechaActiva)),
     ]);
   } catch (err) {
     if (err.status === 401) { showLogin(); return; }
@@ -340,6 +341,22 @@ async function renderAll() {
     sinCostoList.innerHTML = [...sinCostoSet].map(p => `<li>${escapeHtml(p)}</li>`).join("");
   } else {
     sinCostoCard.style.display = "none";
+  }
+
+  // Ventas donde el stock no se descontó: el producto/combo vendido no coincidió con
+  // ninguna fila de costos (combo sin vincular en Composición de combos, o diferencia de
+  // nombre). El servidor ya calculó esto al registrar la venta (campo alertaStock).
+  const alertaStockCard = document.getElementById("alerta-stock-card");
+  const alertaStockList = document.getElementById("alerta-stock-list");
+  const ventasConAlertaStock = (ventas || []).filter(v => v.alertaStock);
+  if (ventasConAlertaStock.length > 0) {
+    alertaStockCard.style.display = "block";
+    alertaStockList.innerHTML = ventasConAlertaStock.map(v => {
+      const nombres = JSON.parse(v.alertaStock).join(", ");
+      return `<li><strong>${escapeHtml(v.producto)}</strong> (${v.horaLabel}) — sin descontar: ${escapeHtml(nombres)}</li>`;
+    }).join("");
+  } else {
+    alertaStockCard.style.display = "none";
   }
 
   // Tabla de costos

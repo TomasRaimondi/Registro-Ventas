@@ -432,6 +432,18 @@ async function migrarBalanceCamposNuevos(execFn) {
   }
 }
 
+// Migración aditiva: agrega "alertaStock" a ventas. Guarda (como JSON) los nombres de
+// producto/combo que la venta intentó descontar del stock pero no encontraron ninguna fila
+// en "costos" con ese nombre exacto (típico: un combo sin vincular en Composición de combos,
+// o una diferencia de mayúsculas/espacios) — esas ventas quedaron con el stock sin tocar.
+async function migrarAlertaStockVentas(execFn) {
+  try {
+    await execFn("ALTER TABLE ventas ADD COLUMN alertaStock TEXT");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 // Migración aditiva: agrega "loteId" a compras_stock para poder agrupar varios productos
 // cargados en una misma compra. Las filas viejas quedan con loteId NULL (se agrupan solas).
 async function migrarLoteId(execFn) {
@@ -531,6 +543,7 @@ if (USE_TURSO) {
       await migrarStock((sql) => client.execute(sql));
       await migrarStockDeposito((sql) => client.execute(sql));
       await migrarBalanceCamposNuevos((sql) => client.execute(sql));
+      await migrarAlertaStockVentas((sql) => client.execute(sql));
       await migrarLoteId((sql) => client.execute(sql));
       await migrarCliente((sql) => client.execute(sql));
       await migrarEnvio((sql) => client.execute(sql));
@@ -567,9 +580,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       await client.execute({
-        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null],
+        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor, alertaStock)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null, row.alertaStock || null],
       });
     },
     async deleteById(id) {
@@ -618,10 +631,11 @@ if (USE_TURSO) {
       await client.execute({ sql: "UPDATE costos SET stockDeposito = ? WHERE producto = ?", args: [stockDeposito, producto] });
     },
     async decrementStock(producto, cantidad) {
-      await client.execute({
+      const res = await client.execute({
         sql: "UPDATE costos SET stock = MAX(0, stock - ?) WHERE producto = ?",
         args: [cantidad, producto],
       });
+      return res.rowsAffected;
     },
     async incrementStock(producto, cantidad) {
       await client.execute({
@@ -1219,6 +1233,7 @@ if (USE_TURSO) {
       await migrarStock(async (sql) => db.exec(sql));
       await migrarStockDeposito(async (sql) => db.exec(sql));
       await migrarBalanceCamposNuevos(async (sql) => db.exec(sql));
+      await migrarAlertaStockVentas(async (sql) => db.exec(sql));
       await migrarLoteId(async (sql) => db.exec(sql));
       await migrarCliente(async (sql) => db.exec(sql));
       await migrarEnvio(async (sql) => db.exec(sql));
@@ -1248,9 +1263,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       db.prepare(
-        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null);
+        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor, alertaStock)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null, row.alertaStock || null);
     },
     async deleteById(id) {
       db.prepare("DELETE FROM ventas WHERE id = ?").run(id);
@@ -1293,7 +1308,8 @@ if (USE_TURSO) {
       db.prepare("UPDATE costos SET stockDeposito = ? WHERE producto = ?").run(stockDeposito, producto);
     },
     async decrementStock(producto, cantidad) {
-      db.prepare("UPDATE costos SET stock = MAX(0, stock - ?) WHERE producto = ?").run(cantidad, producto);
+      const info = db.prepare("UPDATE costos SET stock = MAX(0, stock - ?) WHERE producto = ?").run(cantidad, producto);
+      return info.changes;
     },
     async incrementStock(producto, cantidad) {
       db.prepare("UPDATE costos SET stock = stock + ? WHERE producto = ?").run(cantidad, producto);

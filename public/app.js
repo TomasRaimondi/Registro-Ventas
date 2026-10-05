@@ -756,10 +756,26 @@ function renderMetrics(sales) {
 
 // ---------- Render del historial (de hoy o del día elegido) ----------
 
+function renderAlertaStockTop(sales) {
+  const banner = document.getElementById("alerta-stock-top");
+  const conAlerta = sales.filter(s => s.alertaStock);
+  if (!conAlerta.length) { banner.style.display = "none"; return; }
+  banner.style.display = "block";
+  banner.innerHTML = `
+    <strong>⚠ ${conAlerta.length} ${conAlerta.length === 1 ? "venta" : "ventas"} no descontaron stock correctamente</strong>
+    <ul>${conAlerta.map(s => {
+      const nombres = JSON.parse(s.alertaStock).join(", ");
+      return `<li>${s.horaLabel} — ${escapeHtml(s.producto)}: sin descontar <em>${escapeHtml(nombres)}</em></li>`;
+    }).join("")}</ul>
+  `;
+}
+
 function renderHistory(sales, fecha, hoyFecha) {
   const esHoy = fecha === hoyFecha;
   document.getElementById("historial-fecha-label").textContent = esHoy ? "hoy" : formatFechaLarga(fecha);
   hoyBtn.style.display = esHoy ? "none" : "inline-block";
+
+  renderAlertaStockTop(sales);
 
   const tbody = document.getElementById("history-body");
   tbody.innerHTML = "";
@@ -772,9 +788,10 @@ function renderHistory(sales, fecha, hoyFecha) {
   [...sales].reverse().forEach(s => {
     const tr = document.createElement("tr");
     tr.className = "sale-row";
+    const alertaTitulo = s.alertaStock ? `No se descontó stock de: ${JSON.parse(s.alertaStock).join(", ")}` : "";
     tr.innerHTML = `
       <td>${s.horaLabel}</td>
-      <td><span class="expand-caret">▸</span>${escapeHtml(s.producto)}</td>
+      <td><span class="expand-caret">▸</span>${escapeHtml(s.producto)}${s.alertaStock ? `<span class="alerta-stock-badge" title="${escapeHtml(alertaTitulo)}">⚠</span>` : ""}</td>
       <td>${money(s.precio)}</td>
       <td><span class="pm-tag ${s.metodo}">${PAYMENT_LABELS[s.metodo] || s.metodo}</span>${s.envioMetodo === "uber_moto" ? '<span class="uber-tag">🛵 Uber Moto</span>' : ""}</td>
       <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>

@@ -578,8 +578,13 @@ function readJsonBody(req) {
 
 // ---------- Stock: descuenta/restaura, resolviendo combos a sus componentes ----------
 
+// Devuelve la lista de nombres (producto suelto o componente de combo) para los que el
+// UPDATE de stock no encontró ninguna fila en "costos" con ese nombre exacto — típicamente
+// un combo sin vincular en Composición de combos, o una diferencia de mayúsculas/espacios
+// entre el nombre vendido y el cargado en costos. Esas ventas quedan con el stock sin tocar.
 async function ajustarStockPorItems(items, direccion) {
   // direccion: -1 al vender (descuenta), +1 al borrar una venta (restaura)
+  const sinStock = [];
   try {
     const composicion = await db.getComposicion();
     const composicionPorCombo = new Map();
@@ -592,17 +597,22 @@ async function ajustarStockPorItems(items, direccion) {
       const componentes = composicionPorCombo.get(it.producto);
       if (componentes && componentes.length) {
         for (const c of componentes) {
-          if (direccion < 0) await db.decrementStock(c.componenteProducto, c.cantidad);
-          else await db.incrementStock(c.componenteProducto, c.cantidad);
+          const afectadas = direccion < 0
+            ? await db.decrementStock(c.componenteProducto, c.cantidad)
+            : await db.incrementStock(c.componenteProducto, c.cantidad);
+          if (direccion < 0 && !afectadas) sinStock.push(c.componenteProducto);
         }
       } else {
-        if (direccion < 0) await db.decrementStock(it.producto, 1);
-        else await db.incrementStock(it.producto, 1);
+        const afectadas = direccion < 0
+          ? await db.decrementStock(it.producto, 1)
+          : await db.incrementStock(it.producto, 1);
+        if (direccion < 0 && !afectadas) sinStock.push(it.producto);
       }
     }
   } catch (e) {
     console.error("No se pudo ajustar el stock:", e);
   }
+  return sinStock;
 }
 
 // Revierte un movimiento de compras_stock: resta su cantidad del stock actual, lo borra
@@ -936,6 +946,8 @@ const server = http.createServer(async (req, res) => {
       const cliente = body.cliente ? String(body.cliente).trim().slice(0, 200) : null;
       const vendedor = getUsuario(req);
 
+      const sinStock = await ajustarStockPorItems(itemsProcessed, -1);
+
       const row = {
         id: crypto.randomUUID(),
         producto: productoResumen,
@@ -949,13 +961,13 @@ const server = http.createServer(async (req, res) => {
         envioMetodo,
         envioCosto,
         vendedor,
+        alertaStock: sinStock.length ? JSON.stringify(sinStock) : null,
       };
 
       await db.insert(row);
       for (const it of itemsProcessed) {
         await db.insertItem({ id: crypto.randomUUID(), ventaId: row.id, producto: it.producto, precio: it.precio });
       }
-      await ajustarStockPorItems(itemsProcessed, -1);
 
       // Comisión minorista automática: 5% del excedente por sobre $45.000, solo en
       // ventas no mayoristas que registra el empleado (Chino), desde el 16/09/2026.
