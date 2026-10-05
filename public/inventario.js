@@ -742,4 +742,35 @@ function renderEvolucion() {
   }
 }
 
+// ---------- Pantalla completa de un gráfico del modal de evolución ----------
+// Agranda la tarjeta entera del gráfico a todo el viewport con CSS (mismo mecanismo que
+// ya usa Reportes), para poder ver el detalle de un período sin tener que entrecerrar
+// los ojos en la vista chica de 3 columnas.
+
+function salirDeTodosLosGraficosMaximizados() {
+  document.querySelectorAll(".card-chart-maximizada").forEach((card) => {
+    card.classList.remove("card-chart-maximizada");
+    const btn = card.querySelector(".chart-zoom-btn");
+    if (btn) btn.textContent = "⛶ Agrandar";
+  });
+  document.body.classList.remove("chart-maximizado-activo");
+}
+
+document.querySelectorAll(".chart-zoom-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const card = btn.closest(".card");
+    const yaMaximizada = card.classList.contains("card-chart-maximizada");
+    salirDeTodosLosGraficosMaximizados();
+    if (!yaMaximizada) {
+      card.classList.add("card-chart-maximizada");
+      btn.textContent = "🗗 Achicar";
+      document.body.classList.add("chart-maximizado-activo");
+    }
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") salirDeTodosLosGraficosMaximizados();
+});
+
 checkAuth();
