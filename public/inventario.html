@@ -62,17 +62,32 @@
   .inv-modal .modal-card { max-width: 520px; }
   .inv-modal .ev-modal-card { max-width: 1100px; max-height: 88vh; overflow-y: auto; }
   .ev-modal-card table th, .ev-modal-card table td { white-space: nowrap; font-size: 12px; }
-  .ev-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 10px; }
-  .ev-chart-box h3 { margin: 0 0 8px; font-size: 14px; }
-  .ev-chart-compact { height: 130px; }
+  /* Los 3 gráficos van uno abajo del otro (no en columnas lado a lado): con hasta 30
+     barras diarias, repartir el ancho del modal en 3 columnas dejaba cada barra en ~11px,
+     ilegible. Apilados, cada uno tiene todo el ancho del modal disponible. */
+  .ev-charts-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 10px; }
+  .ev-chart-box h3 { margin: 0 0 10px; font-size: 14px; }
+  .ev-chart-compact { height: 170px; }
+  /* Ancho mínimo fijo por barra en vez de que "flex:1" las achique para que entren todas:
+     con muchas barras (30 días) el gráfico scrollea horizontal en vez de volverse ilegible;
+     con pocas (12 meses, 16 semanas) entran todas igual sin necesitar scroll. */
+  .ev-chart-compact .chart-bar-wrap { flex: 0 0 46px; min-width: 46px; }
+  .ev-chart-compact .chart-bar-value { font-size: 12px; }
+  .ev-chart-compact .chart-bar-sub-label { font-size: 10px; }
+  .ev-chart-compact .chart-bar-label { font-size: 11px; }
   /* Colores sólidos en vez del degradé genérico de .chart-bar/.chart-bar-mayorista
      (compartido con Reportes, no se toca esa regla global): acá dos tonos bien
      distinguibles, sin degradé, más "formales" para un panel de números del negocio. */
   .ev-chart-compact .chart-bar { background: var(--accent); }
   .ev-chart-compact .chart-bar-mayorista { background: var(--orange); }
+  .card-chart-maximizada .ev-chart-compact { height: 60vh !important; }
+  .card-chart-maximizada .ev-chart-compact .chart-bar-wrap { flex-basis: 64px; min-width: 64px; }
+  .card-chart-maximizada .ev-chart-compact .chart-bar-value { font-size: 14px; }
+  .card-chart-maximizada .ev-chart-compact .chart-bar-sub-label { font-size: 12px; }
+  .card-chart-maximizada .ev-chart-compact .chart-bar-label { font-size: 12px; }
 
-  .ev-line-chart-wrap { height: 130px; display: flex; flex-direction: column; }
-  .card-chart-maximizada .ev-line-chart-wrap { height: 62vh !important; }
+  .ev-line-chart-wrap { height: 170px; display: flex; flex-direction: column; }
+  .card-chart-maximizada .ev-line-chart-wrap { height: 60vh !important; }
   .ev-line-plot { flex: 1; display: flex; gap: 8px; min-height: 0; }
   .ev-line-yaxis { display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--text-dim); text-align: right; width: 54px; flex-shrink: 0; padding: 2px 0; }
   .ev-line-svg-box { flex: 1; position: relative; min-width: 0; }

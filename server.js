@@ -316,6 +316,22 @@ async function construirEvolucionProducto(nombreProducto) {
   const key = normalizeNombre(nombreProducto);
   const itemsProducto = items.filter((it) => normalizeNombre(it.producto) === key);
 
+  // Combos que incluyen este producto como componente: una venta de ese combo también
+  // saca stock de este producto, así que sus unidades cuentan acá también (si no, un
+  // producto que se vende sobre todo en combo mostraría "casi no se vende", cuando en
+  // realidad se está yendo del depósito igual). El volumen ($) del combo se reparte entre
+  // sus componentes en proporción al costo de cada uno -el combo tiene un solo precio de
+  // venta conjunto, no uno por componente- usando el mismo costo histórico ya calculado
+  // para el costo del combo en el resto de la app.
+  const comboKeysRelevantes = new Set(
+    Object.entries(indiceCosto.componentesPorCombo)
+      .filter(([, comps]) => comps.some((c) => normalizeNombre(c.componente) === key))
+      .map(([comboKey]) => comboKey)
+  );
+  const itemsCombo = comboKeysRelevantes.size
+    ? items.filter((it) => comboKeysRelevantes.has(normalizeNombre(it.producto)))
+    : [];
+
   const costoHistorial = costosHistorialTodos
     .filter((c) => normalizeNombre(c.producto) === key)
     .sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde))
@@ -329,25 +345,48 @@ async function construirEvolucionProducto(nombreProducto) {
   const porSemanaMap = new Map();
   const porMesMap = new Map();
 
-  for (const it of itemsProducto) {
-    const costoEnVenta = calcularCostoHistorico(it.producto, it.fecha, indiceCosto);
-    const esMayorista = it.metodo === "mayorista";
-    const semana = getWeekStart(it.fecha);
-    const mes = it.fecha.slice(0, 7);
-
-    for (const [mapa, keyPeriodo] of [[porDiaMap, it.fecha], [porSemanaMap, semana], [porMesMap, mes]]) {
+  function sumarAPeriodos(fecha, esMayorista, unidades, volumen, costo) {
+    const semana = getWeekStart(fecha);
+    const mes = fecha.slice(0, 7);
+    for (const [mapa, keyPeriodo] of [[porDiaMap, fecha], [porSemanaMap, semana], [porMesMap, mes]]) {
       if (!mapa.has(keyPeriodo)) mapa.set(keyPeriodo, grupoVacio());
       const g = mapa.get(keyPeriodo);
       if (esMayorista) {
-        g.unidadesMayorista += 1;
-        g.volumenMayorista += it.precio;
-        if (costoEnVenta !== null) g.costoTotalMayorista += costoEnVenta;
+        g.unidadesMayorista += unidades;
+        g.volumenMayorista += volumen;
+        g.costoTotalMayorista += costo;
       } else {
-        g.unidadesMinorista += 1;
-        g.volumenMinorista += it.precio;
-        if (costoEnVenta !== null) g.costoTotalMinorista += costoEnVenta;
+        g.unidadesMinorista += unidades;
+        g.volumenMinorista += volumen;
+        g.costoTotalMinorista += costo;
       }
     }
+  }
+
+  for (const it of itemsProducto) {
+    const costoEnVenta = calcularCostoHistorico(it.producto, it.fecha, indiceCosto);
+    sumarAPeriodos(it.fecha, it.metodo === "mayorista", 1, it.precio, costoEnVenta !== null ? costoEnVenta : 0);
+  }
+
+  for (const it of itemsCombo) {
+    const comboKey = normalizeNombre(it.producto);
+    const comps = indiceCosto.componentesPorCombo[comboKey] || [];
+    const cantidadEsteComponente = comps
+      .filter((c) => normalizeNombre(c.componente) === key)
+      .reduce((acc, c) => acc + c.cantidad, 0);
+    if (!cantidadEsteComponente) continue;
+
+    const costoEsteComponenteUnitario = calcularCostoHistorico(nombreProducto, it.fecha, indiceCosto);
+    let volumen = 0;
+    let costo = 0;
+    if (costoEsteComponenteUnitario !== null) {
+      costo = costoEsteComponenteUnitario * cantidadEsteComponente;
+      const costoComboTotal = calcularCostoHistorico(it.producto, it.fecha, indiceCosto);
+      if (costoComboTotal !== null && costoComboTotal > 0) {
+        volumen = it.precio * (costo / costoComboTotal);
+      }
+    }
+    sumarAPeriodos(it.fecha, it.metodo === "mayorista", cantidadEsteComponente, volumen, costo);
   }
 
   function cerrarPeriodos(mapa, campoPeriodo, limite) {

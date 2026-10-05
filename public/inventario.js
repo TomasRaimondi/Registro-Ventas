@@ -631,6 +631,18 @@ document.querySelectorAll("#ev-periodo-tabs .periodo-tab").forEach((btn) => {
   });
 });
 
+// Monto corto para la etiqueta sobre cada barra ("$25,9k" en vez de "$25.889"): en una
+// columna de ~46px un monto completo no entra y se superpone con el de al lado.
+function moneyCompacto(n) {
+  const num = Number(n) || 0;
+  const sign = num < 0 ? "-" : "";
+  const abs = Math.abs(num);
+  if (abs < 1000) return sign + "$" + Math.round(abs);
+  const miles = abs / 1000;
+  const texto = miles >= 10 ? Math.round(miles).toString() : miles.toFixed(1).replace(".", ",");
+  return sign + "$" + texto + "k";
+}
+
 function labelPeriodo(row) {
   if (row.fecha) return row.fecha.slice(5); // MM-DD, alcanza para el eje del gráfico
   if (row.semana) return "sem " + row.semana.slice(5);
@@ -642,7 +654,7 @@ function labelPeriodo(row) {
 // sumarTotal es true, arriba de cada par se muestra el total (tiene sentido para
 // unidades/volumen); para precio promedio no (promediar dos promedios no significa
 // nada), así que ahí solo se ven las dos barras con su valor en el tooltip.
-function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue = money, sumarTotal = true, subLabelFn = null } = {}) {
+function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue = money, formatLabel = null, sumarTotal = true, subLabelFn = null } = {}) {
   container.innerHTML = "";
   if (!filas.length) return;
   const maxAbs = Math.max(
@@ -657,7 +669,10 @@ function renderDualBarChartEvolucion(container, filas, { getA, getB, formatValue
 
     const totalLabel = document.createElement("span");
     totalLabel.className = "chart-bar-value";
-    totalLabel.textContent = sumarTotal ? formatValue(valueA + valueB) : "";
+    // La etiqueta sobre la barra usa un formato compacto si se pasó uno (ej. "$25,9k" en
+    // vez de "$25.889"): en una columna angosta, un monto completo se sale del ancho y
+    // se superpone con el de al lado. El tooltip (title) sigue mostrando el monto exacto.
+    totalLabel.textContent = sumarTotal ? (formatLabel || formatValue)(valueA + valueB) : "";
     wrap.appendChild(totalLabel);
 
     if (subLabelFn) {
@@ -734,7 +749,14 @@ function renderLineChartEvolucion(container, filas, { getA, getB }) {
   const gridSvg = [0, 25, 50, 75, 100].map((gy) => `<line x1="0" y1="${gy}" x2="100" y2="${gy}" class="ev-line-grid" />`).join("");
 
   const yAxisHtml = [4, 3, 2, 1, 0].map((n4) => `<span>${money((maxVal / 4) * n4)}</span>`).join("");
-  const xAxisHtml = filas.map((f) => `<span>${escapeHtml(labelPeriodo(f))}</span>`).join("");
+  // Con muchos puntos (hasta 30 días) una etiqueta por punto queda amontonada e
+  // ilegible: se muestra como mucho ~10, salteando el resto (el punto sigue estando,
+  // con su tooltip, solo que sin texto fijo debajo).
+  const paso = Math.max(1, Math.ceil(n / 10));
+  const xAxisHtml = filas.map((f, i) => {
+    const mostrar = i % paso === 0 || i === n - 1;
+    return `<span>${mostrar ? escapeHtml(labelPeriodo(f)) : ""}</span>`;
+  }).join("");
 
   container.innerHTML = `
     <div class="ev-line-plot">
@@ -757,18 +779,26 @@ function renderEvolucion() {
   if (!evolucionActual) return;
   const filas = evolucionActual[evolucionPeriodo === "dia" ? "porDia" : evolucionPeriodo === "semana" ? "porSemana" : "porMes"];
 
-  renderDualBarChartEvolucion(document.getElementById("ev-chart-unidades"), filas, {
+  const chartUnidades = document.getElementById("ev-chart-unidades");
+  renderDualBarChartEvolucion(chartUnidades, filas, {
     getA: (f) => f.unidadesMinorista,
     getB: (f) => f.unidadesMayorista,
     formatValue: (n) => String(n),
     subLabelFn: (min, may) => `${min} min · ${may} may`,
   });
 
-  renderDualBarChartEvolucion(document.getElementById("ev-chart-volumen"), filas, {
+  const chartVolumen = document.getElementById("ev-chart-volumen");
+  renderDualBarChartEvolucion(chartVolumen, filas, {
     getA: (f) => f.volumenMinorista,
     getB: (f) => f.volumenMayorista,
     formatValue: money,
+    formatLabel: moneyCompacto,
   });
+
+  // Cuando hay más barras de las que entran (ej. 30 días) el gráfico scrollea: arranca
+  // mostrando lo más reciente, no lo más viejo.
+  chartUnidades.scrollLeft = chartUnidades.scrollWidth;
+  chartVolumen.scrollLeft = chartVolumen.scrollWidth;
 
   renderLineChartEvolucion(document.getElementById("ev-chart-precio"), filas, {
     getA: (f) => f.unidadesMinorista > 0 ? f.volumenMinorista / f.unidadesMinorista : null,
@@ -827,6 +857,9 @@ document.querySelectorAll(".chart-zoom-btn").forEach((btn) => {
       card.classList.add("card-chart-maximizada");
       btn.textContent = "🗗 Achicar";
       document.body.classList.add("chart-maximizado-activo");
+      // El ancho de cada barra cambia con el tamaño maximizado (CSS), así que el scroll
+      // "al final" de antes ya no apunta a lo más reciente: se recalcula.
+      card.querySelectorAll(".ev-chart-compact").forEach((c) => { c.scrollLeft = c.scrollWidth; });
     }
   });
 });
