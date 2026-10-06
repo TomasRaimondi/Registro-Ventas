@@ -16,6 +16,12 @@ const METODOS_VALIDOS = new Set(["efectivo", "transferencia", "debito", "credito
 const CUENTA_DNI_COMISION = 0.006;
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas
 
+// Código de descuento fijo: a diferencia de los cupones de Tiendanube (de un solo uso,
+// validados contra la API), "PROMO" siempre da 10% OFF, sin límite de usos y sin pegarle
+// a Tiendanube. Vive acá, no en la tienda, porque es un acuerdo interno del local.
+const CUPON_FIJO_CODIGO = "PROMO";
+const CUPON_FIJO_PORCENTAJE = 10;
+
 // Comisión minorista del empleado: 5% del excedente por sobre $45.000 en cada venta
 // que él mismo registre (no mayorista), a partir del 2026-09-16.
 const COMISION_MINORISTA_UMBRAL = 50000;
@@ -936,7 +942,12 @@ const server = http.createServer(async (req, res) => {
       let cuponTiendanubeId = null;
       if (body.cuponCodigo) {
         const codigoIngresado = String(body.cuponCodigo).trim();
-        if (codigoIngresado) {
+        if (codigoIngresado.toUpperCase() === CUPON_FIJO_CODIGO) {
+          // Código fijo del local: siempre 10% OFF, sin límite de usos, no pasa por
+          // Tiendanube (no es un cupón suyo, no hay nada que desactivar después).
+          cuponCodigo = CUPON_FIJO_CODIGO;
+          cuponPorcentaje = CUPON_FIJO_PORCENTAJE;
+        } else if (codigoIngresado) {
           if (!tiendanube.isConfigured()) return sendJson(res, 503, { error: "La tienda no está conectada: no se puede validar el cupón" });
           let cupon;
           try {
@@ -2736,8 +2747,11 @@ const server = http.createServer(async (req, res) => {
     if (pathname.startsWith("/api/cupon/") && req.method === "GET") {
       // Lo usa también Chino (empleado): es el que carga el código al vender en el local.
       if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
-      if (!tiendanube.isConfigured()) return sendJson(res, 200, { valido: false, motivo: "La tienda no está conectada" });
       const codigo = decodeURIComponent(pathname.slice("/api/cupon/".length));
+      if (codigo.trim().toUpperCase() === CUPON_FIJO_CODIGO) {
+        return sendJson(res, 200, { valido: true, code: CUPON_FIJO_CODIGO, porcentaje: CUPON_FIJO_PORCENTAJE });
+      }
+      if (!tiendanube.isConfigured()) return sendJson(res, 200, { valido: false, motivo: "La tienda no está conectada" });
       try {
         const cupon = await tiendanube.buscarCuponPorCodigo(codigo);
         const chequeo = tiendanube.cuponUtilizable(cupon);
