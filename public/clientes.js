@@ -85,8 +85,12 @@ logoutBtn.addEventListener("click", async () => {
   showLogin();
 });
 
+let rolActual = null;
+
 async function checkAuth() {
-  const { authenticated } = await api("/api/auth-check");
+  const { authenticated, role } = await api("/api/auth-check");
+  rolActual = role || null;
+  document.getElementById("lote-cupones-card").style.display = rolActual === "owner" ? "block" : "none";
   if (authenticated) showApp();
   else showLogin();
 }
@@ -530,5 +534,72 @@ function toggleDetalle(tr, c) {
   </td>`;
   tr.after(detalle);
 }
+
+// ---------- Generar cupones en lote (solo dueño) ----------
+
+const loteForm = document.getElementById("lote-cupones-form");
+const loteBtn = document.getElementById("lote-cupones-btn");
+const loteProgreso = document.getElementById("lote-cupones-progreso");
+const loteResultado = document.getElementById("lote-cupones-resultado");
+const loteResumen = document.getElementById("lote-cupones-resumen");
+const loteGrid = document.getElementById("cupones-lote-grid");
+const loteDescargarBtn = document.getElementById("lote-cupones-descargar");
+let ultimoLoteCodigos = [];
+
+loteForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const cantidad = parseInt(document.getElementById("lote-cantidad").value, 10);
+  const porcentaje = parseFloat(document.getElementById("lote-porcentaje").value);
+  const prefijo = document.getElementById("lote-prefijo").value.trim() || "PROMO";
+
+  if (!Number.isInteger(cantidad) || cantidad <= 0 || cantidad > 500) {
+    alert("La cantidad tiene que ser un número entre 1 y 500.");
+    return;
+  }
+  if (!Number.isFinite(porcentaje) || porcentaje <= 0 || porcentaje > 90) {
+    alert("El porcentaje tiene que ser un número entre 1 y 90.");
+    return;
+  }
+  if (!confirm(`¿Generar ${cantidad} cupones de ${porcentaje}% OFF (un solo uso cada uno) en Tiendanube? Esto crea cupones reales en la tienda.`)) return;
+
+  loteBtn.disabled = true;
+  loteBtn.textContent = "Generando...";
+  loteProgreso.style.display = "block";
+  loteProgreso.textContent = `Creando ${cantidad} cupones, puede tardar unos ${Math.ceil(cantidad * 0.35)} segundos...`;
+  loteResultado.style.display = "none";
+
+  try {
+    const res = await api("/api/cupones/generar-lote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cantidad, porcentaje, prefijo }),
+    });
+
+    const filas = await api("/api/cupones/generados?lote=" + encodeURIComponent(res.lote));
+    ultimoLoteCodigos = filas.map((f) => f.code);
+
+    loteResumen.textContent = `${res.creados} cupones creados` + (res.errores && res.errores.length ? ` — ${res.errores.length} fallaron` : "");
+    loteGrid.innerHTML = ultimoLoteCodigos.map((code) => `<div class="cupon-lote-chip">${escapeHtml(code)}</div>`).join("");
+    loteResultado.style.display = "block";
+    loteProgreso.style.display = "none";
+  } catch (err) {
+    loteProgreso.textContent = "No se pudo generar el lote: " + err.message;
+  } finally {
+    loteBtn.disabled = false;
+    loteBtn.textContent = "Generar";
+  }
+});
+
+loteDescargarBtn.addEventListener("click", () => {
+  if (!ultimoLoteCodigos.length) return;
+  const csv = "codigo\n" + ultimoLoteCodigos.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cupones-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
 
 checkAuth();

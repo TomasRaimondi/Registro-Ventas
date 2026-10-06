@@ -66,6 +66,34 @@
       <p class="hint error-hint">La tienda de Tiendanube no está conectada en este panel. Copiá el token en <code>tiendanube-config.json</code> y reiniciá el servidor.</p>
     </section>
 
+    <section class="card" id="lote-cupones-card" style="display:none;">
+      <h2>🎟️ Generar cupones en lote</h2>
+      <p class="hint" style="text-align:left;">Crea cupones de un solo uso en Tiendanube, todos con el mismo % de descuento (no apuntan a ningún cliente en particular). Sirven tanto en la tienda online como cargando el código en Registro de Ventas. Tarda unos segundos cada 10 cupones.</p>
+      <form id="lote-cupones-form" class="inline-form">
+        <label class="umbral-field">
+          Cantidad
+          <input type="number" id="lote-cantidad" min="1" max="500" step="1" value="100" required>
+        </label>
+        <label class="umbral-field">
+          Porcentaje
+          <input type="number" id="lote-porcentaje" min="1" max="90" step="1" value="10" required>
+        </label>
+        <label class="umbral-field">
+          Prefijo del código
+          <input type="text" id="lote-prefijo" value="PROMO10" maxlength="20">
+        </label>
+        <button type="submit" class="submit-btn" id="lote-cupones-btn" style="width:auto; padding:12px 20px;">Generar</button>
+      </form>
+      <p class="hint" id="lote-cupones-progreso" style="display:none;"></p>
+      <div id="lote-cupones-resultado" style="display:none;">
+        <div class="clientes-toolbar" style="margin:14px 0 10px;">
+          <span class="hint" id="lote-cupones-resumen" style="margin:0;"></span>
+          <button type="button" id="lote-cupones-descargar" class="link-btn">⬇ Descargar CSV</button>
+        </div>
+        <div class="cupones-lote-grid" id="cupones-lote-grid"></div>
+      </div>
+    </section>
+
     <section class="metrics-single" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:20px;">
       <div class="card metric-card">
         <span class="label">Clientes con compras</span>

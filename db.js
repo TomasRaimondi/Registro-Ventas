@@ -143,6 +143,15 @@ const SCHEMA = `
     creadoEn TEXT NOT NULL,
     actualizadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS cupones_generados (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    tiendanubeId TEXT,
+    porcentaje REAL NOT NULL,
+    lote TEXT NOT NULL,
+    usado INTEGER NOT NULL DEFAULT 0,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS tablero_tareas (
     id TEXT PRIMARY KEY,
     texto TEXT NOT NULL,
@@ -444,6 +453,23 @@ async function migrarAlertaStockVentas(execFn) {
   }
 }
 
+// Migración aditiva: agrega el cupón de descuento (de Tiendanube) aplicado a una venta del
+// local, para poder mostrarlo en Registro de Ventas y en reportes. El % ya validado contra
+// Tiendanube en el momento de la venta se congela acá (si el cupón después se borra, la
+// venta vieja no se queda sin dato).
+async function migrarCuponVentas(execFn) {
+  try {
+    await execFn("ALTER TABLE ventas ADD COLUMN cuponCodigo TEXT");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+  try {
+    await execFn("ALTER TABLE ventas ADD COLUMN cuponDescuento REAL");
+  } catch (e) {
+    // La columna ya existe: no hacer nada.
+  }
+}
+
 // Migración aditiva: agrega "loteId" a compras_stock para poder agrupar varios productos
 // cargados en una misma compra. Las filas viejas quedan con loteId NULL (se agrupan solas).
 async function migrarLoteId(execFn) {
@@ -544,6 +570,7 @@ if (USE_TURSO) {
       await migrarStockDeposito((sql) => client.execute(sql));
       await migrarBalanceCamposNuevos((sql) => client.execute(sql));
       await migrarAlertaStockVentas((sql) => client.execute(sql));
+      await migrarCuponVentas((sql) => client.execute(sql));
       await migrarLoteId((sql) => client.execute(sql));
       await migrarCliente((sql) => client.execute(sql));
       await migrarEnvio((sql) => client.execute(sql));
@@ -580,9 +607,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       await client.execute({
-        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor, alertaStock)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null, row.alertaStock || null],
+        sql: `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor, alertaStock, cuponCodigo, cuponDescuento)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null, row.alertaStock || null, row.cuponCodigo || null, row.cuponDescuento ?? null],
       });
     },
     async deleteById(id) {
@@ -1008,6 +1035,22 @@ if (USE_TURSO) {
       await client.execute({ sql: "DELETE FROM deudas WHERE id = ?", args: [id] });
     },
 
+    async getCuponesGenerados({ lote } = {}) {
+      const res = lote
+        ? await client.execute({ sql: "SELECT * FROM cupones_generados WHERE lote = ? ORDER BY creadoEn ASC", args: [lote] })
+        : await client.execute("SELECT * FROM cupones_generados ORDER BY creadoEn DESC");
+      return res.rows;
+    },
+    async insertCuponGenerado(row) {
+      await client.execute({
+        sql: `INSERT INTO cupones_generados (id, code, tiendanubeId, porcentaje, lote, usado, creadoEn) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+        args: [row.id, row.code, row.tiendanubeId || null, row.porcentaje, row.lote, row.creadoEn],
+      });
+    },
+    async marcarCuponGeneradoUsado(code) {
+      await client.execute({ sql: "UPDATE cupones_generados SET usado = 1 WHERE code = ?", args: [code] });
+    },
+
     async insertItem(row) {
       await client.execute({
         sql: `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`,
@@ -1234,6 +1277,7 @@ if (USE_TURSO) {
       await migrarStockDeposito(async (sql) => db.exec(sql));
       await migrarBalanceCamposNuevos(async (sql) => db.exec(sql));
       await migrarAlertaStockVentas(async (sql) => db.exec(sql));
+      await migrarCuponVentas(async (sql) => db.exec(sql));
       await migrarLoteId(async (sql) => db.exec(sql));
       await migrarCliente(async (sql) => db.exec(sql));
       await migrarEnvio(async (sql) => db.exec(sql));
@@ -1263,9 +1307,9 @@ if (USE_TURSO) {
     },
     async insert(row) {
       db.prepare(
-        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor, alertaStock)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null, row.alertaStock || null);
+        `INSERT INTO ventas (id, producto, precio, metodo, fecha, hora, horaLabel, creadoEn, cliente, envioMetodo, envioCosto, vendedor, alertaStock, cuponCodigo, cuponDescuento)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.producto, row.precio, row.metodo, row.fecha, row.hora, row.horaLabel, row.creadoEn, row.cliente || null, row.envioMetodo || null, row.envioCosto ?? null, row.vendedor || null, row.alertaStock || null, row.cuponCodigo || null, row.cuponDescuento ?? null);
     },
     async deleteById(id) {
       db.prepare("DELETE FROM ventas WHERE id = ?").run(id);
@@ -1633,6 +1677,19 @@ if (USE_TURSO) {
     },
     async deleteDeuda(id) {
       db.prepare("DELETE FROM deudas WHERE id = ?").run(id);
+    },
+
+    async getCuponesGenerados({ lote } = {}) {
+      if (lote) return db.prepare("SELECT * FROM cupones_generados WHERE lote = ? ORDER BY creadoEn ASC").all(lote);
+      return db.prepare("SELECT * FROM cupones_generados ORDER BY creadoEn DESC").all();
+    },
+    async insertCuponGenerado(row) {
+      db.prepare(
+        `INSERT INTO cupones_generados (id, code, tiendanubeId, porcentaje, lote, usado, creadoEn) VALUES (?, ?, ?, ?, ?, 0, ?)`
+      ).run(row.id, row.code, row.tiendanubeId || null, row.porcentaje, row.lote, row.creadoEn);
+    },
+    async marcarCuponGeneradoUsado(code) {
+      db.prepare("UPDATE cupones_generados SET usado = 1 WHERE code = ?").run(code);
     },
 
     async insertItem(row) {

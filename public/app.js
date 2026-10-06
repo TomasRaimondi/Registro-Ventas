@@ -462,6 +462,54 @@ function resetearEnvio() {
   envioCostoInput.value = "";
 }
 
+// ---------- Cupón de descuento (Tiendanube): aplica a toda la venta, el servidor es el
+// que valida y aplica el % de verdad — esto es solo para avisarle al empleado antes de
+// que mande la venta si el código sirve o no. ----------
+
+const cuponInput = document.getElementById("cupon-codigo");
+const cuponEstadoEl = document.getElementById("cupon-estado");
+let cuponValidado = null; // { code, porcentaje } si el último chequeo dio OK, si no null
+
+async function validarCupon() {
+  const codigo = cuponInput.value.trim();
+  if (!codigo) {
+    cuponValidado = null;
+    cuponEstadoEl.textContent = "";
+    cuponEstadoEl.className = "cupon-estado";
+    return;
+  }
+  cuponEstadoEl.textContent = "Validando...";
+  cuponEstadoEl.className = "cupon-estado";
+  try {
+    const res = await api("/api/cupon/" + encodeURIComponent(codigo));
+    if (res.valido) {
+      cuponValidado = { code: res.code, porcentaje: res.porcentaje };
+      cuponEstadoEl.textContent = `✓ ${res.porcentaje}% OFF`;
+      cuponEstadoEl.className = "cupon-estado cupon-ok";
+    } else {
+      cuponValidado = null;
+      cuponEstadoEl.textContent = `✗ ${res.motivo}`;
+      cuponEstadoEl.className = "cupon-estado cupon-error";
+    }
+  } catch (err) {
+    cuponValidado = null;
+    cuponEstadoEl.textContent = "✗ No se pudo validar el cupón";
+    cuponEstadoEl.className = "cupon-estado cupon-error";
+  }
+}
+
+cuponInput.addEventListener("blur", validarCupon);
+cuponInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); validarCupon(); }
+});
+
+function resetearCupon() {
+  cuponInput.value = "";
+  cuponValidado = null;
+  cuponEstadoEl.textContent = "";
+  cuponEstadoEl.className = "cupon-estado";
+}
+
 // ---------- Carrito de productos (una venta puede tener varios) ----------
 
 let carrito = [];
@@ -544,6 +592,10 @@ form.addEventListener("submit", async (e) => {
     alert("Elegí un método de pago.");
     return;
   }
+  if (cuponInput.value.trim() && !cuponValidado) {
+    alert("El cupón cargado no es válido. Corregilo o borralo antes de registrar la venta.");
+    return;
+  }
   const envioCosto = envioActivo ? parseFloat(envioCostoInput.value) : null;
   if (envioActivo && (!Number.isFinite(envioCosto) || envioCosto <= 0)) {
     alert("Ingresá el costo del envío por Uber Moto.");
@@ -591,6 +643,7 @@ form.addEventListener("submit", async (e) => {
         metodo: metodoSeleccionado,
         envioMetodo: envioActivo ? "uber_moto" : null,
         envioCosto,
+        cuponCodigo: cuponInput.value.trim() || null,
       }),
     });
 
@@ -600,6 +653,7 @@ form.addEventListener("submit", async (e) => {
     payButtons.forEach(b => b.classList.remove("active"));
     metodoSeleccionado = null;
     webCalcWrap.style.display = "none";
+    resetearCupon();
     resetWebCalc();
     resetearEnvio();
     document.getElementById("producto").focus();
@@ -789,9 +843,10 @@ function renderHistory(sales, fecha, hoyFecha) {
     const tr = document.createElement("tr");
     tr.className = "sale-row";
     const alertaTitulo = s.alertaStock ? `No se descontó stock de: ${JSON.parse(s.alertaStock).join(", ")}` : "";
+    const cuponTitulo = s.cuponCodigo ? `Cupón ${s.cuponCodigo}: -${money(s.cuponDescuento)}` : "";
     tr.innerHTML = `
       <td>${s.horaLabel}</td>
-      <td><span class="expand-caret">▸</span>${escapeHtml(s.producto)}${s.alertaStock ? `<span class="alerta-stock-badge" title="${escapeHtml(alertaTitulo)}">⚠</span>` : ""}</td>
+      <td><span class="expand-caret">▸</span>${escapeHtml(s.producto)}${s.alertaStock ? `<span class="alerta-stock-badge" title="${escapeHtml(alertaTitulo)}">⚠</span>` : ""}${s.cuponCodigo ? `<span class="cupon-badge" title="${escapeHtml(cuponTitulo)}">🏷️ ${escapeHtml(s.cuponCodigo)}</span>` : ""}</td>
       <td>${money(s.precio)}</td>
       <td><span class="pm-tag ${s.metodo}">${PAYMENT_LABELS[s.metodo] || s.metodo}</span>${s.envioMetodo === "uber_moto" ? '<span class="uber-tag">🛵 Uber Moto</span>' : ""}</td>
       <td><button class="del-btn" title="Eliminar" data-id="${s.id}">✕</button></td>

@@ -926,21 +926,53 @@ const server = http.createServer(async (req, res) => {
       if (!itemsInput.length) return sendJson(res, 400, { error: "No hay productos cargados en la venta" });
       if (!METODOS_VALIDOS.has(metodo)) return sendJson(res, 400, { error: "Método de pago inválido" });
 
+      // Cupón de descuento (de Tiendanube): se valida acá, nunca se confía en un % que
+      // mande el cliente. El % se aplica a cada ítem antes de la comisión de Cuenta DNI
+      // (el cliente paga menos; la comisión del medio de pago se calcula sobre eso), para
+      // que la venta quede registrada con el precio promocional real en cada producto -
+      // reportes y ganancias usan el precio de cada ítem, no el total de la venta.
+      let cuponCodigo = null;
+      let cuponPorcentaje = 0;
+      let cuponTiendanubeId = null;
+      if (body.cuponCodigo) {
+        const codigoIngresado = String(body.cuponCodigo).trim();
+        if (codigoIngresado) {
+          if (!tiendanube.isConfigured()) return sendJson(res, 503, { error: "La tienda no está conectada: no se puede validar el cupón" });
+          let cupon;
+          try {
+            cupon = await tiendanube.buscarCuponPorCodigo(codigoIngresado);
+          } catch (e) {
+            return sendJson(res, 502, { error: "No se pudo validar el cupón: " + e.message });
+          }
+          const chequeo = tiendanube.cuponUtilizable(cupon);
+          if (!chequeo.ok) return sendJson(res, 400, { error: `Cupón "${codigoIngresado}": ${chequeo.motivo}` });
+          cuponCodigo = cupon.code;
+          cuponPorcentaje = chequeo.porcentaje;
+          cuponTiendanubeId = cupon.id;
+        }
+      }
+
       const itemsProcessed = [];
+      let totalSinCupon = 0;
       for (const it of itemsInput) {
         const producto = String(it.producto || "").trim();
         const precio = Number(it.precio);
         if (!producto) return sendJson(res, 400, { error: "Falta el nombre de un producto" });
         if (!Number.isFinite(precio) || precio <= 0) return sendJson(res, 400, { error: `Precio inválido para "${producto}"` });
+        totalSinCupon += precio;
 
-        const precioNeto = metodo === "cuentadni"
-          ? Math.round(precio * (1 - CUENTA_DNI_COMISION) * 100) / 100
+        const precioConCupon = cuponPorcentaje > 0
+          ? Math.round(precio * (1 - cuponPorcentaje / 100) * 100) / 100
           : precio;
+        const precioNeto = metodo === "cuentadni"
+          ? Math.round(precioConCupon * (1 - CUENTA_DNI_COMISION) * 100) / 100
+          : precioConCupon;
 
         itemsProcessed.push({ producto, precio: precioNeto });
       }
 
       const totalBruto = itemsProcessed.reduce((acc, it) => acc + it.precio, 0);
+      const cuponDescuento = cuponPorcentaje > 0 ? Math.round(totalSinCupon * (cuponPorcentaje / 100) * 100) / 100 : 0;
 
       // Envío por Uber Moto: se descuenta del total, igual que la comisión de Cuenta DNI,
       // pero como un monto fijo (el costo real del viaje) en vez de un porcentaje.
@@ -1001,11 +1033,25 @@ const server = http.createServer(async (req, res) => {
         envioCosto,
         vendedor,
         alertaStock: sinStock.length ? JSON.stringify(sinStock) : null,
+        cuponCodigo,
+        cuponDescuento: cuponCodigo ? cuponDescuento : null,
       };
 
       await db.insert(row);
       for (const it of itemsProcessed) {
         await db.insertItem({ id: crypto.randomUUID(), ventaId: row.id, producto: it.producto, precio: it.precio });
+      }
+
+      // El cupón se desactiva recién ahora, con la venta ya guardada: esta venta del
+      // local no pasa por el checkout de Tiendanube, así que si no lo desactivamos acá
+      // a mano, un cupón de un solo uso se podría volver a usar en la web.
+      if (cuponTiendanubeId) {
+        try {
+          await tiendanube.marcarCuponUsado(cuponTiendanubeId);
+          await db.marcarCuponGeneradoUsado(cuponCodigo);
+        } catch (e) {
+          console.error(`No se pudo desactivar el cupón ${cuponCodigo} después de usarlo:`, e.message);
+        }
       }
 
       // Comisión minorista automática: 5% del excedente por sobre $45.000, solo en
@@ -2683,6 +2729,68 @@ const server = http.createServer(async (req, res) => {
         console.error("Error creando cupón en Tiendanube:", e);
         return sendJson(res, 502, { error: "No se pudo crear el cupón: " + e.message });
       }
+    }
+
+    // ---------- Cupones de descuento aplicados en Registro de Ventas ----------
+
+    if (pathname.startsWith("/api/cupon/") && req.method === "GET") {
+      // Lo usa también Chino (empleado): es el que carga el código al vender en el local.
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!tiendanube.isConfigured()) return sendJson(res, 200, { valido: false, motivo: "La tienda no está conectada" });
+      const codigo = decodeURIComponent(pathname.slice("/api/cupon/".length));
+      try {
+        const cupon = await tiendanube.buscarCuponPorCodigo(codigo);
+        const chequeo = tiendanube.cuponUtilizable(cupon);
+        if (!chequeo.ok) return sendJson(res, 200, { valido: false, motivo: chequeo.motivo });
+        return sendJson(res, 200, { valido: true, code: cupon.code, porcentaje: chequeo.porcentaje });
+      } catch (e) {
+        return sendJson(res, 200, { valido: false, motivo: e.message });
+      }
+    }
+
+    // Genera N cupones de un solo uso con el mismo % (ej: 100 cupones 10% OFF). Tarda unos
+    // segundos (una llamada a Tiendanube por cupón, con una pausa chica entre cada una), así
+    // que es acción de dueño, no algo que dispare el empleado sin querer.
+    if (pathname === "/api/cupones/generar-lote" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 403, { error: "Solo el dueño puede generar cupones en lote" });
+      if (!tiendanube.isConfigured()) return sendJson(res, 503, { error: "La tienda no está conectada" });
+      const body = await readJsonBody(req);
+      const cantidad = Number(body.cantidad);
+      const porcentaje = Number(body.porcentaje);
+      const prefijo = body.prefijo ? String(body.prefijo).trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) : "PROMO";
+      if (!Number.isInteger(cantidad) || cantidad <= 0 || cantidad > 500) {
+        return sendJson(res, 400, { error: "Cantidad inválida (entre 1 y 500)" });
+      }
+      if (!Number.isFinite(porcentaje) || porcentaje <= 0 || porcentaje > 90) {
+        return sendJson(res, 400, { error: "Porcentaje inválido" });
+      }
+      try {
+        const lote = crypto.randomUUID();
+        const resultado = await tiendanube.generarCuponesEnLote({
+          cantidad,
+          porcentaje,
+          prefijo,
+          onCreado: (cupon) => db.insertCuponGenerado({
+            id: crypto.randomUUID(),
+            code: cupon.code,
+            tiendanubeId: cupon.id ? String(cupon.id) : null,
+            porcentaje,
+            lote,
+            creadoEn: new Date().toISOString(),
+          }),
+        });
+        return sendJson(res, 201, { lote, creados: resultado.creados.length, errores: resultado.errores });
+      } catch (e) {
+        console.error("Error generando cupones en lote:", e);
+        return sendJson(res, 502, { error: "No se pudo generar el lote: " + e.message });
+      }
+    }
+
+    if (pathname === "/api/cupones/generados" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 403, { error: "No autorizado" });
+      const lote = query.get("lote") || undefined;
+      const rows = await db.getCuponesGenerados({ lote });
+      return sendJson(res, 200, rows);
     }
 
     // ---------- Recompra de clientes mayoristas (se arma a partir de la base local) ----------

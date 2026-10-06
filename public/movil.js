@@ -303,6 +303,53 @@ function resetearEnvio() {
   envioCostoInput.value = "";
 }
 
+// ---------- Cupón de descuento (Tiendanube): aplica a toda la venta. El servidor es el
+// que valida y aplica el % de verdad, esto solo avisa antes de mandar si el código sirve.
+
+const cuponInput = document.getElementById("cuponCodigo");
+const cuponEstadoEl = document.getElementById("cuponEstado");
+let cuponValidado = null;
+
+async function validarCupon() {
+  const codigo = cuponInput.value.trim();
+  if (!codigo) {
+    cuponValidado = null;
+    cuponEstadoEl.textContent = "";
+    return;
+  }
+  cuponEstadoEl.style.color = "var(--muted)";
+  cuponEstadoEl.textContent = "Validando...";
+  try {
+    const res = await api("/api/cupon/" + encodeURIComponent(codigo));
+    if (res.valido) {
+      cuponValidado = { code: res.code, porcentaje: res.porcentaje };
+      cuponEstadoEl.style.color = "#2F9E6E";
+      cuponEstadoEl.textContent = `✓ ${res.porcentaje}% OFF`;
+      buzz(14);
+    } else {
+      cuponValidado = null;
+      cuponEstadoEl.style.color = "#D64545";
+      cuponEstadoEl.textContent = `✗ ${res.motivo}`;
+      buzz([30, 50, 30]);
+    }
+  } catch (err) {
+    cuponValidado = null;
+    cuponEstadoEl.style.color = "#D64545";
+    cuponEstadoEl.textContent = "✗ No se pudo validar";
+  }
+}
+
+cuponInput.addEventListener("blur", validarCupon);
+cuponInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); cuponInput.blur(); }
+});
+
+function resetearCupon() {
+  cuponInput.value = "";
+  cuponValidado = null;
+  cuponEstadoEl.textContent = "";
+}
+
 // ---------- Venta perdida ----------
 
 const vpScrim = document.getElementById("vpScrim");
@@ -476,6 +523,9 @@ saveBtn.onclick = async () => {
   if (envioActivo && (!Number.isFinite(envioCosto) || envioCosto <= 0)) {
     buzz([40, 60, 40]); toast("Ingresá el costo del envío", false); return;
   }
+  if (cuponInput.value.trim() && !cuponValidado) {
+    buzz([40, 60, 40]); toast("El cupón no es válido. Corregilo o borralo.", false); return;
+  }
 
   saveBtn.disabled = true;
   const originalTxt = saveBtn.textContent;
@@ -494,6 +544,7 @@ saveBtn.onclick = async () => {
         metodo: metodoSeleccionado,
         envioMetodo: envioActivo ? "uber_moto" : null,
         envioCosto,
+        cuponCodigo: cuponInput.value.trim() || null,
       }),
     });
 
@@ -502,6 +553,7 @@ saveBtn.onclick = async () => {
     document.querySelectorAll(".pay").forEach((b) => b.setAttribute("aria-pressed", "false"));
     metodoSeleccionado = null;
     resetearEnvio();
+    resetearCupon();
 
     buzz([16, 40, 26]);
     saveBtn.classList.add("done");

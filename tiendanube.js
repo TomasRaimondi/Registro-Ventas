@@ -292,22 +292,116 @@ async function resolverProducto(productId) {
   }
 }
 
-// Crea un cupón de descuento de un solo uso en Tiendanube para reenganchar a un cliente puntual.
-async function generarCupon({ porcentaje, nota }) {
+// Crea un cupón de descuento de un solo uso en Tiendanube para reenganchar a un cliente
+// puntual (prefijo "VOLVE") o, con prefijo propio, para un lote genérico (ver
+// generarCuponesEnLote más abajo).
+async function generarCupon({ porcentaje, nota, prefijo, maxUses = 1 }) {
   if (!isConfigured()) throw new Error("Tienda no conectada");
   const pct = Number(porcentaje);
   if (!Number.isFinite(pct) || pct <= 0 || pct > 90) throw new Error("Porcentaje inválido");
 
-  const codigo = `VOLVE${pct}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const base = prefijo || `VOLVE${pct}`;
+  const codigo = `${base}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   const body = {
     code: codigo,
     type: "percentage",
     value: String(pct),
     valid: true,
-    max_uses: 1,
+    max_uses: maxUses,
   };
   const cupon = await tnFetch("/coupons", { method: "POST", body: JSON.stringify(body) });
   return { code: cupon.code || codigo, id: cupon.id, porcentaje: pct, nota: nota || null };
+}
+
+// ---------- Cupones aplicados a ventas del local (Registro de Ventas) ----------
+//
+// Tiendanube no tiene un filtro de "buscar por código" que funcione (?code= se probó y
+// devuelve la lista entera sin filtrar), así que se trae la lista completa una vez y se
+// cachea un rato corto — en una tienda con un par de cientos de cupones esto es liviano y
+// evita pegarle a la API en cada venta.
+let cacheCupones = { data: null, fetchedAt: 0 };
+const CACHE_CUPONES_MS = 2 * 60 * 1000;
+
+async function getCupones({ forzar = false } = {}) {
+  if (!isConfigured()) throw new Error("Tienda no conectada");
+  if (!forzar && cacheCupones.data && Date.now() - cacheCupones.fetchedAt < CACHE_CUPONES_MS) {
+    return cacheCupones.data;
+  }
+  const cupones = await fetchAllPages("/coupons");
+  cacheCupones = { data: cupones, fetchedAt: Date.now() };
+  return cupones;
+}
+
+function invalidarCacheCupones() {
+  cacheCupones = { data: null, fetchedAt: 0 };
+}
+
+// Busca un cupón por código exacto, sin importar mayúsculas ni espacios de más (así el
+// empleado lo puede tipear como le resulte más cómodo).
+async function buscarCuponPorCodigo(codigo, { forzar = false } = {}) {
+  const normalizado = String(codigo || "").trim().toUpperCase();
+  if (!normalizado) return null;
+  const cupones = await getCupones({ forzar });
+  return cupones.find((c) => String(c.code || "").trim().toUpperCase() === normalizado) || null;
+}
+
+// Chequea si un cupón ya encontrado todavía se puede usar: activo, de tipo porcentaje (es
+// lo único que esta pantalla sabe aplicar), sin pasarse de sus usos máximos, y dentro de su
+// ventana de vigencia si tiene una cargada.
+function cuponUtilizable(cupon) {
+  if (!cupon) return { ok: false, motivo: "No existe un cupón con ese código" };
+  if (cupon.is_deleted) return { ok: false, motivo: "El cupón fue eliminado" };
+  if (!cupon.valid) return { ok: false, motivo: "El cupón ya no está activo (puede que ya se haya usado)" };
+  if (cupon.type !== "percentage") return { ok: false, motivo: "Este cupón no es de porcentaje: no se puede aplicar acá" };
+  const pct = Number(cupon.value);
+  if (!Number.isFinite(pct) || pct <= 0) return { ok: false, motivo: "El cupón tiene un porcentaje inválido" };
+  if (cupon.max_uses != null && Number(cupon.used || 0) >= Number(cupon.max_uses)) {
+    return { ok: false, motivo: "El cupón ya alcanzó su límite de usos" };
+  }
+  const ahora = Date.now();
+  if (cupon.end_date) {
+    const fin = new Date(cupon.end_date).getTime();
+    if (Number.isFinite(fin) && fin < ahora) return { ok: false, motivo: "El cupón venció" };
+  }
+  if (cupon.start_date) {
+    const inicio = new Date(cupon.start_date).getTime();
+    if (Number.isFinite(inicio) && inicio > ahora) return { ok: false, motivo: "El cupón todavía no empieza a regir" };
+  }
+  return { ok: true, porcentaje: pct };
+}
+
+// Desactiva un cupón después de usarlo en una venta del local: esa venta no pasa por el
+// checkout de la tienda, así que Tiendanube nunca se entera sola de que se usó. Desactivarlo
+// (valid:false) es lo que impide que se reuse, tanto acá como en la tienda online.
+async function marcarCuponUsado(cuponId) {
+  await tnFetch(`/coupons/${cuponId}`, { method: "PUT", body: JSON.stringify({ valid: false }) });
+  invalidarCacheCupones();
+}
+
+// Crea "cantidad" cupones de un solo uso, mismo porcentaje para todos, códigos únicos tipo
+// "PREFIJO-XXXXX". No hay alta en lote en la API: se crean uno por uno con una pausa chica
+// entre cada uno para no pisar el límite de pedidos/segundo. Si alguno falla (código
+// repetido por mala suerte, error de red puntual) se sigue con el resto; onCreado(code, id)
+// se llama después de cada éxito para que quien llama pueda ir guardando el progreso.
+async function generarCuponesEnLote({ cantidad, porcentaje, prefijo = "PROMO", onCreado } = {}) {
+  if (!isConfigured()) throw new Error("Tienda no conectada");
+  const n = Number(cantidad);
+  if (!Number.isInteger(n) || n <= 0 || n > 500) throw new Error("Cantidad inválida (máximo 500 por lote)");
+
+  const creados = [];
+  const errores = [];
+  for (let i = 0; i < n; i++) {
+    try {
+      const cupon = await generarCupon({ porcentaje, prefijo, maxUses: 1 });
+      creados.push(cupon);
+      if (onCreado) await onCreado(cupon);
+    } catch (e) {
+      errores.push(e.message);
+    }
+    await sleep(350);
+  }
+  invalidarCacheCupones();
+  return { creados, errores };
 }
 
 // Busca un pedido por su número visible (el "#1234" que ve el cliente) para precargar
@@ -332,4 +426,7 @@ async function buscarOrdenPorNumero(numero) {
   };
 }
 
-module.exports = { isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero };
+module.exports = {
+  isConfigured, getClientesRecompra, generarCupon, resolverProducto, waLink, normalizarTelefono, buscarOrdenPorNumero,
+  buscarCuponPorCodigo, cuponUtilizable, marcarCuponUsado, generarCuponesEnLote,
+};

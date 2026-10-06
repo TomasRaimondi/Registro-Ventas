@@ -196,3 +196,24 @@ tr.fila-cliente:hover { background: var(--accent-soft); }
 .ranking-valor { font-weight: 700; color: var(--green); white-space: nowrap; }
 
 .fan-badge { font-size: 11px; }
+
+/* ---------- Generar cupones en lote ---------- */
+
+.cupones-lote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.cupon-lote-chip {
+  font-family: monospace;
+  font-size: 12px;
+  text-align: center;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--bg-soft);
+  color: var(--text);
+}

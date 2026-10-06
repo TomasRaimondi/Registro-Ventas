@@ -109,6 +109,14 @@
       <div class="cart-list" id="cart-list"></div>
 
       <div class="field">
+        <label for="cupon-codigo">Cupón de descuento (opcional — aplica a toda la venta)</label>
+        <div class="cupon-input-row">
+          <input type="text" id="cupon-codigo" name="cupon-codigo" placeholder="Ej: PROMO-AB1C2" autocomplete="off">
+          <span class="cupon-estado" id="cupon-estado"></span>
+        </div>
+      </div>
+
+      <div class="field">
         <label>Método de pago</label>
         <div class="pay-methods" id="pay-methods">
           <button type="button" class="pay-btn" data-metodo="efectivo">💵 Efectivo</button>
