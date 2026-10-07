@@ -36,8 +36,9 @@ const loginCard = document.getElementById("login-card");
 const appContent = document.getElementById("app-content");
 const logoutBtn = document.getElementById("logout-btn");
 
-// "owner" ve todo. "empleado" solo puede crear pedidos, nunca ve costos/ganancias
-// ni la lista de pedidos de otros clientes (ver body.modo-empleado en style.css).
+// El empleado tiene acceso completo a esta pantalla (costos, rentabilidad, pedidos
+// recientes de todos los clientes): solo se le sigue ocultando lo que es de otra
+// pantalla (Recompra Mayoristas, Panel de Ganancias), ver body.modo-empleado en style.css.
 let sesionRol = null;
 
 function showApp() {
@@ -46,7 +47,7 @@ function showApp() {
   logoutBtn.style.display = "inline-block";
   document.body.classList.toggle("modo-empleado", sesionRol === "empleado");
   mostrarVista("inicio");
-  if (sesionRol === "owner") cargarRecientes();
+  cargarRecientes();
 }
 
 function showLogin() {
@@ -106,23 +107,15 @@ let itemsPedido = []; // { producto, costo, cantidad, precioVenta }
 let productosDisponibles = []; // { producto, costo }, sin combos
 
 async function cargarProductosDisponibles() {
-  if (sesionRol === "owner") {
-    const [costos, composicion] = await Promise.all([
-      api("/api/costos"),
-      api("/api/composicion"),
-    ]);
-    const combosSet = new Set(composicion.map(c => c.comboProducto));
-    productosDisponibles = costos.filter(c => !combosSet.has(c.producto));
-  } else {
-    // El empleado no puede leer /api/costos (nunca ve el costo real): arma la misma
-    // lista de nombres a partir de /api/productos, que es público y no expone montos.
-    const [nombres, composicion] = await Promise.all([
-      api("/api/productos"),
-      api("/api/composicion"),
-    ]);
-    const combosSet = new Set(composicion.map(c => c.comboProducto));
-    productosDisponibles = nombres.filter(p => !combosSet.has(p)).map(p => ({ producto: p, costo: null }));
-  }
+  // El empleado tiene acceso completo a costos/rentabilidad acá (pedido explícito): usa
+  // la misma puerta de entrada que el dueño, /api/pedidos-mayoristas/productos, que es
+  // propia de esta pantalla (no afloja el /api/costos general del resto de la app).
+  const [costos, composicion] = await Promise.all([
+    api("/api/pedidos-mayoristas/productos"),
+    api("/api/composicion"),
+  ]);
+  const combosSet = new Set(composicion.map(c => c.comboProducto));
+  productosDisponibles = costos.filter(c => !combosSet.has(c.producto));
 }
 
 const CAMPOS_DATOS_CLIENTE = [
@@ -327,8 +320,9 @@ function agregarProductoAlPedido(nombre) {
 
 // ---------- Tabla de productos del pedido ----------
 
-// it.costo puede ser null: el empleado nunca recibe costos del servidor (ver
-// cargarProductosDisponibles), así que para su sesión esto queda siempre en "—".
+// it.costo puede ser null en un pedido viejo que se está editando y cuyo producto ya no
+// tiene costo cargado (se borró de la planilla): el resto del tiempo siempre hay costo,
+// el empleado también lo recibe del servidor (ver cargarProductosDisponibles).
 function calcularFila(it) {
   const cantidad = it.cantidad;
   const tieneCosto = it.costo !== null && it.costo !== undefined;
@@ -422,9 +416,12 @@ function recomputeTotales() {
   const hayCostoDesconocido = itemsPedido.some(it => it.costo === null || it.costo === undefined);
   const totalCosto = itemsPedido.reduce((acc, it) => acc + (it.costo || 0) * it.cantidad, 0);
   const totalVenta = itemsPedido.reduce((acc, it) => acc + (Number(it.precioVenta) || 0) * it.cantidad, 0);
+  const ganancia = totalVenta - totalCosto;
+  const pctTotal = !hayCostoDesconocido && totalVenta > 0 ? (ganancia / totalVenta) * 100 : null;
   document.getElementById("pedido-total-costo").textContent = hayCostoDesconocido ? "—" : money(totalCosto);
   document.getElementById("pedido-total-venta").textContent = money(totalVenta);
-  document.getElementById("pedido-total-ganancia").textContent = hayCostoDesconocido ? "—" : money(totalVenta - totalCosto);
+  document.getElementById("pedido-total-ganancia").textContent = hayCostoDesconocido ? "—" : money(ganancia);
+  document.getElementById("pedido-total-pct").textContent = pctTotal !== null ? pctTotal.toFixed(1) + "%" : "—";
 }
 
 // ---------- Validación común ----------
@@ -576,7 +573,7 @@ function mostrarFactura({ titulo, datosCliente }) {
   document.getElementById("factura-numero").textContent = facturaNumeroActual;
   renderDatosClienteBox();
 
-  facturaVistaModo = sesionRol === "empleado" ? "cliente" : "empresa";
+  facturaVistaModo = "empresa";
   document.querySelectorAll(".factura-vista-tab").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.vista === facturaVistaModo);
   });
@@ -627,9 +624,11 @@ function renderFacturaContenido() {
     totalesEl.innerHTML = `<span class="factura-total-final">Total: ${money(totalVenta)}</span>`;
   } else {
     const totalCosto = itemsPedido.reduce((acc, it) => acc + it.costo * it.cantidad, 0);
+    const pctTotal = totalVenta > 0 ? ((totalVenta - totalCosto) / totalVenta) * 100 : null;
     totalesEl.innerHTML = `
       <span>Total costo: ${money(totalCosto)}</span>
       <span>Ganancia: ${money(totalVenta - totalCosto)}</span>
+      <span>% Rentabilidad total: ${pctTotal !== null ? pctTotal.toFixed(1) + "%" : "—"}</span>
       <span class="factura-total-final">Total venta: ${money(totalVenta)}</span>
     `;
   }
@@ -822,22 +821,20 @@ function toggleDetalleReciente(ventaId, row, items) {
   renderDetalleReciente(ventaId, row, items);
 }
 
-// El costo de cada item ya viene calculado desde el servidor (/api/reportes) con el
+// El costo de cada item ya viene calculado desde el servidor (/api/pedidos-mayoristas/recientes,
+// propio de esta pantalla, no el /api/reportes general que es solo del dueño) con el
 // valor que estaba vigente el día de esa venta, no el actual.
 async function cargarRecientes() {
   const body = document.getElementById("recientes-body");
   let data;
   try {
-    data = await api("/api/reportes");
+    data = await api("/api/pedidos-mayoristas/recientes");
   } catch (err) {
     console.error(err);
     return;
   }
 
-  const ventasMayoristas = data.ventas
-    .filter(v => v.metodo === "mayorista")
-    .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
-    .slice(0, 30);
+  const ventasMayoristas = data.ventas;
 
   if (ventasMayoristas.length === 0) {
     body.innerHTML = `<tr class="empty-row"><td colspan="5">Todavía no hay pedidos mayoristas guardados.</td></tr>`;

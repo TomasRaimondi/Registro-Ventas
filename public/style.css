@@ -1042,10 +1042,9 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ---------- Pedidos mayoristas ---------- */
 
-/* Sesión de empleado: nunca ve costos/ganancias ni la lista de pedidos de otros clientes. */
-body.modo-empleado .col-costo,
-body.modo-empleado #vista-recientes,
-body.modo-empleado #factura-vista-tabs,
+/* Sesión de empleado: acceso completo a esta pantalla (costos, rentabilidad, pedidos
+   recientes). Solo se le siguen ocultando los links a otras pantallas del dueño
+   (Recompra Mayoristas, Panel de Ganancias), que no son parte de este pedido. */
 body.modo-empleado #link-recompra-mayoristas,
 body.modo-empleado #link-panel-ganancias {
   display: none !important;

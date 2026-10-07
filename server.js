@@ -2816,7 +2816,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/clientes-mayoristas" && req.method === "POST") {
-      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      // isAuthenticated, no isOwner: también lo llama el empleado al guardar un pedido
+      // mayorista (para que el teléfono quede en la libreta), aunque no pueda ver el
+      // listado completo de clientes mayoristas (eso sigue siendo GET, solo del dueño).
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
       const body = await readJsonBody(req);
       const nombre = String(body.nombre || "").trim();
       if (!nombre) return sendJson(res, 400, { error: "Falta el nombre del cliente" });
@@ -2833,6 +2836,53 @@ const server = http.createServer(async (req, res) => {
       });
       const row = await db.getClienteMayoristaPorNombre(nombreNormalizado);
       return sendJson(res, 200, row);
+    }
+
+    // ---------- Pedidos Mayoristas: acceso completo también para el empleado ----------
+    //
+    // Estas dos rutas son propias de la pantalla de cotizar/armar pedidos mayoristas y
+    // están gateadas con isAuthenticated (no isOwner) a propósito: el empleado necesita
+    // ver costo y rentabilidad real para cotizar bien un pedido. No aflojan /api/costos
+    // ni /api/reportes (que siguen siendo solo del dueño en el resto de la app) — son
+    // puertas de entrada separadas, con exactamente los datos que esta pantalla necesita.
+
+    if (pathname === "/api/pedidos-mayoristas/productos" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const costos = await db.getCostos();
+      return sendJson(res, 200, costos);
+    }
+
+    if (pathname === "/api/pedidos-mayoristas/recientes" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      const [ventas, items, indiceCosto] = await Promise.all([
+        db.getAllVentas(),
+        db.getAllItems(),
+        construirIndiceCostoHistorico(),
+      ]);
+
+      const ventasMayoristas = ventas
+        .filter((v) => v.metodo === "mayorista")
+        .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
+        .slice(0, 30);
+
+      const idsRelevantes = new Set(ventasMayoristas.map((v) => v.id));
+      const itemsPorVenta = new Map();
+      items.forEach((it) => {
+        if (idsRelevantes.has(it.ventaId)) itemsPorVenta.set(it.ventaId, [...(itemsPorVenta.get(it.ventaId) || []), it]);
+      });
+      // Ventas de antes del carrito no tienen fila en venta_items: se reconstruye un
+      // item único a partir de la venta original para que su costo no se pierda.
+      const itemsCompletos = [];
+      for (const v of ventasMayoristas) {
+        const propios = itemsPorVenta.get(v.id);
+        if (propios && propios.length) itemsCompletos.push(...propios);
+        else itemsCompletos.push({ ventaId: v.id, producto: v.producto, precio: v.precio, fecha: v.fecha });
+      }
+      for (const it of itemsCompletos) {
+        it.costo = calcularCostoHistorico(it.producto, it.fecha, indiceCosto);
+      }
+
+      return sendJson(res, 200, { ventas: ventasMayoristas, items: itemsCompletos });
     }
 
     if (pathname === "/api/recompra-mayoristas" && req.method === "GET") {
