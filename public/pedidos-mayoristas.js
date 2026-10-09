@@ -120,7 +120,7 @@ async function cargarProductosDisponibles() {
 
 const CAMPOS_DATOS_CLIENTE = [
   "pedido-cliente", "pedido-domicilio", "pedido-localidad", "pedido-provincia",
-  "pedido-telefono", "pedido-email", "pedido-iva", "pedido-vencimiento", "pedido-cuit-propio",
+  "pedido-telefono", "pedido-cliente-doc", "pedido-email", "pedido-iva", "pedido-vencimiento", "pedido-cuit-propio",
 ];
 
 function resetPedido() {
@@ -140,6 +140,7 @@ function obtenerDatosCliente() {
     localidad: document.getElementById("pedido-localidad").value.trim(),
     provincia: document.getElementById("pedido-provincia").value.trim(),
     telefono: document.getElementById("pedido-telefono").value.trim(),
+    documento: document.getElementById("pedido-cliente-doc").value.trim(),
     email: document.getElementById("pedido-email").value.trim(),
     iva: document.getElementById("pedido-iva").value,
     vencimiento: document.getElementById("pedido-vencimiento").value,
@@ -194,6 +195,7 @@ document.getElementById("nuevo-pedido-btn").addEventListener("click", async () =
   actualizarEncabezadoHoja();
   mostrarVista("hoja");
   document.getElementById("pedido-cliente").focus();
+  chequearDisponibilidadArca();
 });
 
 // ---------- Editar un pedido ya guardado ----------
@@ -233,6 +235,7 @@ async function iniciarEdicionPedido(venta, items) {
   renderItemsTable();
   mostrarVista("hoja");
   document.getElementById("pedido-cliente").focus();
+  chequearDisponibilidadArca();
 }
 
 document.getElementById("pedido-cancelar-btn").addEventListener("click", () => {
@@ -452,14 +455,10 @@ function validarPedido() {
 
 // ---------- Guardar como venta real (descuenta stock) ----------
 
-document.getElementById("pedido-guardar-stock-btn").addEventListener("click", async () => {
-  const datosCliente = validarPedido();
-  if (!datosCliente) return;
-
-  const btn = document.getElementById("pedido-guardar-stock-btn");
-  btn.disabled = true;
-  btn.textContent = editandoVentaId ? "Guardando cambios..." : "Guardando...";
-
+// Guarda el pedido en armado como venta real (descuenta stock). La usan tanto el botón
+// de guardar normal como el de "Guardar y Facturar con ARCA" -facturar sin que la venta
+// haya quedado guardada no tendría sentido-, para no duplicar esta lógica en los dos.
+async function guardarPedidoComoVenta(datosCliente) {
   const itemsExpandidos = [];
   itemsPedido.forEach(it => {
     for (let i = 0; i < it.cantidad; i++) {
@@ -475,40 +474,53 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
     bodyPayload.horaLabel = editandoHoraLabel;
   }
 
-  try {
-    // Primero se crea la versión nueva y recién si eso funciona se borra la original: así, si
-    // algo falla a mitad de camino, en el peor caso queda un duplicado (fácil de notar y borrar
-    // a mano) en vez de perderse el pedido original sin que se haya guardado el editado.
-    await api("/api/ventas", {
+  // Primero se crea la versión nueva y recién si eso funciona se borra la original: así, si
+  // algo falla a mitad de camino, en el peor caso queda un duplicado (fácil de notar y borrar
+  // a mano) en vez de perderse el pedido original sin que se haya guardado el editado.
+  const ventaGuardada = await api("/api/ventas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(bodyPayload),
+  });
+
+  if (editandoVentaId) {
+    try {
+      await api("/api/ventas/" + encodeURIComponent(editandoVentaId), { method: "DELETE" });
+    } catch (err) {
+      console.error(err);
+      alert("Se guardó el pedido editado, pero no se pudo borrar el pedido original: quedaron los dos cargados. Borrá el que sobra a mano desde \"Pedidos mayoristas recientes\".");
+    }
+    editandoVentaId = null;
+  }
+
+  // Guarda (o actualiza) el teléfono del cliente en la libreta de mayoristas, para que
+  // "Recompra Mayoristas" tenga con quién contactarlo. No bloquea el guardado del pedido
+  // si esto falla: es un extra, no algo crítico.
+  if (datosCliente.telefono) {
+    api("/api/clientes-mayoristas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(bodyPayload),
-    });
+      body: JSON.stringify({ nombre: datosCliente.nombre, telefono: datosCliente.telefono }),
+    }).catch((err) => console.error("No se pudo guardar el teléfono del cliente mayorista:", err));
+  }
 
-    if (editandoVentaId) {
-      try {
-        await api("/api/ventas/" + encodeURIComponent(editandoVentaId), { method: "DELETE" });
-      } catch (err) {
-        console.error(err);
-        alert("Se guardó el pedido editado, pero no se pudo borrar el pedido original: quedaron los dos cargados. Borrá el que sobra a mano desde \"Pedidos mayoristas recientes\".");
-      }
-      editandoVentaId = null;
-    }
+  return ventaGuardada;
+}
 
-    // Guarda (o actualiza) el teléfono del cliente en la libreta de mayoristas, para que
-    // "Recompra Mayoristas" tenga con quién contactarlo. No bloquea el guardado del pedido
-    // si esto falla: es un extra, no algo crítico.
-    if (datosCliente.telefono) {
-      api("/api/clientes-mayoristas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: datosCliente.nombre, telefono: datosCliente.telefono }),
-      }).catch((err) => console.error("No se pudo guardar el teléfono del cliente mayorista:", err));
-    }
+document.getElementById("pedido-guardar-stock-btn").addEventListener("click", async () => {
+  const datosCliente = validarPedido();
+  if (!datosCliente) return;
 
-    // Siempre dice "PRESUPUESTO", se haya guardado como venta o no: sin CAE ni
-    // registro en AFIP esto no es legalmente una factura, aunque el pedido sí haya
-    // quedado guardado como venta real (con stock descontado) en el sistema.
+  const btn = document.getElementById("pedido-guardar-stock-btn");
+  btn.disabled = true;
+  btn.textContent = editandoVentaId ? "Guardando cambios..." : "Guardando...";
+
+  try {
+    await guardarPedidoComoVenta(datosCliente);
+    // Siempre dice "PRESUPUESTO": sin CAE ni registro en ARCA esto no es legalmente una
+    // factura, aunque el pedido sí haya quedado guardado como venta real (con stock
+    // descontado) en el sistema. Para una factura real está el botón de ARCA, si está
+    // configurado.
     mostrarFactura({ titulo: "PRESUPUESTO", datosCliente });
     cargarRecientes();
   } catch (err) {
@@ -517,6 +529,65 @@ document.getElementById("pedido-guardar-stock-btn").addEventListener("click", as
     errorEl.style.display = "block";
   } finally {
     btn.disabled = false;
+    actualizarEncabezadoHoja();
+  }
+});
+
+// ---------- Facturar con ARCA (CAE real) ----------
+
+const CBTE_TIPO_LETRA = { 1: "A", 6: "B", 11: "C" };
+const btnFacturarArca = document.getElementById("pedido-facturar-arca-btn");
+
+async function chequearDisponibilidadArca() {
+  try {
+    const estado = await api("/api/arca/estado");
+    btnFacturarArca.style.display = estado.configurado ? "block" : "none";
+    const hint = document.getElementById("arca-estado-hint");
+    if (estado.configurado && estado.ambiente === "testing") {
+      hint.textContent = "⚠ ARCA está en modo de pruebas (testing): el CAE que te devuelva no es válido como factura real.";
+      hint.style.display = "block";
+    } else {
+      hint.style.display = "none";
+    }
+  } catch (err) {
+    btnFacturarArca.style.display = "none";
+  }
+}
+
+btnFacturarArca.addEventListener("click", async () => {
+  const datosCliente = validarPedido();
+  if (!datosCliente) return;
+
+  const errorEl = document.getElementById("pedido-error");
+  errorEl.style.display = "none";
+  btnFacturarArca.disabled = true;
+  btnFacturarArca.textContent = "Guardando y facturando...";
+
+  try {
+    const venta = await guardarPedidoComoVenta(datosCliente);
+    const totalVenta = Math.round(itemsPedido.reduce((acc, it) => acc + (Number(it.precioVenta) || 0) * it.cantidad, 0) * 100) / 100;
+
+    const factura = await api("/api/arca/facturar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ventaId: venta.id,
+        importeTotal: totalVenta,
+        clienteDocumento: datosCliente.documento,
+        clienteNombre: datosCliente.nombre,
+        condicionIVAReceptor: datosCliente.iva,
+      }),
+    });
+
+    mostrarFactura({ titulo: `FACTURA ${CBTE_TIPO_LETRA[factura.cbteTipo] || ""}`, datosCliente, facturaArca: factura });
+    cargarRecientes();
+  } catch (err) {
+    errorEl.textContent = "No se pudo facturar con ARCA: " + (err.message || "error desconocido") +
+      ". Si el pedido ya se guardó como venta, revisá \"Pedidos mayoristas recientes\" antes de reintentar, para no descontar el stock dos veces.";
+    errorEl.style.display = "block";
+  } finally {
+    btnFacturarArca.disabled = false;
+    btnFacturarArca.textContent = "Guardar y Facturar con ARCA (CAE real)";
     actualizarEncabezadoHoja();
   }
 });
@@ -564,12 +635,29 @@ function renderDatosClienteBox() {
   el.innerHTML = `<span class="dato-cliente-nombre"><strong>Cliente / Empresa:</strong> ${escapeHtml(d.nombre)}</span>` + filas.join("");
 }
 
-function mostrarFactura({ titulo, datosCliente }) {
+function mostrarFactura({ titulo, datosCliente, facturaArca }) {
   facturaDatosClienteActual = datosCliente;
-  facturaNumeroActual = obtenerProximoNumeroComprobante();
 
   document.getElementById("factura-titulo").textContent = titulo;
   document.getElementById("factura-fecha").textContent = pedidoFechaHora ? formatFechaCorta(pedidoFechaHora.fecha) : "—";
+
+  const caeLinea = document.getElementById("factura-cae-linea");
+  const caeVtoLinea = document.getElementById("factura-cae-vto-linea");
+  if (facturaArca) {
+    // Con CAE real, el N° es el oficial de ARCA (punto de venta-número), no el contador
+    // local: ese contador era solo para que los presupuestos tuvieran un N° prolijo.
+    facturaNumeroActual = `${String(facturaArca.ptoVta).padStart(4, "0")}-${String(facturaArca.cbteNro).padStart(8, "0")}`;
+    document.getElementById("factura-cae").textContent = facturaArca.cae;
+    document.getElementById("factura-cae-vto").textContent = formatFechaCorta(
+      `${facturaArca.caeFchVto.slice(0, 4)}-${facturaArca.caeFchVto.slice(4, 6)}-${facturaArca.caeFchVto.slice(6, 8)}`
+    );
+    caeLinea.style.display = "inline";
+    caeVtoLinea.style.display = "inline";
+  } else {
+    facturaNumeroActual = obtenerProximoNumeroComprobante();
+    caeLinea.style.display = "none";
+    caeVtoLinea.style.display = "none";
+  }
   document.getElementById("factura-numero").textContent = facturaNumeroActual;
   renderDatosClienteBox();
 
@@ -666,6 +754,9 @@ async function construirHtmlFactura() {
   const titulo = document.getElementById("factura-titulo").textContent;
   const numero = document.getElementById("factura-numero").textContent;
   const fecha = document.getElementById("factura-fecha").textContent;
+  const caeVisible = document.getElementById("factura-cae-linea").style.display !== "none";
+  const cae = document.getElementById("factura-cae").textContent;
+  const caeVto = document.getElementById("factura-cae-vto").textContent;
   const datosClienteHtml = document.getElementById("factura-datos-cliente").innerHTML;
   const theadHtml = document.getElementById("factura-thead-row").innerHTML;
   const bodyHtml = document.getElementById("factura-body").innerHTML;
@@ -718,6 +809,7 @@ async function construirHtmlFactura() {
       <h2>${escapeHtml(titulo)}</h2>
       <span>N° ${escapeHtml(numero)}</span>
       <span>Fecha: ${escapeHtml(fecha)}</span>
+      ${caeVisible ? `<span>CAE: ${escapeHtml(cae)}</span><span>Vto. CAE: ${escapeHtml(caeVto)}</span>` : ""}
     </div>
   </div>
   <div class="factura-datos-cliente">${datosClienteHtml}</div>

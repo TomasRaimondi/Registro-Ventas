@@ -8,6 +8,7 @@ const tiendanube = require("./tiendanube");
 const mayoristas = require("./mayoristas");
 const mercadopago = require("./mercadopago");
 const redlinkEmail = require("./redlink-email");
+const arca = require("./arca");
 
 const PORT = process.env.PORT || 3000;
 const TIMEZONE = "America/Argentina/Buenos_Aires";
@@ -471,6 +472,63 @@ try {
 } catch (e) {
   console.error("No se pudo leer admin-config.json:", e.message);
 }
+
+// ---------- ARCA (ex-AFIP): facturación electrónica real, vía arca.js ----------
+//
+// Igual patrón que el resto de las integraciones (Tiendanube, Mercado Pago): en esta PC
+// se lee de un archivo local (arca-config.json, en .gitignore, nunca se sube), en Render
+// se arma desde variables de entorno. El certificado/clave pueden venir como archivo
+// local (certFile/keyFile, rutas relativas a esta carpeta) o, en producción, como el
+// contenido PEM completo en ARCA_CERT/ARCA_KEY (Render no tiene un lugar natural para
+// "subir un archivo", así que el contenido va directo en la variable de entorno y acá se
+// escribe a un archivo temporal una sola vez al arrancar, porque openssl necesita un
+// archivo, no puede firmar leyendo de un string).
+let ARCA_CONFIG = null;
+try {
+  if (process.env.ARCA_CUIT && process.env.ARCA_CERT && process.env.ARCA_KEY) {
+    const tmpDir = path.join(os.tmpdir(), "arca-creds");
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const certFile = path.join(tmpDir, "cert.crt");
+    const keyFile = path.join(tmpDir, "key.key");
+    fs.writeFileSync(certFile, process.env.ARCA_CERT);
+    fs.writeFileSync(keyFile, process.env.ARCA_KEY);
+    ARCA_CONFIG = {
+      cuit: process.env.ARCA_CUIT,
+      puntoVenta: Number(process.env.ARCA_PUNTO_VENTA || 1),
+      condicionIVAEmisor: process.env.ARCA_CONDICION_IVA || "Monotributo",
+      certPath: certFile,
+      keyPath: keyFile,
+      ambiente: process.env.ARCA_AMBIENTE || "testing",
+    };
+  } else {
+    const localArcaConfigPath = path.join(__dirname, "arca-config.json");
+    if (fs.existsSync(localArcaConfigPath)) {
+      const cfg = JSON.parse(fs.readFileSync(localArcaConfigPath, "utf8"));
+      ARCA_CONFIG = {
+        cuit: cfg.cuit,
+        puntoVenta: Number(cfg.puntoVenta || 1),
+        condicionIVAEmisor: cfg.condicionIVAEmisor || "Monotributo",
+        certPath: path.join(__dirname, cfg.certFile),
+        keyPath: path.join(__dirname, cfg.keyFile),
+        ambiente: cfg.ambiente || "testing",
+      };
+    }
+  }
+} catch (e) {
+  console.error("No se pudo leer la configuración de ARCA:", e.message);
+}
+
+// Factura C (Monotributo) no discrimina IVA: neto = total, iva = 0. Factura A/B (Responsable
+// Inscripto) si, pero esta primera versión solo cubre Monotributo -el caso de Platense Fit-;
+// agregar RI más adelante es sumar el cálculo de IVA acá, no tocar el resto del flujo.
+const CBTE_TIPO_POR_CONDICION = { Monotributo: 11, ResponsableInscripto_B: 6, ResponsableInscripto_A: 1 };
+// Mismos valores que ya usa el dropdown "Condición frente al IVA" de Pedidos Mayoristas.
+const CONDICION_IVA_RECEPTOR_ID = {
+  "Consumidor Final": 5,
+  "Responsable Inscripto": 1,
+  "Monotributista": 6,
+  "Exento": 4,
+};
 
 // token -> { role: "owner" | "empleado", usuario: "tomas" | "chino" }. El empleado
 // solo puede usar los endpoints que explícitamente chequean isAuthenticated (no
@@ -1152,6 +1210,100 @@ const server = http.createServer(async (req, res) => {
 
       await db.deleteByFecha(fecha);
       return sendJson(res, 200, { ok: true });
+    }
+
+    // ---------- Facturación electrónica real (ARCA, ex-AFIP) ----------
+
+    if (pathname === "/api/arca/estado" && req.method === "GET") {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!ARCA_CONFIG) return sendJson(res, 200, { configurado: false });
+      return sendJson(res, 200, {
+        configurado: true,
+        ambiente: ARCA_CONFIG.ambiente,
+        puntoVenta: ARCA_CONFIG.puntoVenta,
+        condicionIVAEmisor: ARCA_CONFIG.condicionIVAEmisor,
+      });
+    }
+
+    // Prueba de conectividad: no necesita certificado (FEDummy es público), así que sirve
+    // para confirmar que ARCA está arriba antes de intentar autenticar de verdad.
+    if (pathname === "/api/arca/ping" && req.method === "GET") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      try {
+        const r = await arca.dummy({ ambiente: ARCA_CONFIG ? ARCA_CONFIG.ambiente : "testing" });
+        return sendJson(res, 200, r);
+      } catch (e) {
+        return sendJson(res, 502, { error: e.message });
+      }
+    }
+
+    // Pide un CAE real a ARCA para un pedido (pensado para Pedidos Mayoristas, pero no
+    // depende de esa pantalla: recibe los datos ya armados). Solo el dueño: emite un
+    // comprobante fiscal real, no es algo para que el empleado dispare sin supervisión.
+    if (pathname === "/api/arca/facturar" && req.method === "POST") {
+      if (!isOwner(req)) return sendJson(res, 401, { error: "No autenticado" });
+      if (!ARCA_CONFIG) return sendJson(res, 503, { error: "ARCA no está configurado (falta arca-config.json)" });
+      // Responsable Inscripto (Factura A/B) necesita discriminar IVA de verdad: esta
+      // primera versión solo calcula bien el caso Monotributo (Factura C, sin IVA
+      // discriminado). Mejor frenar acá con un error claro que emitir una Factura A/B con
+      // el IVA mal calculado.
+      if (ARCA_CONFIG.condicionIVAEmisor !== "Monotributo") {
+        return sendJson(res, 501, { error: `condicionIVAEmisor "${ARCA_CONFIG.condicionIVAEmisor}" todavía no está implementado (solo Monotributo / Factura C por ahora)` });
+      }
+
+      const body = await readJsonBody(req);
+      const importeTotal = Number(body.importeTotal);
+      if (!Number.isFinite(importeTotal) || importeTotal <= 0) {
+        return sendJson(res, 400, { error: "Falta el importe total del comprobante" });
+      }
+
+      const condicionIVA = body.condicionIVAReceptor && CONDICION_IVA_RECEPTOR_ID[body.condicionIVAReceptor]
+        ? body.condicionIVAReceptor
+        : "Consumidor Final";
+      const condicionIVAReceptorId = CONDICION_IVA_RECEPTOR_ID[condicionIVA];
+
+      // CUIT (11 dígitos) -> DocTipo 80; DNI (7-8) -> DocTipo 96; sin nada -> Consumidor
+      // Final sin identificar (válido en ARCA para Factura C de consumidor final).
+      const docIngresado = String(body.clienteDocumento || "").replace(/\D/g, "");
+      let docTipo = 99;
+      let docNro = 0;
+      if (docIngresado.length === 11) { docTipo = 80; docNro = docIngresado; }
+      else if (docIngresado.length === 7 || docIngresado.length === 8) { docTipo = 96; docNro = docIngresado; }
+
+      const cbteTipo = CBTE_TIPO_POR_CONDICION[ARCA_CONFIG.condicionIVAEmisor] || CBTE_TIPO_POR_CONDICION.Monotributo;
+
+      try {
+        const resultado = await arca.facturar(ARCA_CONFIG, {
+          cbteTipo,
+          docTipo,
+          docNro,
+          importeTotal,
+          importeNeto: importeTotal,
+          importeIva: 0,
+          condicionIVAReceptorId,
+        });
+
+        const row = {
+          id: crypto.randomUUID(),
+          ventaId: body.ventaId || null,
+          cbteTipo,
+          ptoVta: resultado.ptoVta,
+          cbteNro: resultado.cbteNro,
+          cae: resultado.cae,
+          caeFchVto: resultado.caeFchVto,
+          docTipo,
+          docNro: String(docNro),
+          cliente: body.clienteNombre || null,
+          importeTotal,
+          ambiente: ARCA_CONFIG.ambiente,
+          creadoEn: new Date().toISOString(),
+        };
+        await db.insertFacturaArca(row);
+        return sendJson(res, 201, row);
+      } catch (e) {
+        console.error("Error facturando con ARCA:", e.message);
+        return sendJson(res, 502, { error: e.message });
+      }
     }
 
     // Comisiones minoristas del empleado: público, igual que /api/salario (así Chino

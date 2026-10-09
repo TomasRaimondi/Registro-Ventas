@@ -152,6 +152,21 @@ const SCHEMA = `
     usado INTEGER NOT NULL DEFAULT 0,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS facturas_arca (
+    id TEXT PRIMARY KEY,
+    ventaId TEXT,
+    cbteTipo INTEGER NOT NULL,
+    ptoVta INTEGER NOT NULL,
+    cbteNro INTEGER NOT NULL,
+    cae TEXT NOT NULL,
+    caeFchVto TEXT NOT NULL,
+    docTipo INTEGER NOT NULL,
+    docNro TEXT NOT NULL,
+    cliente TEXT,
+    importeTotal REAL NOT NULL,
+    ambiente TEXT NOT NULL,
+    creadoEn TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS tablero_tareas (
     id TEXT PRIMARY KEY,
     texto TEXT NOT NULL,
@@ -1051,6 +1066,22 @@ if (USE_TURSO) {
       await client.execute({ sql: "UPDATE cupones_generados SET usado = 1 WHERE code = ?", args: [code] });
     },
 
+    async insertFacturaArca(row) {
+      await client.execute({
+        sql: `INSERT INTO facturas_arca (id, ventaId, cbteTipo, ptoVta, cbteNro, cae, caeFchVto, docTipo, docNro, cliente, importeTotal, ambiente, creadoEn)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.id, row.ventaId || null, row.cbteTipo, row.ptoVta, row.cbteNro, row.cae, row.caeFchVto, row.docTipo, row.docNro, row.cliente || null, row.importeTotal, row.ambiente, row.creadoEn],
+      });
+    },
+    async getAllFacturasArca() {
+      const res = await client.execute("SELECT * FROM facturas_arca ORDER BY creadoEn DESC");
+      return res.rows;
+    },
+    async getFacturaArcaPorVenta(ventaId) {
+      const res = await client.execute({ sql: "SELECT * FROM facturas_arca WHERE ventaId = ?", args: [ventaId] });
+      return res.rows[0] || null;
+    },
+
     async insertItem(row) {
       await client.execute({
         sql: `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`,
@@ -1690,6 +1721,19 @@ if (USE_TURSO) {
     },
     async marcarCuponGeneradoUsado(code) {
       db.prepare("UPDATE cupones_generados SET usado = 1 WHERE code = ?").run(code);
+    },
+
+    async insertFacturaArca(row) {
+      db.prepare(
+        `INSERT INTO facturas_arca (id, ventaId, cbteTipo, ptoVta, cbteNro, cae, caeFchVto, docTipo, docNro, cliente, importeTotal, ambiente, creadoEn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(row.id, row.ventaId || null, row.cbteTipo, row.ptoVta, row.cbteNro, row.cae, row.caeFchVto, row.docTipo, row.docNro, row.cliente || null, row.importeTotal, row.ambiente, row.creadoEn);
+    },
+    async getAllFacturasArca() {
+      return db.prepare("SELECT * FROM facturas_arca ORDER BY creadoEn DESC").all();
+    },
+    async getFacturaArcaPorVenta(ventaId) {
+      return db.prepare("SELECT * FROM facturas_arca WHERE ventaId = ?").get(ventaId) || null;
     },
 
     async insertItem(row) {

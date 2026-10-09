@@ -93,6 +93,10 @@
           <input type="text" id="pedido-telefono" placeholder="Opcional">
         </div>
         <div class="field">
+          <label for="pedido-cliente-doc">CUIT o DNI del cliente (para facturar)</label>
+          <input type="text" id="pedido-cliente-doc" placeholder="Opcional — sin dato, factura a Consumidor Final">
+        </div>
+        <div class="field">
           <label for="pedido-email">Correo electrónico</label>
           <input type="text" id="pedido-email" placeholder="Opcional">
         </div>
@@ -168,9 +172,11 @@
 
       <div class="pedido-acciones">
         <button type="button" id="pedido-guardar-stock-btn" class="submit-btn">Guardar pedido y descontar stock</button>
+        <button type="button" id="pedido-facturar-arca-btn" class="submit-btn" style="background:var(--blue); display:none;">Guardar y Facturar con ARCA (CAE real)</button>
         <button type="button" id="pedido-solo-presupuesto-btn" class="secondary-btn">Solo generar presupuesto / factura (no descuenta stock)</button>
         <button type="button" id="pedido-cancelar-btn" class="clear-btn">Cancelar</button>
       </div>
+      <p class="hint" id="arca-estado-hint" style="display:none; text-align:left;"></p>
       <p class="hint error-hint" id="pedido-error" style="display:none;"></p>
     </section>
 
@@ -199,6 +205,8 @@
             <h2 id="factura-titulo">PRESUPUESTO</h2>
             <span>N° <span id="factura-numero"></span></span>
             <span>Fecha: <span id="factura-fecha"></span></span>
+            <span id="factura-cae-linea" style="display:none;">CAE: <span id="factura-cae"></span></span>
+            <span id="factura-cae-vto-linea" style="display:none;">Vto. CAE: <span id="factura-cae-vto"></span></span>
           </div>
         </div>
 
