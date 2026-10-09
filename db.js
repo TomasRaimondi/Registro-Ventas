@@ -167,6 +167,12 @@ const SCHEMA = `
     ambiente TEXT NOT NULL,
     creadoEn TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS arca_ta_cache (
+    ambiente TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    sign TEXT NOT NULL,
+    vencimiento INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS tablero_tareas (
     id TEXT PRIMARY KEY,
     texto TEXT NOT NULL,
@@ -1082,6 +1088,23 @@ if (USE_TURSO) {
       return res.rows[0] || null;
     },
 
+    // Token de acceso de ARCA (WSAA), persistido para que sobreviva un reinicio del
+    // servidor (Render duerme por inactividad y se despierta de cero, o redeploya en
+    // cada push): ARCA no deja pedir un token nuevo si ya hay uno vigente, así que
+    // perderlo solo en memoria dejaría la facturación rota hasta que ese token viejo
+    // venza (hasta 12hs), aunque el de ahora sea perfectamente válido.
+    async getArcaTaCache(ambiente) {
+      const res = await client.execute({ sql: "SELECT * FROM arca_ta_cache WHERE ambiente = ?", args: [ambiente] });
+      return res.rows[0] || null;
+    },
+    async upsertArcaTaCache(row) {
+      await client.execute({
+        sql: `INSERT INTO arca_ta_cache (ambiente, token, sign, vencimiento) VALUES (?, ?, ?, ?)
+              ON CONFLICT(ambiente) DO UPDATE SET token = excluded.token, sign = excluded.sign, vencimiento = excluded.vencimiento`,
+        args: [row.ambiente, row.token, row.sign, row.vencimiento],
+      });
+    },
+
     async insertItem(row) {
       await client.execute({
         sql: `INSERT INTO venta_items (id, ventaId, producto, precio) VALUES (?, ?, ?, ?)`,
@@ -1734,6 +1757,16 @@ if (USE_TURSO) {
     },
     async getFacturaArcaPorVenta(ventaId) {
       return db.prepare("SELECT * FROM facturas_arca WHERE ventaId = ?").get(ventaId) || null;
+    },
+
+    async getArcaTaCache(ambiente) {
+      return db.prepare("SELECT * FROM arca_ta_cache WHERE ambiente = ?").get(ambiente) || null;
+    },
+    async upsertArcaTaCache(row) {
+      db.prepare(
+        `INSERT INTO arca_ta_cache (ambiente, token, sign, vencimiento) VALUES (?, ?, ?, ?)
+         ON CONFLICT(ambiente) DO UPDATE SET token = excluded.token, sign = excluded.sign, vencimiento = excluded.vencimiento`
+      ).run(row.ambiente, row.token, row.sign, row.vencimiento);
     },
 
     async insertItem(row) {

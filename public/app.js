@@ -635,7 +635,7 @@ form.addEventListener("submit", async (e) => {
       }))
     );
 
-    await api("/api/ventas", {
+    const ventaCreada = await api("/api/ventas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -647,6 +647,12 @@ form.addEventListener("submit", async (e) => {
       }),
     });
 
+    // Facturar es un paso aparte, después de que la venta ya quedó guardada: si falla,
+    // no hay que deshacer ni reintentar la venta, solo avisar que falló la factura.
+    if (arcaFacturarCheck.checked) {
+      await facturarVentaConArca(ventaCreada);
+    }
+
     carrito = [];
     renderCart();
     form.reset();
@@ -656,6 +662,7 @@ form.addEventListener("submit", async (e) => {
     resetearCupon();
     resetWebCalc();
     resetearEnvio();
+    arcaDocWrap.style.display = "none";
     document.getElementById("producto").focus();
 
     // Si estaba viendo el historial de otro día, la venta nueva se cargó hoy: volvemos a hoy para verla.
@@ -952,9 +959,73 @@ function iniciarApp() {
   cargarProductos();
   setInterval(cargarProductos, 30000);
 
+  chequearDisponibilidadArca();
+
   refresh();
   // Se refresca solo, para que las métricas se actualicen aunque carguen ventas desde otro dispositivo
   setInterval(refresh, 5000);
+}
+
+// ---------- Facturar con ARCA (CAE real), opcional en cada venta ----------
+
+const arcaFacturarWrap = document.getElementById("arca-facturar-wrap");
+const arcaFacturarCheck = document.getElementById("arca-facturar-check");
+const arcaDocWrap = document.getElementById("arca-doc-wrap");
+const arcaClienteDoc = document.getElementById("arca-cliente-doc");
+const arcaFacturaTop = document.getElementById("arca-factura-top");
+let arcaAmbiente = null;
+
+async function chequearDisponibilidadArca() {
+  try {
+    const estado = await api("/api/arca/estado");
+    arcaFacturarWrap.style.display = estado.configurado ? "block" : "none";
+    arcaAmbiente = estado.configurado ? estado.ambiente : null;
+    const hint = document.getElementById("arca-ambiente-hint");
+    if (estado.configurado && estado.ambiente === "testing") {
+      hint.textContent = "⚠ ARCA está en modo de pruebas (testing): el CAE no es válido como factura real.";
+      hint.style.display = "block";
+    } else {
+      hint.style.display = "none";
+    }
+  } catch (err) {
+    arcaFacturarWrap.style.display = "none";
+  }
+}
+
+arcaFacturarCheck.addEventListener("change", () => {
+  arcaDocWrap.style.display = arcaFacturarCheck.checked ? "block" : "none";
+});
+
+function formatFechaCAE(yyyymmdd) {
+  if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd;
+  return `${yyyymmdd.slice(6, 8)}/${yyyymmdd.slice(4, 6)}/${yyyymmdd.slice(0, 4)}`;
+}
+
+const CBTE_TIPO_LETRA = { 1: "A", 6: "B", 11: "C" };
+
+// Se llama DESPUÉS de que la venta ya se guardó bien: facturar es un paso aparte, si
+// falla la venta ya quedó registrada igual (no se pierde ni se duplica nada).
+async function facturarVentaConArca(venta) {
+  try {
+    const factura = await api("/api/arca/facturar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ventaId: venta.id,
+        importeTotal: venta.precio,
+        clienteDocumento: arcaClienteDoc.value.trim(),
+      }),
+    });
+    const numero = `${String(factura.ptoVta).padStart(4, "0")}-${String(factura.cbteNro).padStart(8, "0")}`;
+    arcaFacturaTop.innerHTML = `
+      <strong>🧾 Factura ${CBTE_TIPO_LETRA[factura.cbteTipo] || ""} N° ${numero}</strong>
+      ${arcaAmbiente === "testing" ? " (testing, no válida)" : ""}
+      — CAE ${escapeHtml(factura.cae)}, vence ${formatFechaCAE(factura.caeFchVto)}
+    `;
+    arcaFacturaTop.style.display = "block";
+  } catch (err) {
+    alert("La venta se guardó bien, pero no se pudo facturar con ARCA.\n" + (err.message || "Error desconocido"));
+  }
 }
 
 checkAuth();

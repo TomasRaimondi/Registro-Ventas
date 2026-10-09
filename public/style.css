@@ -1529,6 +1529,17 @@ body.modo-empleado #link-panel-ganancias {
   cursor: help;
 }
 
+.arca-factura-top {
+  grid-column: 1 / -1;
+  background: var(--green-soft);
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.arca-factura-top strong { color: var(--green); }
+
 /* ---------- Botón flotante "+" para crear tareas ---------- */
 
 .fab {

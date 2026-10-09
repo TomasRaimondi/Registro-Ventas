@@ -112,15 +112,28 @@ async function soapCall(url, soapActionNs, operationXml) {
 
 // ---------- WSAA: pide el Ticket de Acceso (token + sign), válido 12hs ----------
 //
-// Se cachea en memoria por certificado+ambiente (no por tenant: si dos tenants comparten
-// certificado -algo raro pero posible- comparten también el TA, que es válido igual).
+// Primero una caché en memoria (rápida, nada de I/O), y si se pasan cargarCache/
+// guardarCache (ver server.js: los respalda en la base, no en el filesystem -en Render
+// el disco es efímero, se borra en cada redeploy, la base no-) también se consulta y
+// actualiza ahí. Esto importa en serio: ARCA RECHAZA pedir un token nuevo si ya hay uno
+// vigente para el mismo certificado+servicio, así que perder la caché en un reinicio del
+// servidor (duerme por inactividad, o cada deploy) dejaría la facturación rota hasta que
+// ese token viejo venza solo -hasta 12hs- aunque el de ahora sea perfectamente válido.
 const cacheTA = new Map();
 
-async function obtenerTA({ certPath, keyPath, ambiente }) {
+async function obtenerTA({ certPath, keyPath, ambiente, cargarCache, guardarCache }) {
   const key = `${certPath}|${ambiente}`;
-  const cacheado = cacheTA.get(key);
-  if (cacheado && cacheado.vencimiento > Date.now() + 60 * 1000) {
-    return cacheado;
+  const enMemoria = cacheTA.get(key);
+  if (enMemoria && enMemoria.vencimiento > Date.now() + 60 * 1000) {
+    return enMemoria;
+  }
+
+  if (cargarCache) {
+    const persistido = await cargarCache(ambiente);
+    if (persistido && persistido.vencimiento > Date.now() + 60 * 1000) {
+      cacheTA.set(key, persistido);
+      return persistido;
+    }
   }
 
   const tra = crearTRA("wsfe");
@@ -152,6 +165,7 @@ async function obtenerTA({ certPath, keyPath, ambiente }) {
     vencimiento: Date.now() + 12 * 60 * 60 * 1000,
   };
   cacheTA.set(key, ta);
+  if (guardarCache) await guardarCache(ambiente, ta);
   return ta;
 }
 
@@ -270,9 +284,11 @@ async function caeSolicitar({ ta, cuit, ptoVta, cbteTipo, cbteNro, item, ambient
 // ---------- Punto de entrada de alto nivel ----------
 //
 // Orquesta todo: autentica, pide el próximo número, pide el CAE. "tenant.arca" trae
-// {cuit, puntoVenta, certPath, keyPath, ambiente}.
-async function facturar(tenantArca, item) {
-  const ta = await obtenerTA({ certPath: tenantArca.certPath, keyPath: tenantArca.keyPath, ambiente: tenantArca.ambiente });
+// {cuit, puntoVenta, certPath, keyPath, ambiente}. "cacheCallbacks" (opcional) son
+// {cargarCache, guardarCache} para persistir el token más allá de esta corrida del
+// proceso — ver el comentario arriba de obtenerTA.
+async function facturar(tenantArca, item, cacheCallbacks = {}) {
+  const ta = await obtenerTA({ certPath: tenantArca.certPath, keyPath: tenantArca.keyPath, ambiente: tenantArca.ambiente, ...cacheCallbacks });
   const ultimo = await compUltimoAutorizado({
     ta, cuit: tenantArca.cuit, ptoVta: tenantArca.puntoVenta, cbteTipo: item.cbteTipo, ambiente: tenantArca.ambiente,
   });

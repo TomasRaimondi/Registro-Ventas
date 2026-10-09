@@ -530,6 +530,14 @@ const CONDICION_IVA_RECEPTOR_ID = {
   "Exento": 4,
 };
 
+// Respaldan el token de WSAA en la base (no en el filesystem: en Render el disco es
+// efímero) para que sobreviva a que el servidor se reinicie — ver el comentario grande
+// en arca.js, arriba de obtenerTA, sobre por qué esto importa en serio.
+const ARCA_TA_CACHE = {
+  cargarCache: (ambiente) => db.getArcaTaCache(ambiente),
+  guardarCache: (ambiente, ta) => db.upsertArcaTaCache({ ambiente, token: ta.token, sign: ta.sign, vencimiento: ta.vencimiento }),
+};
+
 // token -> { role: "owner" | "empleado", usuario: "tomas" | "chino" }. El empleado
 // solo puede usar los endpoints que explícitamente chequean isAuthenticated (no
 // isOwner) más abajo.
@@ -1281,7 +1289,7 @@ const server = http.createServer(async (req, res) => {
           importeNeto: importeTotal,
           importeIva: 0,
           condicionIVAReceptorId,
-        });
+        }, ARCA_TA_CACHE);
 
         const row = {
           id: crypto.randomUUID(),
