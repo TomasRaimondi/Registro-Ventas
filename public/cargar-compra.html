@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cargar compra</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#EEF2F0">
+<link rel="apple-touch-icon" href="/logo-platense-fit.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Platense Fit">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}</script>
+<script src="nav-menu.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Cargar compra</h1>
+  </div>
+  <div class="topbar-actions">
+    <a href="/" class="link-btn">Registro de Ventas</a>
+    <a href="/inventario.html" class="link-btn">Inventario</a>
+    <div id="app-nav"></div>
+    <button id="logout-btn" class="clear-btn" style="display:none;">Cerrar sesión</button>
+  </div>
+</header>
+
+<main class="layout-single layout-wide cc-main">
+
+  <section class="card login-card" id="login-card">
+    <h2>Acceso privado</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="submit-btn">Entrar</button>
+      <p class="hint error-hint" id="login-error" style="display:none;">Contraseña incorrecta.</p>
+    </form>
+  </section>
+
+  <div id="app-content" style="display:none;">
+    <div class="cc-cab">
+      <h2>Cargar compra</h2>
+      <p>Cargá los productos de la factura o remito. El stock y el costo promedio se actualizan al registrar.</p>
+    </div>
+
+    <div class="cc-grid" id="cc-formulario">
+      <section class="card cc-productos">
+        <div class="cc-seccion-cab">
+          <h3>Productos</h3>
+          <button type="button" class="cc-link" id="cc-vaciar" hidden>Vaciar lista</button>
+        </div>
+
+        <div class="cc-tabla-scroll">
+          <table class="cc-tabla">
+            <thead>
+              <tr>
+                <th class="cc-col-prod">Producto</th>
+                <th class="cc-col-num">Cantidad</th>
+                <th class="cc-col-num">Costo unit.</th>
+                <th class="cc-col-num">Subtotal</th>
+                <th class="cc-col-x"></th>
+              </tr>
+            </thead>
+            <tbody id="cc-items"></tbody>
+          </table>
+          <p class="cc-vacio" id="cc-vacio">Todavía no hay productos. Agregalos abajo.</p>
+        </div>
+
+        <div class="cc-agregar">
+          <div class="cc-agregar-prod autocomplete-field">
+            <label for="cc-producto">Agregar producto</label>
+            <input type="text" id="cc-producto" placeholder="Buscá o escribí el nombre…" autocomplete="off">
+            <div class="suggestions" id="cc-sugerencias"></div>
+          </div>
+          <div class="cc-agregar-num">
+            <label for="cc-cantidad">Cantidad</label>
+            <input type="number" id="cc-cantidad" min="1" step="1" placeholder="1">
+          </div>
+          <div class="cc-agregar-num">
+            <label for="cc-costo">Costo unit.</label>
+            <input type="number" id="cc-costo" min="0" step="0.01" placeholder="$">
+          </div>
+          <button type="button" class="cc-agregar-btn" id="cc-agregar-btn">+ Agregar</button>
+        </div>
+        <p class="hint" style="text-align:left;margin-top:6px;">Tip: escribí el nombre, Enter, la cantidad, Enter, el costo y Enter: queda agregado y volvés al nombre.</p>
+      </section>
+
+      <aside class="card cc-resumen">
+        <h3>Datos de la compra</h3>
+        <div class="field">
+          <label for="cc-fecha">Fecha</label>
+          <input type="date" id="cc-fecha">
+        </div>
+        <div class="field">
+          <label for="cc-proveedor">Proveedor <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cc-proveedor" placeholder="Ej: Distribuidora XYZ" list="cc-proveedores">
+          <datalist id="cc-proveedores"></datalist>
+        </div>
+        <div class="field">
+          <label for="cc-vencimiento">Vencimiento <span class="opcional">(opcional)</span></label>
+          <input type="date" id="cc-vencimiento">
+        </div>
+        <div class="field">
+          <label for="cc-factura">Nº de factura o remito <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cc-factura" placeholder="0001-00012345">
+        </div>
+        <div class="field">
+          <label for="cc-notas">Notas <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cc-notas">
+        </div>
+
+        <div class="cc-totales">
+          <div><span>Productos</span><strong id="cc-t-productos">0</strong></div>
+          <div><span>Unidades</span><strong id="cc-t-unidades">0</strong></div>
+          <div class="cc-total"><span>Total de la compra</span><strong id="cc-t-total">$0</strong></div>
+        </div>
+        <button type="button" class="submit-btn cc-registrar" id="cc-registrar" disabled>Registrar compra</button>
+        <p class="hint error-hint" id="cc-error" style="display:none;"></p>
+      </aside>
+    </div>
+
+    <section class="card cc-listo" id="cc-listo" style="display:none;">
+      <span class="cc-listo-check">✓</span>
+      <h2>Compra registrada</h2>
+      <p id="cc-listo-texto"></p>
+      <div class="cc-listo-acciones">
+        <button type="button" class="submit-btn" id="cc-otra">Cargar otra compra</button>
+        <a href="/inventario.html" class="link-btn">Ver inventario</a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="cargar-compra.js"></script>
+</body>
+</html>

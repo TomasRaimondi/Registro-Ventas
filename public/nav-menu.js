@@ -47,6 +47,7 @@
       label: "Otros",
       items: [
         { href: "/inventario.html", label: "Inventario" },
+        { href: "/cargar-compra.html", label: "Cargar compra" },
         { href: "/balance.html", label: "Balance" },
         { href: "/anuncios.html", label: "Anuncios" },
         { href: "/calendario-contenido.html", label: "Calendario de Contenido" },

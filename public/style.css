@@ -1961,3 +1961,78 @@ body.modo-empleado #link-panel-ganancias {
     display: block;
   }
 }
+
+/* =====================================================================
+   Cargar compra (pantalla completa: cargar-compra.html / cargar-compra.js)
+   ===================================================================== */
+.cc-main { max-width: 1320px; }
+.cc-cab { margin-bottom: 16px; }
+.cc-cab h2 { margin: 0 0 4px; font-size: 26px; }
+.cc-cab p { margin: 0; color: var(--text-dim); font-size: 14px; }
+.cc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.cc-seccion-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.cc-seccion-cab h3, .cc-resumen h3 { margin: 0; font-size: 16px; }
+.cc-link { border: 0; background: none; color: var(--text-dim); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.cc-link:hover { color: var(--red); }
+.cc-tabla-scroll { overflow-x: auto; }
+.cc-tabla { width: 100%; border-collapse: collapse; }
+.cc-tabla th { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+.cc-tabla td { padding: 8px 6px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+.cc-tabla tr:last-child td { border-bottom: 0; }
+.cc-col-prod { min-width: 240px; }
+.cc-col-num { width: 130px; text-align: right; }
+.cc-tabla th.cc-col-num { text-align: right; }
+.cc-col-x { width: 38px; text-align: center; }
+.cc-tabla input { width: 100%; padding: 9px 10px; font-size: 14.5px; }
+.cc-col-num input { text-align: right; font-variant-numeric: tabular-nums; }
+.cc-in-nombre { font-weight: 700; }
+.cc-subtotal { padding-top: 17px !important; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cc-col-x .cart-item-remove { margin-top: 6px; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-soft); color: var(--text-dim); cursor: pointer; }
+.cc-col-x .cart-item-remove:hover { color: var(--red); border-color: var(--red); }
+.cc-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.cc-chip-nuevo { display: inline-block; padding: 1px 8px; border-radius: 100px; font-size: 11px; font-weight: 700; color: var(--green); background: var(--green-soft); }
+.cc-sin-precio [data-campo="precioUnitario"] { border-color: var(--orange) !important; background: var(--orange-soft) !important; }
+.cc-vacio { margin: 18px 0; padding: 26px; text-align: center; color: var(--text-dim); font-size: 14px; border: 1px dashed var(--card-border); border-radius: 14px; }
+.cc-agregar { display: grid; grid-template-columns: minmax(0, 1fr) 110px 130px auto; gap: 10px; align-items: end; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--card-border); }
+.cc-agregar label { display: block; font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 5px; }
+.cc-agregar input { width: 100%; }
+.cc-agregar-btn { height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.cc-agregar-btn:hover { background: var(--accent); color: #fff; }
+.cc-resumen { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 4px; }
+.cc-resumen .field { margin-bottom: 10px; }
+.cc-resumen .opcional { font-weight: 500; color: var(--text-dim); }
+.cc-totales { margin: 6px 0 12px; padding: 14px; border-radius: 14px; background: var(--bg); border: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 6px; }
+.cc-totales div { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-dim); }
+.cc-totales strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.cc-totales .cc-total { padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--card-border); align-items: baseline; }
+.cc-totales .cc-total span { color: var(--text); font-weight: 700; }
+.cc-totales .cc-total strong { font-size: 26px; color: var(--green); }
+.cc-registrar { width: 100%; margin: 0 !important; padding: 15px !important; font-size: 16px !important; }
+.cc-registrar:disabled { opacity: .45; cursor: not-allowed; }
+.cc-listo { flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 48px 24px; max-width: 640px; margin: 30px auto; }
+.cc-listo-check { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; color: #fff; background: var(--green); }
+.cc-listo h2 { margin: 6px 0 0; font-size: 24px; }
+.cc-listo p { margin: 0; color: var(--text-dim); line-height: 1.55; }
+.cc-listo-acciones { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
+.cc-listo-acciones .submit-btn { width: auto; margin: 0; padding: 12px 22px; }
+@media (max-width: 960px) {
+  .cc-grid { grid-template-columns: 1fr; }
+  .cc-resumen { position: static; }
+}
+@media (max-width: 640px) {
+  .cc-tabla thead { display: none; }
+  .cc-tabla, .cc-tabla tbody, .cc-tabla tr { display: block; width: 100%; }
+  .cc-tabla tr { display: grid; grid-template-columns: 1fr 1fr 38px; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--card-border); }
+  .cc-tabla td { display: block; border: 0; padding: 0; width: auto; text-align: left; }
+  .cc-tabla td.cc-col-prod { grid-column: 1 / 3; min-width: 0; }
+  .cc-tabla td.cc-col-x { grid-column: 3; grid-row: 1; }
+  .cc-tabla td.cc-col-num:nth-child(2), .cc-tabla td.cc-col-num:nth-child(4) { grid-column: 1; }
+  .cc-tabla td.cc-col-num:nth-child(3) { grid-column: 2; }
+  .cc-tabla td.cc-col-num::before { display: block; font-size: 11px; font-weight: 700; color: var(--text-dim); margin-bottom: 3px; }
+  .cc-tabla td.cc-col-num:nth-child(2)::before { content: "Cantidad"; }
+  .cc-tabla td.cc-col-num:nth-child(3)::before { content: "Costo unit."; }
+  .cc-tabla td.cc-col-num:nth-child(4)::before { content: "Subtotal"; }
+  .cc-subtotal { padding-top: 0 !important; font-size: 16px; }
+  .cc-agregar { grid-template-columns: 1fr 1fr; }
+  .cc-agregar-prod, .cc-agregar-btn { grid-column: 1 / -1; }
+}

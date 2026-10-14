@@ -460,7 +460,8 @@ function cerrarModalNuevoIngreso() {
   modalNuevoIngreso.style.display = "none";
 }
 
-document.getElementById("btn-nuevo-ingreso").addEventListener("click", abrirModalNuevoIngreso);
+// La carga de compras es una pantalla completa (cargar-compra.html).
+document.getElementById("btn-nuevo-ingreso").addEventListener("click", () => { location.href = "/cargar-compra.html"; });
 document.getElementById("ni-cerrar-btn").addEventListener("click", cerrarModalNuevoIngreso);
 modalNuevoIngreso.addEventListener("click", (e) => { if (e.target === modalNuevoIngreso) cerrarModalNuevoIngreso(); });
 
